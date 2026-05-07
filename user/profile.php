@@ -168,6 +168,14 @@ require_once '../includes/header.php';
                 <span style="font-weight: 500; flex: 1;">Settings</span>
                 <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
             </a>
+
+            <a href="help_support.php"
+                style="text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f8f9fa; color: var(--text-dark); transition: all 0.3s; border: 1px solid #eee;">
+                <i class="fa fa-headset"
+                    style="color: var(--primary-green); font-size: 18px; width: 24px; text-align: center;"></i>
+                <span style="font-weight: 500; flex: 1;">Help & Support</span>
+                <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
+            </a>
         </div>
     </div>
 </div>

@@ -48,6 +48,97 @@
 </footer>
 
 <?php if (isset($_SESSION['user_id'])): ?>
+    <?php
+    // Detect current page section
+    $current_page = basename($_SERVER['PHP_SELF']);
+    $tut_column = '';
+    $tut_step = null;
+
+    if ($current_page == 'index.php') {
+        $tut_column = 'tut_home';
+        $tut_step = [
+            'icon' => 'fa-hand-sparkles',
+            'title' => 'Welcome to Enteangadi',
+            'desc' => 'Your local marketplace. Use the search bar and category icons above to explore listings near you.'
+        ];
+    } elseif ($current_page == 'post_ad.php') {
+        $tut_column = 'tut_post';
+        $tut_step = [
+            'icon' => 'fa-plus-circle',
+            'title' => 'Post Your Ad',
+            'desc' => 'Selling is easy! Fill in the details, upload photos, and set your price to reach local buyers.'
+        ];
+    } elseif ($current_page == 'inbox.php' || $current_page == 'chat.php') {
+        $tut_column = 'tut_inbox';
+        $tut_step = [
+            'icon' => 'fa-comments',
+            'title' => 'Messages & Chats',
+            'desc' => 'Chat directly with buyers and sellers. You will get instant notifications for new messages here.'
+        ];
+    } elseif ($current_page == 'profile.php') {
+        $tut_column = 'tut_profile';
+        $tut_step = [
+            'icon' => 'fa-user-cog',
+            'title' => 'Your Dashboard',
+            'desc' => 'Manage your ads, edit your profile, and reach out to our Help & Support team from here.'
+        ];
+    }
+
+    $show_tutorial = false;
+    if ($tut_column) {
+        try {
+            $stmt = $pdo->prepare("SELECT $tut_column FROM users WHERE id = ?");
+            $stmt->execute([$_SESSION['user_id']]);
+            $show_tutorial = ($stmt->fetchColumn() == 0);
+        } catch (PDOException $e) {
+            // Self-healing migration for new columns
+            if ($e->getCode() == '42S22') {
+                $pdo->exec("ALTER TABLE users ADD COLUMN tut_home TINYINT(1) DEFAULT 0, ADD COLUMN tut_post TINYINT(1) DEFAULT 0, ADD COLUMN tut_profile TINYINT(1) DEFAULT 0, ADD COLUMN tut_inbox TINYINT(1) DEFAULT 0");
+                $show_tutorial = true;
+            }
+        }
+    }
+    ?>
+
+    <?php if ($show_tutorial && $tut_step): ?>
+        <div id="tutorial-overlay"
+            style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; display: flex; align-items: center; justify-content: center; color: white;">
+            <div id="tutorial-card"
+                style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 40px; border-radius: 32px; max-width: 400px; width: 85%; text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,0.5); animation: tutorialScaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);">
+                <i class="fa <?= $tut_step['icon'] ?>"
+                    style="font-size: 54px; color: #22c55e; margin-bottom: 24px; display: block;"></i>
+                <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 12px;"><?= $tut_step['title'] ?></h2>
+                <p style="font-size: 16px; line-height: 1.6; color: rgba(255,255,255,0.8); margin-bottom: 32px;">
+                    <?= $tut_step['desc'] ?></p>
+
+                <button onclick="finishSectionTutorial('<?= $tut_column ?>')" class="btn-primary"
+                    style="width: 100%; padding: 16px; border-radius: 16px; font-weight: 700; font-size: 16px; border: none; cursor: pointer;">Got
+                    it!</button>
+            </div>
+        </div>
+        <style>
+            @keyframes tutorialScaleIn {
+                from {
+                    opacity: 0;
+                    transform: scale(0.9);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+            }
+        </style>
+        <script>
+            async function finishSectionTutorial(section) {
+                document.getElementById('tutorial-overlay').style.display = 'none';
+                try {
+                    await fetch('<?= $base_url ?>/user/api_finish_tutorial.php?section=' + section);
+                } catch (e) { console.error(e); }
+            }
+        </script>
+    <?php endif; ?>
+
     <script>
         function playBeep() {
             try {

@@ -29,8 +29,6 @@ if ($user_location && isset($user_location['lat']) && isset($user_location['lng'
     $lng = $user_location['lng'];
     // Haversine formula for distance in KM
     $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
-    // If location is set, prioritize nearby items or just show distance
-    // $order_by = "distance ASC, p.created_at DESC"; // Uncomment to sort by distance
 }
 
 // Fetch products
@@ -64,9 +62,9 @@ if ($category_filter) {
 
     if ($cat_info) {
         if ($cat_info['parent_id'] === null) {
-            $parent_id = $category_filter; // L1 selected
+            $parent_id = $category_filter;
         } else {
-            $parent_id = $cat_info['parent_id']; // L2 selected
+            $parent_id = $cat_info['parent_id'];
         }
         $child_stmt = $pdo->prepare("SELECT * FROM categories WHERE parent_id = ? ORDER BY name");
         $child_stmt->execute([$parent_id]);
@@ -129,12 +127,8 @@ if (isset($_SESSION['user_id'])) {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        <style>
-            div::-webkit-scrollbar {
-                display: none;
-            }
-        </style>
     </div>
+
     <div style="margin-bottom: 32px; display: flex; justify-content: space-between; align-items: center;">
         <h2 style="color: var(--primary-green-dark); font-size: 28px; font-weight: 700;">Fresh Recommendations</h2>
     </div>
@@ -161,10 +155,8 @@ if (isset($_SESSION['user_id'])) {
                         <div class="badge-selling">For Sale</div>
                     <?php endif; ?>
                     <?php if ($product['main_image']): ?>
-                        <img src="<?= htmlspecialchars($product['main_image']) ?>" alt="<?= htmlspecialchars($product['title']) ?>"
-                            class="product-card-image">
+                        <img src="<?= htmlspecialchars($product['main_image']) ?>" class="product-card-image">
                     <?php else: ?>
-                        <!-- Fallback image block -->
                         <div class="product-card-image"
                             style="display: flex; align-items: center; justify-content: center; background: #e0e0e0;">
                             <i class="fa fa-image" style="font-size: 40px; color: #999;"></i>
@@ -172,14 +164,14 @@ if (isset($_SESSION['user_id'])) {
                     <?php endif; ?>
 
                     <div class="wishlist-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)"
-                        style="position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(255,255,255,0.9); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                        <i class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart heart-icon-<?= $product['id'] ?>"
-                            style="color: <?= in_array($product['id'], $user_wishlist) ? 'var(--primary-green)' : '#999' ?>; font-size: 16px;"></i>
+                        style="position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(255,255,255,0.9); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <i class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart"
+                            style="color: <?= in_array($product['id'], $user_wishlist) ? 'var(--primary-green)' : '#999' ?>;"></i>
                     </div>
 
                     <div class="product-card-content">
-                        <div class="product-card-price">₹
-                            <?= number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2) ?></div>
+                        <div class="product-card-price">
+                            ₹<?= number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2) ?></div>
                         <div class="product-card-title"><?= htmlspecialchars($product['title']) ?></div>
                         <div class="product-card-meta">
                             <span><i class="fa fa-map-marker-alt" style="font-size: 10px;"></i>
@@ -188,11 +180,6 @@ if (isset($_SESSION['user_id'])) {
                                 <span style="color: var(--primary-green); font-weight: 600;"><?= round($product['distance'], 1) ?>
                                     km away</span>
                             <?php endif; ?>
-                        </div>
-                        <div class="product-card-meta"
-                            style="margin-top: 4px; border-top: 1px solid #f0f0f0; padding-top: 4px;">
-                            <span><?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?></span>
-                            <span><?= date('M d', strtotime($product['created_at'])) ?></span>
                         </div>
                     </div>
                 </a>
@@ -207,7 +194,7 @@ if (isset($_SESSION['user_id'])) {
         event.stopPropagation();
 
         <?php if (!isset($_SESSION['user_id'])): ?>
-            window.location.href = 'guest/login.php';
+            window.location.href = 'login.php';
             return;
         <?php endif; ?>
 
@@ -217,29 +204,16 @@ if (isset($_SESSION['user_id'])) {
         try {
             const formData = new FormData();
             formData.append('product_id', productId);
-
-            const resp = await fetch('user/toggle_wishlist.php', {
-                method: 'POST',
-                body: formData
-            });
-
+            const resp = await fetch('user/toggle_wishlist.php', { method: 'POST', body: formData });
             const data = await resp.json();
             if (data.status === 'success') {
                 if (data.action === 'added') {
-                    icon.classList.remove('far');
-                    icon.classList.add('fas');
-                    icon.style.color = 'var(--primary-green)';
+                    icon.classList.remove('far'); icon.classList.add('fas'); icon.style.color = 'var(--primary-green)';
                 } else {
-                    icon.classList.remove('fas');
-                    icon.classList.add('far');
-                    icon.style.color = '#999';
+                    icon.classList.remove('fas'); icon.classList.add('far'); icon.style.color = '#999';
                 }
-            } else {
-                alert(data.message);
             }
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     }
 </script>
 
