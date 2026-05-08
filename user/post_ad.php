@@ -15,13 +15,16 @@ try {
 $error = '';
 $success = '';
 
-// Fetch all categories
+// Fetch all categories with is_perishable flag
 $stmt = $pdo->query("SELECT * FROM categories ORDER BY name");
 $all_cats = $stmt->fetchAll();
 
 $l1_categories = [];
 $l2_categories = [];
+$cat_details = []; // Map for easy JS lookup
+
 foreach ($all_cats as $cat) {
+    $cat_details[$cat['id']] = ['is_perishable' => $cat['is_perishable']];
     if (empty($cat['parent_id'])) {
         $l1_categories[] = $cat;
     } else {
@@ -29,6 +32,7 @@ foreach ($all_cats as $cat) {
     }
 }
 $l2_json = json_encode($l2_categories);
+$details_json = json_encode($cat_details);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $_POST['type'] ?? 'sell';
@@ -41,20 +45,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $whatsapp_number = $contact_whatsapp ? ($_POST['whatsapp_number'] ?? '') : '';
     $phone_number = $contact_phone ? ($_POST['phone_number'] ?? '') : '';
     $description = $_POST['description'] ?? '';
+    $expiry_date = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null;
 
     $location_name = $_POST['location_name'] ?? '';
     $latitude = $_POST['latitude'] ?? null;
     $longitude = $_POST['longitude'] ?? null;
 
     if (!empty($title) && !empty($category_id) && !empty($price)) {
-        if (($contact_whatsapp && empty($whatsapp_number)) || ($contact_phone && empty($phone_number))) {
-            $error = "Please provide the required contact numbers for the selected options.";
+        // Validate expiry if perishable
+        $is_cat_perishable = $cat_details[$category_id]['is_perishable'] ?? 0;
+        if ($is_cat_perishable && empty($expiry_date)) {
+            $error = "Expiry date is mandatory for perishable / edible items.";
+        } elseif (($contact_whatsapp && empty($whatsapp_number)) || ($contact_phone && empty($phone_number))) {
+            $error = "Please provide the required contact numbers.";
         } else {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare("INSERT INTO products (user_id, category_id, type, title, description, price, whatsapp_number, phone_number, location_name, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$_SESSION['user_id'], $category_id, $type, $title, $description, $price, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude]);
+                // [AD APPROVAL SYSTEM] Generate Unique ID and Check Mode
+                $unique_id = 'ENTAGD' . rand(1000, 9999);
+                // Ensure uniqueness
+                $check_stmt = $pdo->prepare("SELECT 1 FROM products WHERE unique_id = ?");
+                $check_stmt->execute([$unique_id]);
+                while ($check_stmt->fetch()) {
+                    $unique_id = 'ENTAGD' . rand(1000, 9999);
+                    $check_stmt->execute([$unique_id]);
+                }
+
+                // Get approval mode from settings
+                $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
+                $set_stmt->execute();
+                $approval_mode = $set_stmt->fetchColumn() ?: 'auto';
+                $status = ($approval_mode === 'manual') ? 'pending' : 'active';
+
+                $stmt = $pdo->prepare("INSERT INTO products (user_id, unique_id, category_id, type, title, description, price, expiry_date, whatsapp_number, phone_number, location_name, latitude, longitude, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$_SESSION['user_id'], $unique_id, $category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $status]);
                 $product_id = $pdo->lastInsertId();
 
                 // Handle image upload with compression
@@ -66,7 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $cover_idx = (int) ($_POST['cover_index'] ?? 0);
                     $indices = array_keys($_FILES['images']['tmp_name']);
 
-                    // Move cover index to front of processing
                     if (in_array($cover_idx, $indices)) {
                         $indices = array_diff($indices, [$cover_idx]);
                         array_unshift($indices, $cover_idx);
@@ -77,7 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (empty($tmp_name))
                             continue;
 
-                        $file_ext = strtolower(pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION));
                         $file_name = time() . '_' . $key . '.jpg';
                         $target_file = $upload_dir . $file_name;
 
@@ -96,7 +119,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
-                $success = "Your ad has been posted successfully!";
+
+                if ($status === 'pending') {
+                    $success = "
+                    <div style='text-align:center; padding: 20px 0;'>
+                        <div style='background: #fff8e1; color: #f57c00; border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;'>
+                            <i class='fa fa-clock' style='font-size: 32px;'></i>
+                        </div>
+                        <h3 style='margin-bottom: 8px;'>Ad Submitted for Review</h3>
+                        <p style='color: var(--text-muted); font-size: 14px;'>Your unique ID is <strong>$unique_id</strong>. Our team will review and approve your ad shortly.</p>
+                    </div>";
+                } else {
+                    $success = "
+                    <div style='text-align:center; padding: 20px 0;'>
+                        <div style='background: #e8f5e9; color: var(--primary-green); border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;'>
+                            <i class='fa fa-check-circle' style='font-size: 32px;'></i>
+                        </div>
+                        <h3 style='margin-bottom: 8px;'>Congratulations! Your Ad is Live</h3>
+                        <p style='color: var(--text-muted); font-size: 14px;'>Your unique ID is <strong>$unique_id</strong>. Your ad is now visible to thousands of buyers.</p>
+                    </div>";
+                }
             } catch (PDOException $e) {
                 $pdo->rollBack();
                 $error = "Error posting ad. Please try again.";
@@ -107,9 +149,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-/**
- * Compress and standardize image
- */
 function compressImage($source, $destination, $max_width, $quality)
 {
     $info = getimagesize($source);
@@ -122,10 +161,7 @@ function compressImage($source, $destination, $max_width, $quality)
     else
         return false;
 
-    // Get original dimensions
     list($width, $height) = getimagesize($source);
-
-    // Calculate new dimensions
     $ratio = $width / $height;
     if ($width > $max_width) {
         $new_width = $max_width;
@@ -135,10 +171,7 @@ function compressImage($source, $destination, $max_width, $quality)
         $new_height = $height;
     }
 
-    // Create new image
     $new_image = imagecreatetruecolor($new_width, $new_height);
-
-    // Handle transparency for PNG/GIF
     if ($info['mime'] == 'image/png' || $info['mime'] == 'image/gif') {
         imagealphablending($new_image, false);
         imagesavealpha($new_image, true);
@@ -147,129 +180,44 @@ function compressImage($source, $destination, $max_width, $quality)
     }
 
     imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-
-    // Save as JPEG for better compression
     $result = imagejpeg($new_image, $destination, $quality);
-
-    imagedestroy($image);
-    imagedestroy($new_image);
-
     return $result;
 }
 
 require_once '../includes/header.php';
 ?>
 
-<style>
-    .toggle-btn {
-        flex: 1;
-        padding: 14px;
-        border: 2px solid var(--border-color);
-        border-radius: 12px;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        background: #fff;
-        color: var(--text-muted);
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-
-    input[type="checkbox"]:checked+.toggle-btn {
-        background: var(--primary-green);
-        color: white;
-        border-color: var(--primary-green);
-        box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
-    }
-
-    .preview-item {
-        position: relative;
-        aspect-ratio: 1;
-        border-radius: 8px;
-        overflow: hidden;
-        border: 2px solid var(--border-color);
-    }
-
-    .preview-item img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .preview-item.is-cover {
-        border-color: var(--primary-green);
-    }
-
-    .preview-item .cover-badge {
-        position: absolute;
-        top: 4px;
-        left: 4px;
-        background: var(--primary-green);
-        color: white;
-        padding: 2px 6px;
-        font-size: 10px;
-        border-radius: 4px;
-        display: none;
-    }
-
-    .preview-item.is-cover .cover-badge {
-        display: block;
-    }
-
-    .preview-item .order-num {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        background: rgba(0, 0, 0, 0.5);
-        color: white;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 10px;
-    }
-</style>
-
 <div class="container">
-    <div
-        style="max-width: 600px; margin: 0 auto; background: var(--white); padding: 40px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm);">
+    <div class="form-container-card">
         <h2 style="margin-bottom: 24px; color: var(--primary-green-dark);">Post an Ad</h2>
 
         <?php if ($error): ?>
-            <div style="background: #ffebee; color: var(--danger); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+            <div class="alert-danger-light">
                 <?= htmlspecialchars($error) ?>
             </div>
         <?php endif; ?>
 
         <?php if ($success): ?>
-            <div
-                style="background: #e8f5e9; color: var(--primary-green-dark); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
-                <?= $success ?> <a href="index.php" style="font-weight: bold;">Go to Dashboard</a>
+            <div class="alert-success-light">
+                <?= $success ?> <a href="index.php" style="font-weight: bold; color: var(--primary-green-dark);">Go to
+                    Dashboard</a>
             </div>
         <?php else: ?>
             <form method="POST" action="post_ad.php" enctype="multipart/form-data">
                 <!-- Ad Type Selection -->
                 <div class="form-group" style="margin-bottom: 24px;">
-
-                    <div style="display: flex; gap: 12px;">
-                        <label style="flex: 1; cursor: pointer;">
+                    <div class="type-selector">
+                        <label class="type-btn-label">
                             <input type="radio" name="type" value="sell" checked style="display: none;"
                                 onchange="updateTypeUI(this.value)">
-                            <div class="type-btn active" id="btn-sell"
-                                style="padding: 14px; border-radius: 12px; border: 2px solid var(--primary-green); text-align: center; background: #e8f5e9; color: var(--primary-green); font-weight: 700;">
+                            <div class="type-btn-box active-sell" id="btn-sell">
                                 <i class="fa fa-tag" style="margin-right: 8px;"></i> Sell
                             </div>
                         </label>
-                        <label style="flex: 1; cursor: pointer;">
+                        <label class="type-btn-label">
                             <input type="radio" name="type" value="buy" style="display: none;"
                                 onchange="updateTypeUI(this.value)">
-                            <div class="type-btn" id="btn-buy"
-                                style="padding: 14px; border-radius: 12px; border: 2px solid #eee; text-align: center; background: #f8f9fa; color: var(--text-muted); font-weight: 700;">
+                            <div class="type-btn-box" id="btn-buy">
                                 <i class="fa fa-shopping-basket" style="margin-right: 8px;"></i> Wanted
                             </div>
                         </label>
@@ -279,7 +227,7 @@ require_once '../includes/header.php';
                 <div class="form-group">
                     <label for="title">Ad Title *</label>
                     <input type="text" id="title" name="title" class="form-control" required
-                        placeholder="e.g. iPhone 13 Pro Max">
+                        placeholder="e.g. Home Made Biriyani">
                 </div>
 
                 <div class="form-group">
@@ -294,13 +242,40 @@ require_once '../includes/header.php';
 
                 <div class="form-group" id="l2_category_group" style="display: none;">
                     <label for="category_id">Sub-Category *</label>
-                    <select id="category_id" name="category_id" class="form-control" required>
+                    <select id="category_id" name="category_id" class="form-control" required
+                        onchange="checkPerishable(this.value)">
                         <option value="">Select Sub-Category</option>
                     </select>
                 </div>
 
+                <!-- Perishable Warning & Expiry Section -->
+                <div id="perishable_section"
+                    style="display: none; background: #fff8f1; border: 1px solid #ffccbc; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <i class="fa fa-exclamation-triangle" style="color: #e64a19; font-size: 20px;"></i>
+                        <div>
+                            <h4 style="color: #d84315; margin-bottom: 4px;">Perishable Item Policy</h4>
+                            <p style="font-size: 13px; color: #5d4037; line-height: 1.5;">You are listing an edible or
+                                perishable item. For safety:
+                            <ul style="font-size: 13px; color: #5d4037; margin-top: 8px; padding-left: 20px;">
+                                <li>Ensure the item is fresh and safe for consumption.</li>
+                                <li>You must provide an accurate Best Before / Expiry date.</li>
+                                <li>State any storage instructions in the description.</li>
+                            </ul>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="expiry_date">Best Before / Expiry Date *</label>
+                        <input type="date" id="expiry_date" name="expiry_date" class="form-control"
+                            min="<?= date('Y-m-d') ?>">
+                    </div>
+                </div>
+
                 <script>
                     const l2Categories = <?= $l2_json ?>;
+                    const catDetails = <?= $details_json ?>;
+
                     function updateL2Categories() {
                         const l1Select = document.getElementById('l1_category');
                         const l2Group = document.getElementById('l2_category_group');
@@ -308,6 +283,7 @@ require_once '../includes/header.php';
 
                         const selectedL1 = l1Select.value;
                         l2Select.innerHTML = '<option value="">Select Sub-Category</option>';
+                        hidePerishableSection();
 
                         if (selectedL1 && l2Categories[selectedL1]) {
                             l2Group.style.display = 'block';
@@ -320,14 +296,29 @@ require_once '../includes/header.php';
                         } else {
                             l2Group.style.display = 'none';
                             if (selectedL1) {
-                                // If L1 has no subcategories, assign the L1 ID as the category
-                                const option = document.createElement('option');
-                                option.value = selectedL1;
-                                option.textContent = "Default";
-                                l2Select.appendChild(option);
-                                l2Select.value = selectedL1;
+                                checkPerishable(selectedL1);
                             }
                         }
+                    }
+
+                    function checkPerishable(catId) {
+                        const section = document.getElementById('perishable_section');
+                        const expiryInput = document.getElementById('expiry_date');
+
+                        if (catId && catDetails[catId] && catDetails[catId].is_perishable == 1) {
+                            section.style.display = 'block';
+                            expiryInput.required = true;
+                        } else {
+                            hidePerishableSection();
+                        }
+                    }
+
+                    function hidePerishableSection() {
+                        const section = document.getElementById('perishable_section');
+                        const expiryInput = document.getElementById('expiry_date');
+                        section.style.display = 'none';
+                        expiryInput.required = false;
+                        expiryInput.value = '';
                     }
                 </script>
 
@@ -339,7 +330,7 @@ require_once '../includes/header.php';
 
                 <div class="form-group">
                     <label>Contact Options *</label>
-                    <div style="display: flex; gap: 12px; margin-bottom: 15px;">
+                    <div class="contact-options-grid">
                         <input type="checkbox" id="contact_whatsapp_chk" name="contact_whatsapp" value="1"
                             style="display: none;" onchange="toggleContact('whatsapp')">
                         <label for="contact_whatsapp_chk" id="label_whatsapp" class="toggle-btn">
@@ -355,11 +346,11 @@ require_once '../includes/header.php';
 
                     <div id="whatsapp_group" style="display: none; margin-bottom: 15px;">
                         <input type="tel" id="whatsapp_number" name="whatsapp_number" class="form-control"
-                            placeholder="WhatsApp Number (e.g. 9876543210)">
+                            placeholder="WhatsApp Number">
                     </div>
                     <div id="phone_group" style="display: none; margin-bottom: 15px;">
                         <input type="tel" id="phone_number" name="phone_number" class="form-control"
-                            placeholder="Phone Number for Calls">
+                            placeholder="Phone Number">
                     </div>
                 </div>
 
@@ -381,16 +372,16 @@ require_once '../includes/header.php';
                 <div class="form-group">
                     <label for="description">Description</label>
                     <textarea id="description" name="description" class="form-control" rows="5"
-                        placeholder="Describe what you are selling..."></textarea>
+                        placeholder="Describe the item... Include storage instructions for food items."></textarea>
                 </div>
 
                 <div class="form-group">
                     <label for="location_name">Location *</label>
-                    <div style="display: flex; gap: 8px;">
+                    <div class="location-detect-wrapper">
                         <input type="text" id="location_name" name="location_name" class="form-control" required
                             placeholder="City, Area"
                             value="<?= htmlspecialchars($_SESSION['user_location']['name'] ?? '') ?>">
-                        <button type="button" onclick="detectPostLocation()" class="btn-secondary"
+                        <button type="button" onclick="detectPostLocation(event)" class="btn-secondary"
                             style="padding: 8px 12px; white-space: nowrap;">
                             <i class="fa fa-crosshairs"></i> Detect
                         </button>
@@ -401,95 +392,17 @@ require_once '../includes/header.php';
                         value="<?= $_SESSION['user_location']['lng'] ?? '' ?>">
                 </div>
 
-                <script>
-                    async function detectPostLocation() {
-                        if (!navigator.geolocation) {
-                            alert('Geolocation is not supported');
-                            return;
-                        }
-
-                        const btn = event.currentTarget;
-                        const originalHTML = btn.innerHTML;
-                        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
-                        btn.disabled = true;
-
-                        navigator.geolocation.getCurrentPosition(async (position) => {
-                            const lat = position.coords.latitude;
-                            const lng = position.coords.longitude;
-
-                            document.getElementById('latitude').value = lat;
-                            document.getElementById('longitude').value = lng;
-
-                            try {
-                                const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
-                                const data = await resp.json();
-                                const city = data.address.city || data.address.town || data.address.village || 'Current Location';
-                                document.getElementById('location_name').value = city;
-                            } catch (e) {
-                                document.getElementById('location_name').value = 'Current Location';
-                            }
-
-                            btn.innerHTML = originalHTML;
-                            btn.disabled = false;
-                        }, (err) => {
-                            alert('Error: ' + err.message);
-                            btn.innerHTML = originalHTML;
-                            btn.disabled = false;
-                        }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-                    }
-                </script>
-
                 <div class="form-group">
                     <label>Photos (Select multiple) *</label>
                     <input type="file" id="images" name="images[]" class="form-control" multiple accept="image/*"
                         style="display: none;" onchange="previewImages()">
-                    <div onclick="document.getElementById('images').click()"
-                        style="border: 2px dashed var(--border-color); padding: 32px; border-radius: 12px; text-align: center; cursor: pointer; background: #fafafa; transition: all 0.3s;"
-                        onmouseover="this.style.borderColor='var(--primary-green)'"
-                        onmouseout="this.style.borderColor='var(--border-color)'">
-                        <i class="fa fa-camera"
-                            style="font-size: 32px; color: var(--primary-green); margin-bottom: 12px;"></i>
-                        <p style="color: var(--text-dark); font-weight: 500;">Add Photos</p>
-                        <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Click any photo after
-                            uploading to set as Cover</p>
+                    <div class="upload-zone" onclick="document.getElementById('images').click()">
+                        <i class="fa fa-camera upload-icon"></i>
+                        <p class="upload-text">Add Photos</p>
                     </div>
-                    <div id="image_preview_container"
-                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-top: 16px;">
-                    </div>
+                    <div id="image_preview_container" class="image-preview-grid"></div>
                     <input type="hidden" id="cover_index" name="cover_index" value="0">
                 </div>
-
-                <script>
-                    function previewImages() {
-                        const container = document.getElementById('image_preview_container');
-                        const files = document.getElementById('images').files;
-                        container.innerHTML = '';
-
-                        for (let i = 0; i < files.length; i++) {
-                            const reader = new FileReader();
-                            reader.onload = function (e) {
-                                const div = document.createElement('div');
-                                div.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
-                                div.id = 'preview-' + i;
-                                div.onclick = () => setAsCover(i);
-                                div.innerHTML = `
-                                    <img src="${e.target.result}">
-                                    <div class="cover-badge">Main</div>
-                                    <div class="order-num">${i + 1}</div>
-                                `;
-                                container.appendChild(div);
-                            }
-                            reader.readAsDataURL(files[i]);
-                        }
-                        document.getElementById('cover_index').value = 0;
-                    }
-
-                    function setAsCover(index) {
-                        document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
-                        document.getElementById('preview-' + index).classList.add('is-cover');
-                        document.getElementById('cover_index').value = index;
-                    }
-                </script>
 
                 <button type="submit" class="btn-primary" style="width: 100%; margin-top: 16px;">Post Ad Now</button>
             </form>
@@ -502,32 +415,56 @@ require_once '../includes/header.php';
         const btnSell = document.getElementById('btn-sell');
         const btnBuy = document.getElementById('btn-buy');
         const priceLabel = document.getElementById('priceLabel');
-
         if (type === 'sell') {
-            btnSell.classList.add('active');
-            btnSell.style.background = '#e8f5e9';
-            btnSell.style.borderColor = 'var(--primary-green)';
-            btnSell.style.color = 'var(--primary-green)';
-
-            btnBuy.classList.remove('active');
-            btnBuy.style.background = '#f8f9fa';
-            btnBuy.style.borderColor = '#eee';
-            btnBuy.style.color = 'var(--text-muted)';
-
+            btnSell.classList.add('active-sell'); btnSell.classList.remove('active-buy');
+            btnBuy.classList.remove('active-sell', 'active-buy');
             priceLabel.innerText = "Price (₹)";
         } else {
-            btnBuy.classList.add('active');
-            btnBuy.style.background = '#fff8e1';
-            btnBuy.style.borderColor = '#ffb300';
-            btnBuy.style.color = '#ff8f00';
-
-            btnSell.classList.remove('active');
-            btnSell.style.background = '#f8f9fa';
-            btnSell.style.borderColor = '#eee';
-            btnSell.style.color = 'var(--text-muted)';
-
+            btnBuy.classList.add('active-buy'); btnBuy.classList.remove('active-sell');
+            btnSell.classList.remove('active-sell', 'active-buy');
             priceLabel.innerText = "Budget (₹)";
         }
+    }
+
+    async function detectPostLocation(event) {
+        if (!navigator.geolocation) return;
+        const btn = event.currentTarget;
+        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const lat = pos.coords.latitude; const lng = pos.coords.longitude;
+            document.getElementById('latitude').value = lat; document.getElementById('longitude').value = lng;
+            try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
+                const d = await r.json();
+                document.getElementById('location_name').value = d.address.city || d.address.town || 'Current Location';
+            } catch (e) { document.getElementById('location_name').value = 'Current Location'; }
+            btn.innerHTML = '<i class="fa fa-crosshairs"></i> Detect'; btn.disabled = false;
+        }, () => { btn.innerHTML = '<i class="fa fa-crosshairs"></i> Detect'; btn.disabled = false; });
+    }
+
+    function previewImages() {
+        const container = document.getElementById('image_preview_container');
+        const files = document.getElementById('images').files;
+        container.innerHTML = '';
+        for (let i = 0; i < files.length; i++) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
+                div.id = 'preview-' + i;
+                div.onclick = () => setAsCover(i);
+                div.innerHTML = `<img src="${e.target.result}"><div class="cover-badge">Main</div><div class="order-num">${i + 1}</div>`;
+                container.appendChild(div);
+            }
+            reader.readAsDataURL(files[i]);
+        }
+    }
+
+    function setAsCover(i) {
+        document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
+        document.getElementById('preview-' + i).classList.add('is-cover');
+        document.getElementById('cover_index').value = i;
     }
 </script>
 

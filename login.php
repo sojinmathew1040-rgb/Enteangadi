@@ -61,9 +61,17 @@ require_once 'includes/header.php';
             </div>
 
             <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" class="form-control" required
-                    placeholder="Enter your password">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label for="password" style="margin-bottom: 0;">Password</label>
+                    <a href="forgot_password.php"
+                        style="font-size: 13px; color: var(--primary-green); text-decoration: none;">Forgot
+                        Password?</a>
+                </div>
+                <div class="password-field-container" style="margin-top: 8px;">
+                    <input type="password" id="password" name="password" class="form-control" required
+                        placeholder="Enter your password">
+                    <i class="fa fa-eye password-toggle" onclick="togglePasswordVisibility('password')"></i>
+                </div>
             </div>
 
             <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">Login</button>
@@ -75,5 +83,22 @@ require_once 'includes/header.php';
         </p>
     </div>
 </div>
+
+<script>
+    function togglePasswordVisibility(fieldId) {
+        const passwordField = document.getElementById(fieldId);
+        const toggleIcon = passwordField.nextElementSibling;
+
+        if (passwordField.type === "password") {
+            passwordField.type = "text";
+            toggleIcon.classList.remove("fa-eye");
+            toggleIcon.classList.add("fa-eye-slash");
+        } else {
+            passwordField.type = "password";
+            toggleIcon.classList.remove("fa-eye-slash");
+            toggleIcon.classList.add("fa-eye");
+        }
+    }
+</script>
 
 <?php require_once 'includes/footer.php'; ?>

@@ -13,12 +13,25 @@ try {
         FROM products p 
         JOIN users u ON p.user_id = u.id 
         LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.id = ? AND p.status = 'active'");
+        WHERE p.id = ?");
     $stmt->execute([$product_id]);
     $product = $stmt->fetch();
 
     if (!$product) {
         header("Location: index.php");
+        exit;
+    }
+
+    // [AD ANALYTICS] Increment View Count
+    $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
+    $update_views->execute([$product_id]);
+
+    // Security: Only allow active ads OR let owner/admin view pending/sold/expired
+    $is_owner = (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $product['user_id']);
+    $is_admin = (isset($_SESSION['admin_id']));
+
+    if ($product['status'] !== 'active' && !$is_owner && !$is_admin) {
+        header("Location: index.php?error=unauthorized_view");
         exit;
     }
 
@@ -32,6 +45,15 @@ try {
         $wish_stmt = $pdo->prepare("SELECT id FROM wishlist WHERE user_id = ? AND product_id = ?");
         $wish_stmt->execute([$_SESSION['user_id'], $product_id]);
         $is_wishlisted = (bool) $wish_stmt->fetch();
+    }
+
+    // Admin Action: Toggle Verification
+    if ($is_admin && isset($_POST['admin_action'])) {
+        $new_status = ($_POST['admin_action'] === 'verify') ? 1 : 0;
+        $v_stmt = $pdo->prepare("UPDATE products SET is_verified = ? WHERE id = ?");
+        $v_stmt->execute([$new_status, $product_id]);
+        header("Location: product.php?id=" . $product_id . "&success=status_updated");
+        exit;
     }
 
 } catch (PDOException $e) {
@@ -49,9 +71,13 @@ require_once 'includes/header.php';
                     <div
                         style="position: relative; border-radius: var(--border-radius); overflow: hidden; background: #f0f0f0;">
                         <?php if ($product['type'] == 'buy'): ?>
-                            <div class="badge-wanted" style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">Wanted</div>
+                            <div class="badge-wanted"
+                                style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
+                                Wanted</div>
                         <?php else: ?>
-                            <div class="badge-selling" style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">For Sale</div>
+                            <div class="badge-selling"
+                                style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
+                                For Sale</div>
                         <?php endif; ?>
                         <div class="image-carousel"
                             style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; cursor: pointer;"
@@ -196,11 +222,27 @@ require_once 'includes/header.php';
                     <h1 style="font-size: 32px; color: var(--text-dark); margin-bottom: 8px; font-weight: 700; flex: 1;">
                         <?= htmlspecialchars($product['title']) ?>
                     </h1>
-                    <div class="wishlist-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)"
-                        style="background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); margin-left: 16px; box-shadow: var(--shadow-sm);">
-                        <i class="fa<?= $is_wishlisted ? 's' : 'r' ?> fa-heart"
-                            style="color: <?= $is_wishlisted ? 'var(--primary-green)' : '#999' ?>; font-size: 20px;"></i>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-left: 16px;">
+                        <div class="wishlist-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)"
+                            style="background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                            <i class="fa<?= $is_wishlisted ? 's' : 'r' ?> fa-heart"
+                                style="color: <?= $is_wishlisted ? 'var(--primary-green)' : '#999' ?>; font-size: 20px;"></i>
+                        </div>
+                        <div class="share-btn" onclick="shareProduct()"
+                            style="background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                            <i class="fa fa-share-alt" style="color: #6366f1; font-size: 20px;"></i>
+                        </div>
                     </div>
+                </div>
+
+                <div
+                    style="font-size: 13px; font-weight: 700; color: var(--primary-green); margin-bottom: 12px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 10px;">
+                    <span>ID: <?= htmlspecialchars($product['unique_id']) ?></span>
+                    <?php if ($product['is_verified']): ?>
+                        <span class="verified-tag-premium">
+                            <i class="fa fa-check-circle"></i> Verified Listing
+                        </span>
+                    <?php endif; ?>
                 </div>
 
                 <div
@@ -210,6 +252,27 @@ require_once 'includes/header.php';
                 <div style="font-size: 28px; font-weight: 700; color: var(--primary-green-dark); margin-bottom: 16px;">
                     ₹ <?= number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2) ?>
                 </div>
+
+                <?php if (!empty($product['expiry_date'])): ?>
+                    <?php
+                    $expiry = strtotime($product['expiry_date']);
+                    $today = strtotime(date('Y-m-d'));
+                    $is_expired = ($expiry < $today);
+                    $is_today = ($expiry == $today);
+                    $date_str = date('d M, Y', $expiry);
+                    ?>
+                    <div
+                        style="margin-top: 12px; margin-bottom: 24px; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; background: <?= $is_expired ? '#ffebee' : ($is_today ? '#fff3e0' : '#fff8e1') ?>; color: <?= $is_expired ? '#c62828' : ($is_today ? '#e65100' : '#f57f17') ?>; border: 1px solid <?= $is_expired ? '#ffcdd2' : ($is_today ? '#ffe0b2' : '#ffecb3') ?>;">
+                        <i class="fa <?= $is_expired ? 'fa-calendar-times' : 'fa-clock' ?>" style="font-size: 20px;"></i>
+                        <div>
+                            <span
+                                style="display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; opacity: 0.8; letter-spacing: 0.5px;">
+                                <?= $is_expired ? 'Expired' : ($is_today ? 'Expires Today' : 'Best Before') ?>
+                            </span>
+                            <span style="font-size: 16px; font-weight: 700;"><?= $date_str ?></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <div
                     style="display: flex; justify-content: space-between; color: var(--text-muted); font-size: 14px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border-color);">
@@ -316,6 +379,36 @@ require_once 'includes/header.php';
                         </div>
                     <?php endif; ?>
                 </div>
+
+                <!-- Admin Verification Controls (Visible only to Admin) -->
+                <?php if ($is_admin): ?>
+                    <div
+                        style="margin-top: 24px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; text-align: left;">
+                        <h4
+                            style="font-size: 15px; margin-bottom: 12px; color: var(--text-dark); display: flex; align-items: center; gap: 8px; font-weight: 700;">
+                            <i class="fa fa-user-shield" style="color: #0284c7;"></i> Admin Management
+                        </h4>
+                        <form method="POST">
+                            <?php if (!$product['is_verified']): ?>
+                                <input type="hidden" name="admin_action" value="verify">
+                                <button type="submit" class="btn-primary"
+                                    style="width: 100%; background: #0284c7; border-color: #0284c7; font-size: 14px; padding: 12px; border-radius: 10px;">
+                                    <i class="fa fa-check-circle"></i> Verify & Add Blue Tick
+                                </button>
+                                <p style="margin: 10px 0 0 0; font-size: 11px; color: var(--text-muted); text-align: center;">This
+                                    listing was auto-approved. Click to verify it manually.</p>
+                            <?php else: ?>
+                                <input type="hidden" name="admin_action" value="unverify">
+                                <button type="submit" class="btn-secondary"
+                                    style="width: 100%; color: #dc2626; border-color: #fecaca; background: #fef2f2; font-size: 14px; padding: 12px; border-radius: 10px;">
+                                    <i class="fa fa-times-circle"></i> Remove Verification
+                                </button>
+                                <p style="margin: 10px 0 0 0; font-size: 11px; color: #ef4444; text-align: center;">This ad is
+                                    verified. Click to remove the trust badge.</p>
+                            <?php endif; ?>
+                        </form>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Safety Tips Section -->
                 <div
@@ -438,6 +531,31 @@ require_once 'includes/header.php';
             }
         } catch (e) {
             console.error(e);
+        }
+    }
+
+    async function shareProduct() {
+        const shareData = {
+            title: '<?= addslashes($product['title']) ?> | Enteangadi',
+            text: 'Check out this listing on Enteangadi: <?= addslashes($product['title']) ?>',
+            url: window.location.href
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                console.log('Share failed:', err);
+            }
+        } else {
+            // Fallback for browsers without Web Share API
+            const dummy = document.createElement('input');
+            document.body.appendChild(dummy);
+            dummy.value = window.location.href;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+            alert('Link copied to clipboard! You can now share it.');
         }
     }
 </script>

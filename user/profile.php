@@ -91,91 +91,95 @@ $base_url = "http://" . $_SERVER['HTTP_HOST'] . "/Enteangadi";
 require_once '../includes/header.php';
 ?>
 
-<div class="container" style="max-width: 800px; padding-top: 40px; padding-bottom: 40px;">
+<div class="profile-container">
     <h2 style="color: var(--primary-green-dark); margin-bottom: 24px;">My Profile</h2>
 
     <?php if ($success): ?>
-        <div
-            style="background: #e8f5e9; color: var(--primary-green-dark); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+        <div class="alert-success-light">
             <?= $success ?>
         </div>
     <?php endif; ?>
 
     <?php if ($error): ?>
-        <div style="background: #ffebee; color: var(--danger); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+        <div class="alert-danger-light">
             <?= $error ?>
         </div>
     <?php endif; ?>
 
-    <div
-        style="background: var(--white); padding: 32px; border-radius: var(--border-radius); box-shadow: var(--shadow-sm); text-align: center;">
-        <?php
-        $seller_initial = strtoupper(substr($user['username'], 0, 1));
-        $is_admin = ($user['role'] === 'admin');
-        ?>
-        <!-- Profile Avatar with Click-to-Upload -->
-        <div class="avatar-container" onclick="document.getElementById('profile_picture_input').click()"
-            style="cursor: pointer; position: relative; width: 120px; height: 120px; margin: 0 auto 16px auto; transition: transform 0.3s;"
-            onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-            <?php if (!empty($user['profile_picture'])): ?>
-                <img src="<?= $base_url . '/' . htmlspecialchars($user['profile_picture']) ?>" alt="Profile"
-                    style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid var(--primary-green); box-shadow: var(--shadow-sm);">
-            <?php else: ?>
-                <div
-                    style="width: 120px; height: 120px; border-radius: 50%; background: var(--primary-green); color: white; display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: bold; box-shadow: var(--shadow-sm);">
-                    <?= $is_admin ? 'E' : $seller_initial ?>
+    <div class="profile-card">
+        <!-- Left Side: Profile Info -->
+        <div class="profile-info-side">
+            <?php
+            $seller_initial = strtoupper(substr($user['username'], 0, 1));
+            $is_admin = ($user['role'] === 'admin');
+            ?>
+            <div class="profile-avatar" onclick="document.getElementById('profile_picture_input').click()">
+                <?php if (!empty($user['profile_picture'])): ?>
+                    <img src="<?= $base_url . '/' . htmlspecialchars($user['profile_picture']) ?>" alt="Profile" class="profile-avatar-img">
+                <?php else: ?>
+                    <div class="profile-avatar-placeholder">
+                        <?= $is_admin ? 'E' : $seller_initial ?>
+                    </div>
+                <?php endif; ?>
+                <div class="profile-avatar-badge">
+                    <i class="fa fa-camera" style="font-size: 14px;"></i>
                 </div>
-            <?php endif; ?>
-            <div
-                style="position: absolute; bottom: 4px; right: 4px; background: var(--primary-green); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                <i class="fa fa-camera" style="font-size: 14px;"></i>
             </div>
+
+            <form id="profile_pic_form" action="profile.php" method="POST" enctype="multipart/form-data" style="display: none;">
+                <input type="file" id="profile_picture_input" name="profile_picture" accept="image/*" onchange="document.getElementById('profile_pic_form').submit()">
+            </form>
+
+            <h3 style="margin-bottom: 4px;"><?= htmlspecialchars($user['username']) ?></h3>
+            <p style="color: var(--text-muted); font-size: 14px;">
+                <i class="fa fa-phone" style="font-size: 12px; margin-right: 4px;"></i>
+                <?= htmlspecialchars($user['phone_number']) ?>
+            </p>
         </div>
 
-        <form id="profile_pic_form" action="profile.php" method="POST" enctype="multipart/form-data"
-            style="display: none;">
-            <input type="file" id="profile_picture_input" name="profile_picture" accept="image/*"
-                onchange="document.getElementById('profile_pic_form').submit()">
-        </form>
+        <div class="profile-actions-side">
+            <h4 style="margin-bottom: 20px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">Account Settings</h4>
+            <div class="profile-menu">
+                <a href="wishlist.php" class="profile-menu-item">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="profile-menu-icon">
+                            <i class="fa fa-heart"></i>
+                        </div>
+                        <span style="font-weight: 600;">My Wishlist</span>
+                    </div>
+                    <i class="fa fa-chevron-right" style="color: #cbd5e1; font-size: 12px;"></i>
+                </a>
 
-        <h3 style="margin-bottom: 4px;"><?= htmlspecialchars($user['username']) ?></h3>
-        <p style="color: var(--text-muted); margin-bottom: 24px; font-size: 14px;">
-            <i class="fa fa-phone" style="font-size: 12px; margin-right: 4px;"></i>
-            <?= htmlspecialchars($user['phone_number']) ?>
-        </p>
+                <a href="my_ads.php" class="profile-menu-item">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="profile-menu-icon">
+                            <i class="fa fa-list-alt"></i>
+                        </div>
+                        <span style="font-weight: 600;">My Ads</span>
+                    </div>
+                    <i class="fa fa-chevron-right" style="color: #cbd5e1; font-size: 12px;"></i>
+                </a>
 
-        <div style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
-            <a href="wishlist.php"
-                style="text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f8f9fa; color: var(--text-dark); transition: all 0.3s; border: 1px solid #eee;">
-                <i class="fa fa-heart"
-                    style="color: var(--primary-green); font-size: 18px; width: 24px; text-align: center;"></i>
-                <span style="font-weight: 500; flex: 1;">My Wishlist</span>
-                <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
-            </a>
+                <a href="settings.php" class="profile-menu-item">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="profile-menu-icon">
+                            <i class="fa fa-cog"></i>
+                        </div>
+                        <span style="font-weight: 600;">Settings</span>
+                    </div>
+                    <i class="fa fa-chevron-right" style="color: #cbd5e1; font-size: 12px;"></i>
+                </a>
 
-            <a href="my_ads.php"
-                style="text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f8f9fa; color: var(--text-dark); transition: all 0.3s; border: 1px solid #eee;">
-                <i class="fa fa-list-alt"
-                    style="color: var(--primary-green); font-size: 18px; width: 24px; text-align: center;"></i>
-                <span style="font-weight: 500; flex: 1;">My Ads</span>
-                <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
-            </a>
-
-            <a href="settings.php"
-                style="text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f8f9fa; color: var(--text-dark); transition: all 0.3s; border: 1px solid #eee;">
-                <i class="fa fa-cog"
-                    style="color: var(--primary-green); font-size: 18px; width: 24px; text-align: center;"></i>
-                <span style="font-weight: 500; flex: 1;">Settings</span>
-                <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
-            </a>
-
-            <a href="help_support.php"
-                style="text-decoration: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px; background: #f8f9fa; color: var(--text-dark); transition: all 0.3s; border: 1px solid #eee;">
-                <i class="fa fa-headset"
-                    style="color: var(--primary-green); font-size: 18px; width: 24px; text-align: center;"></i>
-                <span style="font-weight: 500; flex: 1;">Help & Support</span>
-                <i class="fa fa-chevron-right" style="color: #ccc; font-size: 12px;"></i>
-            </a>
+                <a href="help_support.php" class="profile-menu-item">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="profile-menu-icon">
+                            <i class="fa fa-headset"></i>
+                        </div>
+                        <span style="font-weight: 600;">Help & Support</span>
+                    </div>
+                    <i class="fa fa-chevron-right" style="color: #cbd5e1; font-size: 12px;"></i>
+                </a>
+            </div>
         </div>
     </div>
 </div>

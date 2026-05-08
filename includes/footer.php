@@ -101,34 +101,15 @@
     ?>
 
     <?php if ($show_tutorial && $tut_step): ?>
-        <div id="tutorial-overlay"
-            style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 10000; display: flex; align-items: center; justify-content: center; color: white;">
-            <div id="tutorial-card"
-                style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 40px; border-radius: 32px; max-width: 400px; width: 85%; text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,0.5); animation: tutorialScaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);">
-                <i class="fa <?= $tut_step['icon'] ?>"
-                    style="font-size: 54px; color: #22c55e; margin-bottom: 24px; display: block;"></i>
-                <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 12px;"><?= $tut_step['title'] ?></h2>
-                <p style="font-size: 16px; line-height: 1.6; color: rgba(255,255,255,0.8); margin-bottom: 32px;">
-                    <?= $tut_step['desc'] ?></p>
-
+        <div id="tutorial-overlay" class="tutorial-overlay">
+            <div id="tutorial-card" class="tutorial-card">
+                <i class="fa <?= $tut_step['icon'] ?> tutorial-icon-large"></i>
+                <h2 class="tutorial-step-title"><?= $tut_step['title'] ?></h2>
+                <p class="tutorial-step-desc"><?= $tut_step['desc'] ?></p>
                 <button onclick="finishSectionTutorial('<?= $tut_column ?>')" class="btn-primary"
-                    style="width: 100%; padding: 16px; border-radius: 16px; font-weight: 700; font-size: 16px; border: none; cursor: pointer;">Got
-                    it!</button>
+                    style="width: 100%; border: none; cursor: pointer;">Got it!</button>
             </div>
         </div>
-        <style>
-            @keyframes tutorialScaleIn {
-                from {
-                    opacity: 0;
-                    transform: scale(0.9);
-                }
-
-                to {
-                    opacity: 1;
-                    transform: scale(1);
-                }
-            }
-        </style>
         <script>
             async function finishSectionTutorial(section) {
                 document.getElementById('tutorial-overlay').style.display = 'none';
@@ -158,31 +139,17 @@
 
         function showToast(message) {
             const toast = document.createElement('div');
-            toast.style.background = 'var(--primary-green-dark, #2e7d32)';
-            toast.style.color = 'white';
-            toast.style.padding = '12px 24px';
-            toast.style.borderRadius = '8px';
-            toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-            toast.style.fontSize = '14px';
-            toast.style.fontWeight = '500';
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(-20px)';
-            toast.style.transition = 'all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
-            toast.style.display = 'flex';
-            toast.style.alignItems = 'center';
-            toast.style.gap = '8px';
+            toast.className = 'toast-msg';
             toast.innerHTML = `<i class="fa fa-bell"></i> ${message}`;
 
             document.getElementById('toast-container').appendChild(toast);
 
             setTimeout(() => {
-                toast.style.opacity = '1';
-                toast.style.transform = 'translateY(0)';
+                toast.classList.add('show');
             }, 10);
 
             setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(-20px)';
+                toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 300);
             }, 4000);
         }
