@@ -96,15 +96,34 @@ try {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )");
 
-    // Migration: Add phone and is_admin columns to users if they don't exist
+    // Migration: Add email, phone, and is_admin columns to users if they don't exist
+    $check_email = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");
+    if (!$check_email->fetch()) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN email VARCHAR(155) UNIQUE DEFAULT NULL AFTER phone_number");
+    }
+
+    $check_is_admin = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
+    if (!$check_is_admin->fetch()) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0 AFTER role");
+    }
+
     $check_phone = $pdo->query("SHOW COLUMNS FROM users LIKE 'phone'");
     if (!$check_phone->fetch()) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT NULL AFTER email");
+        // Safe check: Only use AFTER if email exists, otherwise just add it
+        $after_clause = "AFTER email";
+        $check_email = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");
+        if (!$check_email->fetch())
+            $after_clause = "";
+        $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT NULL $after_clause");
     }
 
     $check_perm = $pdo->query("SHOW COLUMNS FROM users LIKE 'permissions'");
     if (!$check_perm->fetch()) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL AFTER is_admin");
+        $after_clause = "AFTER is_admin";
+        $check_is_admin = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
+        if (!$check_is_admin->fetch())
+            $after_clause = "";
+        $pdo->exec("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL $after_clause");
     }
 
     // Auto-fix: Ensure the currently logged-in main admin has all permissions
@@ -114,9 +133,12 @@ try {
         $_SESSION['admin_permissions'] = $stmt_admin->fetchColumn();
     }
 
-    function has_permission($module) {
-        if (!isset($_SESSION['admin_permissions'])) return false;
-        if ($_SESSION['admin_permissions'] === '*') return true;
+    function has_permission($module)
+    {
+        if (!isset($_SESSION['admin_permissions']))
+            return false;
+        if ($_SESSION['admin_permissions'] === '*')
+            return true;
         $perms = explode(',', $_SESSION['admin_permissions']);
         return in_array($module, $perms);
     }
@@ -179,6 +201,33 @@ try {
             $uid = 'ENTAGD' . rand(1000, 9999);
             $pdo->prepare("UPDATE products SET unique_id = ? WHERE id = ?")->execute([$uid, $p['id']]);
         }
+    }
+
+    // [LOCATION & CONTACT] Auto-add missing columns to products
+    try {
+        $pdo->query("SELECT whatsapp_number FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL AFTER expiry_date");
+    }
+    try {
+        $pdo->query("SELECT phone_number FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN phone_number VARCHAR(20) DEFAULT NULL AFTER whatsapp_number");
+    }
+    try {
+        $pdo->query("SELECT location_name FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN location_name VARCHAR(255) DEFAULT NULL AFTER phone_number");
+    }
+    try {
+        $pdo->query("SELECT latitude FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN latitude DECIMAL(10, 8) DEFAULT NULL AFTER location_name");
+    }
+    try {
+        $pdo->query("SELECT longitude FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN longitude DECIMAL(11, 8) DEFAULT NULL AFTER latitude");
     }
 
     // [AD APPROVAL SYSTEM] Auto-add is_verified to products
@@ -255,6 +304,39 @@ try {
                 $fullPath = dirname(__FILE__) . '/' . $img;
                 recompressTo50kb($fullPath);
             }
+        }
+    }
+
+    // --- PURGE ARCHIVED ADS AFTER 60 DAYS ---
+    // Permanently remove ads and images that have been inactive for more than 60 days
+    $purge_interval = 60;
+    $purge_stmt = $pdo->prepare("
+        SELECT p.id, pi.image_path 
+        FROM products p
+        LEFT JOIN product_images pi ON p.id = pi.product_id
+        WHERE p.status IN ('deleted', 'sold', 'expired') 
+        AND p.updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+    ");
+    $purge_stmt->execute([$purge_interval]);
+    $to_purge = $purge_stmt->fetchAll();
+
+    if (!empty($to_purge)) {
+        $purge_ids = array_unique(array_column($to_purge, 'id'));
+
+        // 1. Physical Cleanup (Delete image files)
+        foreach ($to_purge as $item) {
+            if ($item['image_path']) {
+                $fullPath = dirname(__FILE__) . '/' . $item['image_path'];
+                if (file_exists($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+        }
+
+        // 2. Database Cleanup (Cascading deletes handle child tables)
+        $final_delete = $pdo->prepare("DELETE FROM products WHERE id = ?");
+        foreach ($purge_ids as $pid) {
+            $final_delete->execute([$pid]);
         }
     }
 

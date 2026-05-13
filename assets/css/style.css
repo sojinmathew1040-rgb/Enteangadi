@@ -4,18 +4,20 @@
     --primary-green: #2E7D32;
     --primary-green-light: #4CAF50;
     --primary-green-dark: #1B5E20;
+    --accent-gold: #FFB300;
     --white: #FFFFFF;
-    --background: #F5F7F5;
-    --text-dark: #1A1A1A;
-    --text-muted: #666666;
-    --border-color: #E0E0E0;
-    --danger: #D32F2F;
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
-    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.12);
-    --border-radius: 16px;
-    --border-radius-sm: 8px;
-    --glass-bg: rgba(255, 255, 255, 0.85);
+    --background: #F8FAF8;
+    --text-dark: #0F172A;
+    --text-muted: #64748B;
+    --border-color: #E2E8F0;
+    --danger: #EF4444;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+    --border-radius: 20px;
+    --border-radius-sm: 12px;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-blur: blur(12px);
 }
 
 * {
@@ -202,8 +204,14 @@ header nav a:hover {
 }
 
 /* Product Grid View */
-/* 4x4 desktop (Wait, 4x4 means 4 columns, up to 4 rows? So 4 cols) */
 .product-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+}
+
+/* My Ads Dashboard Grid */
+.my-ads-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 24px;
@@ -310,6 +318,28 @@ header nav a:hover {
     color: var(--text-muted);
     display: flex;
     justify-content: space-between;
+}
+
+.verified-badge {
+    color: #3b82f6;
+    margin-left: 6px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+}
+
+.verified-badge i {
+    background: #eff6ff;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 10px;
+    border: 1px solid #bfdbfe;
 }
 
 /* Forms */
@@ -575,9 +605,10 @@ footer {
     }
 
     /* 2x2 grid on mobile */
-    .product-grid {
+    .product-grid,
+    .my-ads-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
+        gap: 12px;
     }
 
     .product-detail-container {
@@ -1578,4 +1609,61 @@ input[type="checkbox"]:checked+.toggle-btn {
     font-size: 12px;
     font-weight: 700;
     border: 1px solid #bae6fd;
+}
+
+/* Premium Empty State */
+.empty-state-premium {
+    text-align: center;
+    padding: 80px 24px;
+    background: white;
+    border-radius: 32px;
+    box-shadow: var(--shadow-sm);
+    margin: 40px 0;
+}
+
+.empty-illustration {
+    width: 120px;
+    height: 120px;
+    background: #f1f5f9;
+    color: #94a3b8;
+    border-radius: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    margin: 0 auto 32px;
+    transform: rotate(-10deg);
+}
+
+.empty-state-premium h3 {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 12px;
+}
+
+.empty-state-premium p {
+    color: var(--text-muted);
+    max-width: 400px;
+    margin: 0 auto 32px;
+    line-height: 1.6;
+}
+
+.btn-premium-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, var(--primary-green) 0%, var(--primary-green-dark) 100%);
+    color: white !important;
+    padding: 16px 32px;
+    border-radius: 20px;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 10px 25px rgba(46, 125, 50, 0.2);
+    transition: all 0.3s;
+}
+
+.btn-premium-cta:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 30px rgba(46, 125, 50, 0.3);
 }

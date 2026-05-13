@@ -15,17 +15,23 @@ if (!function_exists('recompressTo50kb')) {
         if (!file_exists($sourcePath))
             return false;
 
+        if (!function_exists('imagecreatefromjpeg'))
+            return false;
+
         $info = getimagesize($sourcePath);
         if (!$info)
             return false;
 
         if ($info['mime'] == 'image/jpeg')
-            $image = imagecreatefromjpeg($sourcePath);
+            $image = @imagecreatefromjpeg($sourcePath);
         elseif ($info['mime'] == 'image/png')
-            $image = imagecreatefrompng($sourcePath);
+            $image = @imagecreatefrompng($sourcePath);
         elseif ($info['mime'] == 'image/gif')
-            $image = imagecreatefromgif($sourcePath);
+            $image = @imagecreatefromgif($sourcePath);
         else
+            return false;
+
+        if (!$image)
             return false;
 
         // "Compress Extra" - Target very low quality for archived/expired items
@@ -40,17 +46,25 @@ if (!function_exists('recompressTo50kb')) {
 if (!function_exists('compressAndResizeImage')) {
     function compressAndResizeImage($source, $destination, $max_width = 800, $quality = 60)
     {
+        if (!function_exists('imagecreatefromjpeg')) {
+            // Fallback: Just copy file without compression if GD is missing
+            return copy($source, $destination);
+        }
+
         $info = getimagesize($source);
         if (!$info)
             return false;
 
         if ($info['mime'] == 'image/jpeg')
-            $image = imagecreatefromjpeg($source);
+            $image = @imagecreatefromjpeg($source);
         elseif ($info['mime'] == 'image/gif')
-            $image = imagecreatefromgif($source);
+            $image = @imagecreatefromgif($source);
         elseif ($info['mime'] == 'image/png')
-            $image = imagecreatefrompng($source);
+            $image = @imagecreatefrompng($source);
         else
+            return false;
+
+        if (!$image)
             return false;
 
         list($width, $height) = getimagesize($source);

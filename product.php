@@ -47,15 +47,6 @@ try {
         $is_wishlisted = (bool) $wish_stmt->fetch();
     }
 
-    // Admin Action: Toggle Verification
-    if ($is_admin && isset($_POST['admin_action'])) {
-        $new_status = ($_POST['admin_action'] === 'verify') ? 1 : 0;
-        $v_stmt = $pdo->prepare("UPDATE products SET is_verified = ? WHERE id = ?");
-        $v_stmt->execute([$new_status, $product_id]);
-        header("Location: product.php?id=" . $product_id . "&success=status_updated");
-        exit;
-    }
-
 } catch (PDOException $e) {
     $product = null;
 }
@@ -63,443 +54,1029 @@ try {
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
+<div class="product-page-premium">
     <?php if ($product): ?>
-        <div class="product-detail-container">
-            <div class="product-detail-image">
-                <?php if (!empty($images)): ?>
-                    <div
-                        style="position: relative; border-radius: var(--border-radius); overflow: hidden; background: #f0f0f0;">
-                        <?php if ($product['type'] == 'buy'): ?>
-                            <div class="badge-wanted"
-                                style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
-                                Wanted</div>
+        <div class="container">
+            <?php if ($product['status'] !== 'active'): ?>
+                <div class="status-warning-banner-premium">
+                    <div class="banner-icon">
+                        <i class="fa <?= ($product['status'] == 'deleted' ? 'fa-trash-alt' : 'fa-info-circle') ?>"></i>
+                    </div>
+                    <div class="banner-text">
+                        <h3>Listing <?= ucfirst($product['status']) ?></h3>
+                        <p>This advertisement is no longer live. Only you can see this page.</p>
+                    </div>
+                    <?php if ($is_owner): ?>
+                        <a href="user/my_ads.php" class="btn-banner-action">Back to Dashboard</a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <!-- Breadcrumbs -->
+            <div class="premium-breadcrumbs">
+                <a href="index.php">Home</a> <i class="fa fa-chevron-right"></i>
+                <a
+                    href="category.php?id=<?= $product['category_id'] ?>"><?= htmlspecialchars($product['category_name'] ?? 'General') ?></a>
+                <i class="fa fa-chevron-right"></i>
+                <span><?= htmlspecialchars($product['title']) ?></span>
+            </div>
+
+            <div class="product-main-layout">
+                <!-- Left: Media Section -->
+                <div class="product-media-section">
+                    <div class="main-gallery-wrapper">
+                        <?php if (!empty($images)): ?>
+                            <div class="badge-type status-<?= $product['type'] ?>">
+                                <?= $product['type'] == 'buy' ? 'Wanted' : 'For Sale' ?>
+                            </div>
+                            <div class="image-carousel-premium" id="mainCarousel" onscroll="updateSliderCounter(this)">
+                                <?php foreach ($images as $img): ?>
+                                    <div class="carousel-item-premium">
+                                        <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($product['title']) ?>"
+                                            onclick="openLightbox()">
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php if (count($images) > 1): ?>
+                                <div class="carousel-counter-premium">
+                                    <span id="currentImg">1</span> / <?= count($images) ?>
+                                </div>
+                                <div class="carousel-nav-btns">
+                                    <button onclick="scrollGallery(-1)"><i class="fa fa-chevron-left"></i></button>
+                                    <button onclick="scrollGallery(1)"><i class="fa fa-chevron-right"></i></button>
+                                </div>
+                            <?php endif; ?>
                         <?php else: ?>
-                            <div class="badge-selling"
-                                style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
-                                For Sale</div>
-                        <?php endif; ?>
-                        <div class="image-carousel"
-                            style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; cursor: pointer;"
-                            onscroll="updateImageCounter(this)" onclick="openLightbox()">
-                            <?php foreach ($images as $index => $img): ?>
-                                <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($product['title']) ?>"
-                                    style="flex: 0 0 100%; width: 100%; scroll-snap-align: start; object-fit: contain; aspect-ratio: 4/3; border-radius: 0; cursor: zoom-in;">
-                            <?php endforeach; ?>
-                        </div>
-                        <style>
-                            .image-carousel::-webkit-scrollbar {
-                                display: none;
-                            }
-                        </style>
-                        <?php if (count($images) > 1): ?>
-                            <div
-                                style="position: absolute; bottom: 16px; right: 16px; background: rgba(0,0,0,0.6); color: white; padding: 4px 12px; border-radius: 16px; font-size: 14px; font-weight: 500; pointer-events: none;">
-                                <span id="current-image-index">1</span> / <?= count($images) ?>
+                            <div class="no-image-placeholder">
+                                <i class="fa fa-image"></i>
+                                <p>No images available</p>
                             </div>
                         <?php endif; ?>
                     </div>
 
-                    <!-- Lightbox Modal -->
-                    <div id="lightbox"
-                        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.98); z-index: 9999; flex-direction: column;">
-
-                        <!-- Close Button -->
-                        <span
-                            style="position: absolute; top: 20px; right: 25px; color: #fff; font-size: 35px; font-weight: 300; cursor: pointer; z-index: 10002; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 50%;"
-                            onclick="closeLightbox()">&times;</span>
-
-                        <!-- Scrollable Image Container -->
-                        <div id="lightbox-scroll-container"
-                            style="width: 100%; height: 100%; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none;"
-                            onscroll="syncLightboxCounter(this)">
-                            <?php foreach ($images as $img): ?>
-                                <div
-                                    style="flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; scroll-snap-align: center;">
-                                    <img src="<?= htmlspecialchars($img) ?>"
-                                        style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                    <!-- Thumbnails -->
+                    <?php if (count($images) > 1): ?>
+                        <div class="thumbnail-grid-premium">
+                            <?php foreach ($images as $index => $img): ?>
+                                <div class="thumb-item" onclick="jumpToImage(<?= $index ?>)">
+                                    <img src="<?= htmlspecialchars($img) ?>" alt="Thumb">
                                 </div>
                             <?php endforeach; ?>
                         </div>
-
-                        <!-- Navigation Buttons (Hidden on mobile) -->
-                        <button onclick="scrollLightbox(-1)" class="lightbox-nav"
-                            style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); color: white; border: none; width: 50px; height: 50px; cursor: pointer; font-size: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10001;">&#10094;</button>
-                        <button onclick="scrollLightbox(1)" class="lightbox-nav"
-                            style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.1); color: white; border: none; width: 50px; height: 50px; cursor: pointer; font-size: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10001;">&#10095;</button>
-
-                        <!-- Counter -->
-                        <div id="lightbox-counter-label"
-                            style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); color: white; font-size: 16px; font-weight: 500; background: rgba(0,0,0,0.5); padding: 6px 16px; border-radius: 20px;">
-                        </div>
-
-                        <style>
-                            #lightbox-scroll-container::-webkit-scrollbar {
-                                display: none;
-                            }
-
-                            @media (max-width: 768px) {
-                                .lightbox-nav {
-                                    display: none !important;
-                                }
-                            }
-                        </style>
-                    </div>
-
-                    <script>
-                        let currentLightboxIndex = 0;
-                        const productImagesCount = <?= count($images) ?>;
-
-                        function updateImageCounter(element) {
-                            const scrollLeft = element.scrollLeft;
-                            const clientWidth = element.clientWidth;
-                            currentLightboxIndex = Math.round(scrollLeft / clientWidth);
-                            const counterElement = document.getElementById('current-image-index');
-                            if (counterElement) {
-                                counterElement.innerText = currentLightboxIndex + 1;
-                            }
-                        }
-
-                        function syncLightboxCounter(element) {
-                            const scrollLeft = element.scrollLeft;
-                            const clientWidth = element.clientWidth;
-                            const index = Math.round(scrollLeft / clientWidth);
-                            document.getElementById('lightbox-counter-label').innerText = `${index + 1} / ${productImagesCount}`;
-                        }
-
-                        function openLightbox() {
-                            const lightbox = document.getElementById('lightbox');
-                            lightbox.style.display = 'flex';
-                            document.body.style.overflow = 'hidden';
-
-                            const container = document.getElementById('lightbox-scroll-container');
-                            const targetScroll = currentLightboxIndex * container.clientWidth;
-                            container.scrollLeft = targetScroll;
-                            syncLightboxCounter(container);
-                        }
-
-                        function closeLightbox() {
-                            document.getElementById('lightbox').style.display = 'none';
-                            document.body.style.overflow = 'auto';
-                        }
-
-                        function scrollLightbox(direction) {
-                            const container = document.getElementById('lightbox-scroll-container');
-                            const newIndex = Math.max(0, Math.min(productImagesCount - 1, Math.round(container.scrollLeft / container.clientWidth) + direction));
-                            container.scrollTo({
-                                left: newIndex * container.clientWidth,
-                                behavior: 'smooth'
-                            });
-                        }
-
-                        function scrollToIndex(index) {
-                            const container = document.getElementById('lightbox-scroll-container');
-                            container.scrollTo({
-                                left: index * container.clientWidth,
-                                behavior: 'smooth'
-                            });
-                        }
-
-                        // Close on Escape key and Arrow keys
-                        document.addEventListener('keydown', function (e) {
-                            if (document.getElementById('lightbox').style.display === 'flex') {
-                                if (e.key === "Escape") closeLightbox();
-                                if (e.key === "ArrowRight") scrollLightbox(1);
-                                if (e.key === "ArrowLeft") scrollLightbox(-1);
-                            }
-                        });
-                    </script>
-                <?php else: ?>
-                    <div
-                        style="width: 100%; aspect-ratio: 4/3; background: #e0e0e0; border-radius: var(--border-radius); display: flex; align-items: center; justify-content: center;">
-                        <i class="fa fa-image" style="font-size: 64px; color: #999;"></i>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <div class="product-detail-info">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <h1 style="font-size: 32px; color: var(--text-dark); margin-bottom: 8px; font-weight: 700; flex: 1;">
-                        <?= htmlspecialchars($product['title']) ?>
-                    </h1>
-                    <div style="display: flex; gap: 8px; align-items: center; margin-left: 16px;">
-                        <div class="wishlist-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)"
-                            style="background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                            <i class="fa<?= $is_wishlisted ? 's' : 'r' ?> fa-heart"
-                                style="color: <?= $is_wishlisted ? 'var(--primary-green)' : '#999' ?>; font-size: 20px;"></i>
-                        </div>
-                        <div class="share-btn" onclick="shareProduct()"
-                            style="background: #fff; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
-                            <i class="fa fa-share-alt" style="color: #6366f1; font-size: 20px;"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    style="font-size: 13px; font-weight: 700; color: var(--primary-green); margin-bottom: 12px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 10px;">
-                    <span>ID: <?= htmlspecialchars($product['unique_id']) ?></span>
-                    <?php if ($product['is_verified']): ?>
-                        <span class="verified-tag-premium">
-                            <i class="fa fa-check-circle"></i> Verified Listing
-                        </span>
                     <?php endif; ?>
+
                 </div>
 
-                <div
-                    style="margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">
-                    <?= $product['type'] == 'buy' ? 'Budget' : 'Price' ?>
-                </div>
-                <div style="font-size: 28px; font-weight: 700; color: var(--primary-green-dark); margin-bottom: 16px;">
-                    ₹ <?= number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2) ?>
-                </div>
-
-                <?php if (!empty($product['expiry_date'])): ?>
-                    <?php
-                    $expiry = strtotime($product['expiry_date']);
-                    $today = strtotime(date('Y-m-d'));
-                    $is_expired = ($expiry < $today);
-                    $is_today = ($expiry == $today);
-                    $date_str = date('d M, Y', $expiry);
-                    ?>
-                    <div
-                        style="margin-top: 12px; margin-bottom: 24px; padding: 12px 16px; border-radius: 12px; display: flex; align-items: center; gap: 12px; background: <?= $is_expired ? '#ffebee' : ($is_today ? '#fff3e0' : '#fff8e1') ?>; color: <?= $is_expired ? '#c62828' : ($is_today ? '#e65100' : '#f57f17') ?>; border: 1px solid <?= $is_expired ? '#ffcdd2' : ($is_today ? '#ffe0b2' : '#ffecb3') ?>;">
-                        <i class="fa <?= $is_expired ? 'fa-calendar-times' : 'fa-clock' ?>" style="font-size: 20px;"></i>
-                        <div>
-                            <span
-                                style="display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; opacity: 0.8; letter-spacing: 0.5px;">
-                                <?= $is_expired ? 'Expired' : ($is_today ? 'Expires Today' : 'Best Before') ?>
-                            </span>
-                            <span style="font-size: 16px; font-weight: 700;"><?= $date_str ?></span>
+                <!-- Right: Information Section -->
+                <div class="product-info-section">
+                    <div class="sticky-info-card">
+                        <div class="price-header-premium">
+                            <div class="price-box">
+                                <span class="price-label"><?= $product['type'] == 'buy' ? 'Budget' : 'Price' ?></span>
+                                <h2 class="price-value">₹ <?= number_format($product['price'], 0) ?></h2>
+                            </div>
+                            <div class="info-actions">
+                                <button class="action-circle-btn wishlist <?= $is_wishlisted ? 'active' : '' ?>"
+                                    onclick="toggleWishlist(event, <?= $product['id'] ?>)">
+                                    <i class="fa<?= $is_wishlisted ? 's' : 'r' ?> fa-heart"></i>
+                                </button>
+                                <button class="action-circle-btn share" onclick="shareProduct()">
+                                    <i class="fa fa-share-alt"></i>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                <?php endif; ?>
 
-                <div
-                    style="display: flex; justify-content: space-between; color: var(--text-muted); font-size: 14px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border-color);">
-                    <span><i class="fa fa-tag"></i>
-                        <?= htmlspecialchars($product['category_name'] ?? 'Uncategorized') ?></span>
-                    <span>
-                        <a href="https://www.google.com/maps/search/?api=1&query=<?= $product['latitude'] ?>,<?= $product['longitude'] ?>"
-                            target="_blank" style="text-decoration: none; color: inherit;">
-                            <i class="fa fa-map-marker-alt"></i>
-                            <?= htmlspecialchars($product['location_name'] ?? 'Unknown Location') ?>
-                        </a>
-                    </span>
-                    <span><i class="fa fa-calendar"></i> <?= date('M d, Y', strtotime($product['created_at'])) ?></span>
-                </div>
+                        <h1 class="product-title-premium"><?= htmlspecialchars($product['title']) ?></h1>
 
-                <h3 style="font-size: 18px; margin-bottom: 12px; font-weight: 600;">Description</h3>
-                <p
-                    style="color: var(--text-muted); line-height: 1.6; margin-bottom: 32px; white-space: pre-wrap; text-align: left;">
-                    <?= htmlspecialchars($product['description']) ?>
-                </p>
+                        <div class="meta-tags-premium">
+                            <span class="meta-tag"><i class="fa fa-map-marker-alt"></i>
+                                <?= htmlspecialchars($product['location_name'] ?? 'Kerala') ?></span>
+                            <span class="meta-tag"><i class="fa fa-calendar-alt"></i>
+                                <?= date('M d, Y', strtotime($product['created_at'])) ?></span>
+                            <span class="meta-tag"><i class="fa fa-eye"></i> <?= number_format($product['views']) ?>
+                                views</span>
+                        </div>
 
-                <div
-                    style="background: var(--background); padding: 24px; border-radius: var(--border-radius); text-align: center;">
-                    <h3 style="font-size: 16px; margin-bottom: 16px;"><?= $product['type'] == 'buy' ? 'Buyer' : 'Seller' ?>
-                        Details</h3>
-                    <div
-                        style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 24px;">
-                        <?php
-                        $seller_initial = strtoupper(substr($product['username'], 0, 1));
-                        $is_admin = ($product['role'] === 'admin');
-                        ?>
-                        <?php if (!empty($product['profile_picture'])): ?>
-                            <img src="<?= htmlspecialchars($product['profile_picture']) ?>" alt="Seller"
-                                style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-green);">
-                        <?php else: ?>
-                            <div
-                                style="width: 64px; height: 64px; border-radius: 50%; background: var(--primary-green); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold;">
-                                <?= $is_admin ? 'E' : $seller_initial ?>
+                        <?php if ($product['is_verified']): ?>
+                            <div class="verified-banner-premium">
+                                <div class="v-icon"><i class="fa fa-check-double"></i></div>
+                                <div class="v-text">
+                                    <strong>Verified Listing</strong>
+                                    <span>This ad has been verified by our team.</span>
+                                </div>
                             </div>
                         <?php endif; ?>
 
-                        <div style="text-align: left;">
-                            <p style="font-size: 20px; font-weight: 600; color: var(--text-dark); margin: 0;">
-                                <?php if ($is_admin): ?>
-                                    Enteangadi Official <i class="fa fa-check-circle"
-                                        style="color: var(--primary-green); font-size: 16px;" title="Verified Admin"></i>
+                        <!-- Seller Section -->
+                        <div class="seller-card-premium">
+                            <div class="seller-info-top">
+                                <?php if (!empty($product['profile_picture'])): ?>
+                                    <img src="<?= htmlspecialchars($product['profile_picture']) ?>" alt="Seller"
+                                        class="seller-avatar">
                                 <?php else: ?>
-                                    <?= htmlspecialchars($product['username']) ?>
+                                    <div class="seller-avatar-placeholder"><?= strtoupper(substr($product['username'], 0, 1)) ?>
+                                    </div>
                                 <?php endif; ?>
-                            </p>
-                            <p style="font-size: 14px; color: var(--text-muted); margin: 4px 0 0 0;">Member since
-                                <?= date('Y') ?>
-                            </p>
+                                <div class="seller-names">
+                                    <h4><?= htmlspecialchars($product['username']) ?></h4>
+                                    <p>Member since <?= date('Y', strtotime($product['created_at'])) ?></p>
+                                </div>
+                            </div>
+
+                            <?php if (isset($_SESSION['user_id'])): ?>
+                                <?php if ($_SESSION['user_id'] != $product['user_id']): ?>
+                                    <div class="contact-btns-grid">
+                                        <a href="user/chat.php?user_id=<?= $product['user_id'] ?>&product_id=<?= $product['id'] ?>"
+                                            class="btn-chat-primary">
+                                            <i class="fa fa-comment-dots"></i> Chat Now
+                                        </a>
+                                        <?php if (!empty($product['product_whatsapp'])): ?>
+                                            <a href="https://wa.me/<?= preg_replace('/\D/', '', $product['product_whatsapp']) ?>"
+                                                target="_blank" class="btn-whatsapp">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        <?php if (!empty($product['product_phone'])): ?>
+                                            <a href="tel:<?= $product['product_phone'] ?>" class="btn-phone">
+                                                <i class="fa fa-phone"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <a href="user/edit_ad.php?id=<?= $product['id'] ?>" class="btn-edit-ad">
+                                        <i class="fa fa-edit"></i> Edit Your Ad
+                                    </a>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <div class="login-to-contact">
+                                    <p>Login to contact the seller</p>
+                                    <a href="login.php" class="btn-login-small">Login / Register</a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Safety Section -->
+                        <div class="safety-tips-premium">
+                            <div class="safety-tips-card">
+                                <h4><i class="fa fa-shield-alt"></i> Safety Tips</h4>
+                                <ul>
+                                    <li><i class="fa fa-check-circle"></i> Meet in a public place</li>
+                                    <li><i class="fa fa-check-circle"></i> Check item before paying</li>
+                                    <li><i class="fa fa-check-circle"></i> Don't pay in advance</li>
+                                </ul>
+                                <button onclick="reportProduct(<?= $product['id'] ?>)" class="btn-report-link">Report this
+                                    ad</button>
+                            </div>
                         </div>
                     </div>
-
-                    <?php if (isset($_SESSION['user_id'])): ?>
-                        <?php if ($_SESSION['user_id'] == $product['user_id']): ?>
-                            <div
-                                style="padding: 16px; background: #e8f5e9; border-radius: 8px; color: var(--primary-green-dark); font-size: 14px; font-weight: 500;">
-                                <i class="fa fa-info-circle"></i> This is your advertisement.
-                            </div>
-                        <?php else: ?>
-                            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
-                                <!-- In-app chat (default) -->
-                                <a href="user/chat.php?user_id=<?= $product['user_id'] ?>&product_id=<?= $product['id'] ?>"
-                                    class="btn-primary"
-                                    style="text-decoration: none; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <i class="fa fa-comments" style="font-size: 20px;"></i> Chat in App
-                                </a>
-
-                                <!-- WhatsApp Chat (Optional) -->
-                                <?php if (!empty($product['product_whatsapp'])): ?>
-                                    <?php
-                                    $wa_number = preg_replace('/\D/', '', $product['product_whatsapp']);
-                                    $wa_message = urlencode("Hi, I'm interested in your product: " . $product['title']);
-                                    $wa_url = "https://wa.me/{$wa_number}?text={$wa_message}";
-                                    ?>
-                                    <a href="<?= $wa_url ?>" target="_blank" class="whatsapp-btn"
-                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;">
-                                        <i class="fab fa-whatsapp" style="font-size: 20px;"></i> Chat on WhatsApp
-                                    </a>
-                                <?php endif; ?>
-
-                                <!-- Phone Call (Optional) -->
-                                <?php if (!empty($product['product_phone'])): ?>
-                                    <a href="tel:<?= htmlspecialchars($product['product_phone']) ?>" class="btn-secondary"
-                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; background: #f0f0f0; color: #333;">
-                                        <i class="fa fa-phone" style="font-size: 20px;"></i> Call
-                                        <?= $product['type'] == 'buy' ? 'Buyer' : 'Seller' ?>
-                                    </a>
-                                <?php endif; ?>
-                            </div>
-                            <button onclick="reportProduct(<?= $product['id'] ?>)" class="btn-danger"
-                                style="width: 100%; margin-top: 12px; background: transparent; color: var(--danger) !important; border: 1px solid var(--danger);">
-                                <i class="fa fa-flag"></i> Report Ad
-                            </button>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <div style="padding: 16px; background: #fff3e0; border-radius: 8px; color: #e65100; font-size: 14px;">
-                            <i class="fa fa-lock"></i> Please <a href="login.php"
-                                style="color: #e65100; font-weight: bold; text-decoration: underline;">Login</a> to contact the
-                            seller.
-                        </div>
-                    <?php endif; ?>
                 </div>
 
-                <!-- Admin Verification Controls (Visible only to Admin) -->
-                <?php if ($is_admin): ?>
-                    <div
-                        style="margin-top: 24px; padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; text-align: left;">
-                        <h4
-                            style="font-size: 15px; margin-bottom: 12px; color: var(--text-dark); display: flex; align-items: center; gap: 8px; font-weight: 700;">
-                            <i class="fa fa-user-shield" style="color: #0284c7;"></i> Admin Management
-                        </h4>
-                        <form method="POST">
-                            <?php if (!$product['is_verified']): ?>
-                                <input type="hidden" name="admin_action" value="verify">
-                                <button type="submit" class="btn-primary"
-                                    style="width: 100%; background: #0284c7; border-color: #0284c7; font-size: 14px; padding: 12px; border-radius: 10px;">
-                                    <i class="fa fa-check-circle"></i> Verify & Add Blue Tick
-                                </button>
-                                <p style="margin: 10px 0 0 0; font-size: 11px; color: var(--text-muted); text-align: center;">This
-                                    listing was auto-approved. Click to verify it manually.</p>
-                            <?php else: ?>
-                                <input type="hidden" name="admin_action" value="unverify">
-                                <button type="submit" class="btn-secondary"
-                                    style="width: 100%; color: #dc2626; border-color: #fecaca; background: #fef2f2; font-size: 14px; padding: 12px; border-radius: 10px;">
-                                    <i class="fa fa-times-circle"></i> Remove Verification
-                                </button>
-                                <p style="margin: 10px 0 0 0; font-size: 11px; color: #ef4444; text-align: center;">This ad is
-                                    verified. Click to remove the trust badge.</p>
-                            <?php endif; ?>
-                        </form>
+                <!-- Description Section (Moved for better mobile flow) -->
+                <div class="description-section-fullwidth">
+                    <div class="description-card-premium">
+                        <h3>Description</h3>
+                        <div class="description-content">
+                            <?= nl2br(htmlspecialchars($product['description'])) ?>
+                        </div>
                     </div>
-                <?php endif; ?>
-
-                <!-- Safety Tips Section -->
-                <div
-                    style="margin-top: 24px; padding: 20px; background: #fffde7; border-radius: var(--border-radius); border-left: 4px solid #fbc02d;">
-                    <h4
-                        style="font-size: 15px; font-weight: 700; color: #f57f17; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fa fa-shield-alt"></i> Safety Tips for
-                        <?= $product['type'] == 'buy' ? 'Sellers' : 'Buyers' ?>
-                    </h4>
-                    <ul style="padding-left: 20px; font-size: 13px; color: #5d4037; line-height: 1.6; text-align: left;">
-                        <li>Meet the <?= $product['type'] == 'buy' ? 'buyer' : 'seller' ?> in a public place.</li>
-                        <li>Inspect the item thoroughly before
-                            <?= $product['type'] == 'buy' ? 'completing the sale' : 'paying' ?>.
-                        </li>
-                        <li>Avoid sharing personal information or paying in advance.</li>
-                        <li>Use the Enteangadi chat for initial communication.</li>
-                    </ul>
                 </div>
             </div>
         </div>
-    </div>
-<?php else: ?>
-    <p>Product not found.</p>
-<?php endif; ?>
+
+        <!-- Lightbox -->
+        <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+            <span class="lightbox-close">&times;</span>
+            <div class="lightbox-content" onclick="event.stopPropagation()">
+                <div class="lightbox-gallery" id="lightboxGallery" onscroll="updateLightboxCounter(this)">
+                    <?php foreach ($images as $img): ?>
+                        <div class="lightbox-item">
+                            <img src="<?= htmlspecialchars($img) ?>" alt="Gallery Image">
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php if (count($images) > 1): ?>
+                    <div class="lightbox-counter">
+                        <span id="lbCurrent">1</span> / <?= count($images) ?>
+                    </div>
+                    <div class="lightbox-nav">
+                        <button onclick="scrollLightbox(-1)"><i class="fa fa-chevron-left"></i></button>
+                        <button onclick="scrollLightbox(1)"><i class="fa fa-chevron-right"></i></button>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+    <?php else: ?>
+        <div class="container empty-state-premium">
+            <i class="fa fa-search"></i>
+            <h2>Product not found</h2>
+            <a href="index.php">Back to Home</a>
+        </div>
+    <?php endif; ?>
 </div>
 
-<!-- Report Modal -->
-<div id="reportModal"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
-    <div style="background: white; padding: 32px; border-radius: var(--border-radius); width: 100%; max-width: 400px;">
-        <h3 style="margin-bottom: 16px;">Report Product</h3>
-        <form id="reportForm">
-            <input type="hidden" id="report_product_id" name="product_id">
-            <div class="form-group">
-                <label>Reason</label>
-                <textarea id="report_reason" name="reason" class="form-control" rows="4" required></textarea>
-            </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                <button type="button" onclick="closeReportModal()" class="btn-secondary">Cancel</button>
-                <button type="submit" class="btn-primary" style="background-color: var(--danger);">Submit
-                    Report</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-    function reportProduct(id) {
-        document.getElementById('report_product_id').value = id;
-        document.getElementById('reportModal').style.display = 'flex';
+<style>
+    .product-page-premium {
+        background: var(--background);
+        padding: 30px 0 100px;
+        min-height: 100vh;
     }
 
-    function closeReportModal() {
-        document.getElementById('reportModal').style.display = 'none';
-        document.getElementById('report_reason').value = '';
+    .premium-breadcrumbs {
+        margin-bottom: 24px;
+        font-size: 13px;
+        color: var(--text-muted);
     }
 
-    document.getElementById('reportForm').addEventListener('submit', function (e) {
-        e.preventDefault();
-        const productId = document.getElementById('report_product_id').value;
-        const reason = document.getElementById('report_reason').value;
+    .premium-breadcrumbs a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-weight: 500;
+    }
 
-        fetch('user/api_report.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `product_id=${productId}&reason=${encodeURIComponent(reason)}`
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Report submitted successfully.');
-                    closeReportModal();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred.');
-            });
-    });
-</script>
+    .premium-breadcrumbs i {
+        font-size: 10px;
+        margin: 0 8px;
+        opacity: 0.5;
+    }
+
+    .product-main-layout {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr;
+        gap: 40px;
+        align-items: start;
+    }
+
+    /* Media Section */
+    .main-gallery-wrapper {
+        position: relative;
+        background: white;
+        border-radius: var(--border-radius);
+        overflow: hidden;
+        box-shadow: var(--shadow-md);
+        aspect-ratio: 4/3;
+    }
+
+    .image-carousel-premium {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        height: 100%;
+        scrollbar-width: none;
+    }
+
+    .image-carousel-premium::-webkit-scrollbar {
+        display: none;
+    }
+
+    .carousel-item-premium {
+        flex: 0 0 100%;
+        height: 100%;
+        scroll-snap-align: start;
+    }
+
+    .carousel-item-premium img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        cursor: zoom-in;
+        background: #f8fafc;
+    }
+
+    .badge-type {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        padding: 8px 20px;
+        border-radius: 12px;
+        color: white;
+        font-weight: 800;
+        font-size: 12px;
+        z-index: 10;
+        box-shadow: var(--shadow-md);
+    }
+
+    .badge-type.status-buy {
+        background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%);
+    }
+
+    .badge-type.status-sell {
+        background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+    }
+
+    .carousel-counter-premium {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(15, 23, 42, 0.7);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        backdrop-filter: blur(4px);
+    }
+
+    .carousel-nav-btns {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        transform: translateY(-50%);
+        display: flex;
+        justify-content: space-between;
+        padding: 0 15px;
+        pointer-events: none;
+    }
+
+    .carousel-nav-btns button {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: white;
+        border: none;
+        box-shadow: var(--shadow-md);
+        cursor: pointer;
+        pointer-events: auto;
+        transition: all 0.2s;
+    }
+
+    .carousel-nav-btns button:hover {
+        transform: scale(1.1);
+        background: var(--primary-green);
+        color: white;
+    }
+
+    .thumbnail-grid-premium {
+        display: flex;
+        gap: 12px;
+        margin-top: 15px;
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+
+    .thumb-item {
+        width: 80px;
+        height: 80px;
+        border-radius: 12px;
+        overflow: hidden;
+        cursor: pointer;
+        border: 2px solid transparent;
+        flex-shrink: 0;
+        transition: all 0.2s;
+    }
+
+    .thumb-item:hover {
+        border-color: var(--primary-green);
+    }
+
+    .thumb-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .description-card-premium {
+        background: white;
+        border-radius: var(--border-radius);
+        padding: 32px;
+        margin-top: 40px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .description-card-premium h3 {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 20px;
+        color: var(--text-dark);
+    }
+
+    .description-content {
+        color: var(--text-muted);
+        line-height: 1.8;
+        font-size: 16px;
+    }
+
+    /* Sticky Info Card */
+    .sticky-info-card {
+        position: sticky;
+        top: 100px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 32px;
+        padding: 40px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+    }
+
+    .price-header-premium {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 24px;
+    }
+
+    .price-label {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .price-value {
+        font-size: 42px;
+        font-weight: 900;
+        color: var(--primary-green-dark);
+        margin: 0;
+        letter-spacing: -1.5px;
+    }
+
+    .info-actions {
+        display: flex;
+        gap: 12px;
+    }
+
+    .action-circle-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .action-circle-btn.wishlist.active {
+        color: var(--primary-green);
+        border-color: var(--primary-green);
+        background: #f0fdf4;
+    }
+
+    .action-circle-btn:hover {
+        transform: scale(1.1);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .product-title-premium {
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--text-dark);
+        margin-bottom: 16px;
+        line-height: 1.4;
+    }
+
+    .meta-tags-premium {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+
+    .meta-tag {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        background: #f1f5f9;
+        padding: 8px 14px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        transition: all 0.2s;
+    }
+
+    .meta-tag:hover {
+        background: #e2e8f0;
+        transform: translateY(-2px);
+    }
+
+    .meta-tag i {
+        color: var(--primary-green);
+        margin-right: 6px;
+    }
+
+    .verified-banner-premium {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        padding: 16px;
+        border-radius: 16px;
+        display: flex;
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .v-icon {
+        font-size: 24px;
+        color: #1d4ed8;
+    }
+
+    .v-text strong {
+        display: block;
+        font-size: 15px;
+        color: #1e3a8a;
+    }
+
+    .v-text span {
+        font-size: 13px;
+        color: #3b82f6;
+    }
+
+    /* Seller Card */
+    .seller-card-premium {
+        background: #f8fafc;
+        border-radius: 20px;
+        padding: 24px;
+        margin-bottom: 30px;
+    }
+
+    .seller-info-top {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .seller-avatar,
+    .seller-avatar-placeholder {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--primary-green);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 800;
+    }
+
+    .seller-names h4 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0;
+    }
+
+    .seller-names p {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin: 4px 0 0 0;
+    }
+
+    .contact-btns-grid {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-chat-primary {
+        flex: 1;
+        background: var(--primary-green);
+        color: white !important;
+        text-decoration: none;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        font-weight: 700;
+        gap: 10px;
+        transition: all 0.3s;
+    }
+
+    .btn-chat-primary:hover {
+        background: var(--primary-green-dark);
+        transform: translateY(-3px);
+    }
+
+    .btn-edit-ad {
+        width: 100%;
+        background: #f1f5f9;
+        color: var(--text-dark) !important;
+        text-decoration: none;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        font-weight: 800;
+        gap: 10px;
+        border: 1px solid #e2e8f0;
+        transition: all 0.3s;
+    }
+
+    .btn-edit-ad:hover {
+        background: #e2e8f0;
+        transform: translateY(-2px);
+    }
+
+    .btn-whatsapp,
+    .btn-phone {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: white !important;
+        text-decoration: none;
+    }
+
+    .btn-whatsapp {
+        background: #25D366;
+    }
+
+    .btn-phone {
+        background: #0F172A;
+    }
+
+    .safety-tips-premium {
+        border-top: 1px solid #f1f5f9;
+        padding-top: 24px;
+    }
+
+    .safety-tips-card {
+        background: #fff9f0;
+        border: 1px solid #ffedd5;
+        border-radius: 16px;
+        padding: 20px;
+    }
+
+    .safety-tips-card h4 {
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        color: #9a3412;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .safety-tips-card ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 16px 0;
+    }
+
+    .safety-tips-card li {
+        font-size: 13px;
+        color: #c2410c;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .safety-tips-card li i {
+        font-size: 12px;
+        opacity: 0.7;
+    }
+
+    .btn-report-link {
+        background: none;
+        border: none;
+        color: #ef4444;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+    }
+
+    .description-section-fullwidth {
+        grid-column: 1 / -1;
+    }
+
+    @media (max-width: 992px) {
+        .product-main-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .sticky-info-card {
+            position: relative;
+            top: 0;
+        }
+
+        .description-section-fullwidth {
+            order: 3;
+        }
+
+        .product-media-section {
+            order: 1;
+        }
+
+        .product-info-section {
+            order: 2;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .main-gallery-wrapper {
+            border-radius: 0;
+            margin-left: -20px;
+            margin-right: -20px;
+            width: calc(100% + 40px);
+        }
+
+        .product-page-premium {
+            padding-top: 0;
+        }
+
+        .premium-breadcrumbs {
+            display: none;
+        }
+
+        .price-value {
+            font-size: 28px;
+        }
+
+        .description-card-premium {
+            padding: 24px;
+            margin-top: 20px;
+        }
+    }
+
+    /* Lightbox Premium */
+    .lightbox-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.98);
+        z-index: 20000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+    }
+
+    .lightbox-content {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .lightbox-gallery {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+    }
+
+    .lightbox-gallery::-webkit-scrollbar {
+        display: none;
+    }
+
+    .lightbox-item {
+        flex: 0 0 100%;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        scroll-snap-align: start;
+        padding: 40px;
+    }
+
+    .lightbox-item img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .lightbox-close {
+        position: absolute;
+        top: 30px;
+        right: 30px;
+        color: white;
+        font-size: 32px;
+        cursor: pointer;
+        z-index: 20002;
+        width: 50px;
+        height: 50px;
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: all 0.3s;
+    }
+
+    .lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: rotate(90deg);
+    }
+
+    .lightbox-nav {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        transform: translateY(-50%);
+        display: flex;
+        justify-content: space-between;
+        padding: 0 30px;
+        pointer-events: none;
+        z-index: 20001;
+    }
+
+    .lightbox-nav button {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        pointer-events: auto;
+        transition: all 0.3s;
+        backdrop-filter: blur(5px);
+    }
+
+    .lightbox-nav button:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.1);
+    }
+
+    .lightbox-counter {
+        position: absolute;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 8px 20px;
+        border-radius: 30px;
+        font-weight: 600;
+        backdrop-filter: blur(5px);
+        font-size: 14px;
+        z-index: 20001;
+    }
+
+    .status-warning-banner-premium {
+        background: #fef2f2;
+        border: 1px solid #fee2e2;
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 30px;
+        animation: fadeInDown 0.5s ease;
+    }
+
+    .status-warning-banner-premium .banner-icon {
+        width: 50px;
+        height: 50px;
+        background: #ef4444;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .status-warning-banner-premium .banner-text h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: #991b1b;
+    }
+
+    .status-warning-banner-premium .banner-text p {
+        margin: 4px 0 0 0;
+        color: #b91c1c;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    .btn-banner-action {
+        margin-left: auto;
+        padding: 10px 20px;
+        background: white;
+        border: 1px solid #fee2e2;
+        border-radius: 12px;
+        text-decoration: none;
+        color: #991b1b;
+        font-weight: 700;
+        font-size: 13px;
+        transition: all 0.3s;
+    }
+
+    .btn-banner-action:hover {
+        background: #ef4444;
+        color: white;
+        border-color: #ef4444;
+    }
+
+    @keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
 
 <script>
+    let currentIdx = 0;
+    const imgCount = <?= count($images) ?>;
+    const images = <?= json_encode($images) ?>;
+
+    function updateSliderCounter(el) {
+        currentIdx = Math.round(el.scrollLeft / el.clientWidth);
+        document.getElementById('currentImg').innerText = currentIdx + 1;
+    }
+
+    function scrollGallery(dir) {
+        const slider = document.getElementById('mainCarousel');
+        currentIdx = Math.max(0, Math.min(imgCount - 1, currentIdx + dir));
+        slider.scrollTo({ left: currentIdx * slider.clientWidth, behavior: 'smooth' });
+    }
+
+    function jumpToImage(idx) {
+        const slider = document.getElementById('mainCarousel');
+        currentIdx = idx;
+        slider.scrollTo({ left: idx * slider.clientWidth, behavior: 'smooth' });
+    }
+
+    function openLightbox() {
+        const modal = document.getElementById('lightbox');
+        const gallery = document.getElementById('lightboxGallery');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Native Fullscreen API
+        if (modal.requestFullscreen) {
+            modal.requestFullscreen();
+        } else if (modal.webkitRequestFullscreen) {
+            modal.webkitRequestFullscreen();
+        } else if (modal.msRequestFullscreen) {
+            modal.msRequestFullscreen();
+        }
+
+        // Jump to the current image in the lightbox
+        setTimeout(() => {
+            gallery.scrollTo({ left: currentIdx * gallery.clientWidth, behavior: 'instant' });
+            document.getElementById('lbCurrent').innerText = currentIdx + 1;
+        }, 10);
+    }
+
+    function closeLightbox() {
+        const modal = document.getElementById('lightbox');
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+
+        // Exit Fullscreen
+        if (document.fullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        }
+    }
+
+    function updateLightboxCounter(el) {
+        const idx = Math.round(el.scrollLeft / el.clientWidth);
+        document.getElementById('lbCurrent').innerText = idx + 1;
+    }
+
+    function scrollLightbox(dir) {
+        const gallery = document.getElementById('lightboxGallery');
+        const idx = Math.round(gallery.scrollLeft / gallery.clientWidth);
+        const nextIdx = Math.max(0, Math.min(imgCount - 1, idx + dir));
+        gallery.scrollTo({ left: nextIdx * gallery.clientWidth, behavior: 'smooth' });
+    }
+
     async function toggleWishlist(event, productId) {
         event.preventDefault();
-
         <?php if (!isset($_SESSION['user_id'])): ?>
-            window.location.href = 'guest/login.php';
+            window.location.href = 'login.php';
             return;
         <?php endif; ?>
 
@@ -509,53 +1086,35 @@ require_once 'includes/header.php';
         try {
             const formData = new FormData();
             formData.append('product_id', productId);
-
-            const resp = await fetch('user/toggle_wishlist.php', {
-                method: 'POST',
-                body: formData
-            });
-
+            const resp = await fetch('user/toggle_wishlist.php', { method: 'POST', body: formData });
             const data = await resp.json();
+
             if (data.status === 'success') {
                 if (data.action === 'added') {
-                    icon.classList.remove('far');
-                    icon.classList.add('fas');
-                    icon.style.color = 'var(--primary-green)';
+                    icon.classList.replace('far', 'fas');
+                    btn.classList.add('active');
                 } else {
-                    icon.classList.remove('fas');
-                    icon.classList.add('far');
-                    icon.style.color = '#999';
+                    icon.classList.replace('fas', 'far');
+                    btn.classList.remove('active');
                 }
-            } else {
-                alert(data.message);
             }
-        } catch (e) {
-            console.error(e);
-        }
+        } catch (e) { console.error(e); }
     }
 
-    async function shareProduct() {
-        const shareData = {
-            title: '<?= addslashes($product['title']) ?> | Enteangadi',
-            text: 'Check out this listing on Enteangadi: <?= addslashes($product['title']) ?>',
-            url: window.location.href
-        };
-
+    function shareProduct() {
         if (navigator.share) {
-            try {
-                await navigator.share(shareData);
-            } catch (err) {
-                console.log('Share failed:', err);
-            }
+            navigator.share({
+                title: document.title,
+                url: window.location.href
+            });
         } else {
-            // Fallback for browsers without Web Share API
             const dummy = document.createElement('input');
             document.body.appendChild(dummy);
             dummy.value = window.location.href;
             dummy.select();
             document.execCommand('copy');
             document.body.removeChild(dummy);
-            alert('Link copied to clipboard! You can now share it.');
+            alert('Link copied to clipboard!');
         }
     }
 </script>

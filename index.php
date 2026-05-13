@@ -29,6 +29,7 @@ if ($user_location && isset($user_location['lat']) && isset($user_location['lng'
     $lng = $user_location['lng'];
     // Haversine formula for distance in KM
     $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
+    $order_by = "p.created_at DESC, distance ASC";
 }
 
 // Fetch products

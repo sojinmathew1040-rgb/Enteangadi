@@ -6,12 +6,6 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Auto-add phone_number column if it doesn't exist
-try {
-    $pdo->exec("ALTER TABLE products ADD COLUMN phone_number VARCHAR(20) DEFAULT NULL");
-} catch (PDOException $e) {
-}
-
 $error = '';
 $success = '';
 
@@ -21,7 +15,7 @@ $all_cats = $stmt->fetchAll();
 
 $l1_categories = [];
 $l2_categories = [];
-$cat_details = []; // Map for easy JS lookup
+$cat_details = [];
 
 foreach ($all_cats as $cat) {
     $cat_details[$cat['id']] = ['is_perishable' => $cat['is_perishable']];
@@ -48,11 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expiry_date = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null;
 
     $location_name = $_POST['location_name'] ?? '';
-    $latitude = $_POST['latitude'] ?? null;
-    $longitude = $_POST['longitude'] ?? null;
+    $latitude = !empty($_POST['latitude']) ? $_POST['latitude'] : null;
+    $longitude = !empty($_POST['longitude']) ? $_POST['longitude'] : null;
 
     if (!empty($title) && !empty($category_id) && !empty($price)) {
-        // Validate expiry if perishable
         $is_cat_perishable = $cat_details[$category_id]['is_perishable'] ?? 0;
         if ($is_cat_perishable && empty($expiry_date)) {
             $error = "Expiry date is mandatory for perishable / edible items.";
@@ -62,9 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // [AD APPROVAL SYSTEM] Generate Unique ID and Check Mode
                 $unique_id = 'ENTAGD' . rand(1000, 9999);
-                // Ensure uniqueness
                 $check_stmt = $pdo->prepare("SELECT 1 FROM products WHERE unique_id = ?");
                 $check_stmt->execute([$unique_id]);
                 while ($check_stmt->fetch()) {
@@ -72,17 +63,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $check_stmt->execute([$unique_id]);
                 }
 
-                // Get approval mode from settings
                 $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
                 $set_stmt->execute();
                 $approval_mode = $set_stmt->fetchColumn() ?: 'auto';
-                $status = ($approval_mode === 'manual') ? 'pending' : 'active';
+                $status = ($approval_mode !== 'auto') ? 'pending' : 'active';
 
                 $stmt = $pdo->prepare("INSERT INTO products (user_id, unique_id, category_id, type, title, description, price, expiry_date, whatsapp_number, phone_number, location_name, latitude, longitude, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$_SESSION['user_id'], $unique_id, $category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $status]);
                 $product_id = $pdo->lastInsertId();
 
-                // Handle image upload with compression
                 if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
                     $upload_dir = '../uploads/products/';
                     if (!is_dir($upload_dir))
@@ -119,26 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
-
-                if ($status === 'pending') {
-                    $success = "
-                    <div style='text-align:center; padding: 20px 0;'>
-                        <div style='background: #fff8e1; color: #f57c00; border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;'>
-                            <i class='fa fa-clock' style='font-size: 32px;'></i>
-                        </div>
-                        <h3 style='margin-bottom: 8px;'>Ad Submitted for Review</h3>
-                        <p style='color: var(--text-muted); font-size: 14px;'>Your unique ID is <strong>$unique_id</strong>. Our team will review and approve your ad shortly.</p>
-                    </div>";
-                } else {
-                    $success = "
-                    <div style='text-align:center; padding: 20px 0;'>
-                        <div style='background: #e8f5e9; color: var(--primary-green); border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;'>
-                            <i class='fa fa-check-circle' style='font-size: 32px;'></i>
-                        </div>
-                        <h3 style='margin-bottom: 8px;'>Congratulations! Your Ad is Live</h3>
-                        <p style='color: var(--text-muted); font-size: 14px;'>Your unique ID is <strong>$unique_id</strong>. Your ad is now visible to thousands of buyers.</p>
-                    </div>";
-                }
+                $success = ($status === 'pending') ? "pending" : "active";
             } catch (PDOException $e) {
                 $pdo->rollBack();
                 $error = "Error posting ad. Please try again.";
@@ -151,14 +121,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 function compressImage($source, $destination, $max_width, $quality)
 {
+    if (!function_exists('imagecreatefromjpeg')) {
+        return move_uploaded_file($source, $destination);
+    }
     $info = getimagesize($source);
     if ($info['mime'] == 'image/jpeg')
-        $image = imagecreatefromjpeg($source);
+        $image = @imagecreatefromjpeg($source);
     elseif ($info['mime'] == 'image/gif')
-        $image = imagecreatefromgif($source);
+        $image = @imagecreatefromgif($source);
     elseif ($info['mime'] == 'image/png')
-        $image = imagecreatefrompng($source);
+        $image = @imagecreatefrompng($source);
     else
+        return false;
+    if (!$image)
         return false;
 
     list($width, $height) = getimagesize($source);
@@ -187,250 +162,1016 @@ function compressImage($source, $destination, $max_width, $quality)
 require_once '../includes/header.php';
 ?>
 
-<div class="container">
-    <div class="form-container-card">
-        <h2 style="margin-bottom: 24px; color: var(--primary-green-dark);">Post an Ad</h2>
-
-        <?php if ($error): ?>
-            <div class="alert-danger-light">
-                <?= htmlspecialchars($error) ?>
-            </div>
-        <?php endif; ?>
-
+<div class="post-ad-page-premium">
+    <div class="container">
         <?php if ($success): ?>
-            <div class="alert-success-light">
-                <?= $success ?> <a href="index.php" style="font-weight: bold; color: var(--primary-green-dark);">Go to
-                    Dashboard</a>
+            <div class="post-success-card animate-success">
+                <div class="success-icon-wrapper">
+                    <div class="success-ring"></div>
+                    <i class="fa fa-check-circle success-bounce"></i>
+                </div>
+                <h2 class="success-title">
+                    <?= ($success === 'pending') ? 'Ad Submitted for Review!' : 'Ad Published Successfully!' ?>
+                </h2>
+                <p class="success-subtitle">
+                    <?= ($success === 'pending') ? 'Your ad is under review and will be live shortly.' : 'Your ad is now live and visible to everyone.' ?>
+                </p>
+                <div class="success-actions">
+                    <a href="my_ads.php" class="btn-manage-premium">
+                        <i class="fa fa-th-list"></i>
+                        Manage My Ads
+                    </a>
+                    <a href="../index.php" class="btn-home-premium">
+                        <i class="fa fa-home"></i>
+                        Back to Home
+                    </a>
+                </div>
             </div>
         <?php else: ?>
-            <form method="POST" action="post_ad.php" enctype="multipart/form-data">
-                <!-- Ad Type Selection -->
-                <div class="form-group" style="margin-bottom: 24px;">
-                    <div class="type-selector">
-                        <label class="type-btn-label">
-                            <input type="radio" name="type" value="sell" checked style="display: none;"
-                                onchange="updateTypeUI(this.value)">
-                            <div class="type-btn-box active-sell" id="btn-sell">
-                                <i class="fa fa-tag" style="margin-right: 8px;"></i> Sell
+            <div class="stepper-wrapper-premium">
+                <div class="step active" id="step-dot-1">
+                    <div class="dot">1</div>
+                    <span>Info</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step" id="step-dot-2">
+                    <div class="dot">2</div>
+                    <span>Media</span>
+                </div>
+                <div class="step-line"></div>
+                <div class="step" id="step-dot-3">
+                    <div class="dot">3</div>
+                    <span>Final</span>
+                </div>
+            </div>
+
+            <form method="POST" action="post_ad.php" enctype="multipart/form-data" id="postAdForm">
+                <?php if ($error): ?>
+                    <div class="alert-danger-premium"><?= htmlspecialchars($error) ?></div>
+                <?php endif; ?>
+
+                <!-- Step 1: Basic Info -->
+                <div class="form-step active" id="step-1">
+                    <div class="form-section-premium">
+                        <div class="section-header">
+                            <div class="section-num">01</div>
+                            <h3>Basic Information</h3>
+                        </div>
+                        <div class="form-grid-premium">
+                            <div class="form-group-premium full-width">
+                                <label>What are you looking to do?</label>
+                                <div class="type-button-group">
+                                    <label class="type-btn">
+                                        <input type="radio" name="type" value="sell" checked
+                                            onchange="updateTypeUI(this.value)">
+                                        <span class="btn-content">
+                                            <i class="fa fa-tag"></i>
+                                            I want to Sell
+                                        </span>
+                                    </label>
+                                    <label class="type-btn">
+                                        <input type="radio" name="type" value="buy" onchange="updateTypeUI(this.value)">
+                                        <span class="btn-content">
+                                            <i class="fa fa-shopping-basket"></i>
+                                            I am looking for
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
-                        </label>
-                        <label class="type-btn-label">
-                            <input type="radio" name="type" value="buy" style="display: none;"
-                                onchange="updateTypeUI(this.value)">
-                            <div class="type-btn-box" id="btn-buy">
-                                <i class="fa fa-shopping-basket" style="margin-right: 8px;"></i> Wanted
+                            <div class="form-group-premium full-width">
+                                <label for="title">Ad Title *</label>
+                                <input type="text" id="title" name="title" class="premium-input" required
+                                    placeholder="e.g. Home Made Cake">
                             </div>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="title">Ad Title *</label>
-                    <input type="text" id="title" name="title" class="form-control" required
-                        placeholder="e.g. Home Made Biriyani">
-                </div>
-
-                <div class="form-group">
-                    <label for="l1_category">Main Category *</label>
-                    <select id="l1_category" class="form-control" required onchange="updateL2Categories()">
-                        <option value="">Select Main Category</option>
-                        <?php foreach ($l1_categories as $cat): ?>
-                            <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group" id="l2_category_group" style="display: none;">
-                    <label for="category_id">Sub-Category *</label>
-                    <select id="category_id" name="category_id" class="form-control" required
-                        onchange="checkPerishable(this.value)">
-                        <option value="">Select Sub-Category</option>
-                    </select>
-                </div>
-
-                <!-- Perishable Warning & Expiry Section -->
-                <div id="perishable_section"
-                    style="display: none; background: #fff8f1; border: 1px solid #ffccbc; padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                        <i class="fa fa-exclamation-triangle" style="color: #e64a19; font-size: 20px;"></i>
-                        <div>
-                            <h4 style="color: #d84315; margin-bottom: 4px;">Perishable Item Policy</h4>
-                            <p style="font-size: 13px; color: #5d4037; line-height: 1.5;">You are listing an edible or
-                                perishable item. For safety:
-                            <ul style="font-size: 13px; color: #5d4037; margin-top: 8px; padding-left: 20px;">
-                                <li>Ensure the item is fresh and safe for consumption.</li>
-                                <li>You must provide an accurate Best Before / Expiry date.</li>
-                                <li>State any storage instructions in the description.</li>
-                            </ul>
-                            </p>
+                            <div class="form-group-premium">
+                                <label for="l1_category">Category *</label>
+                                <select id="l1_category" class="premium-select" required onchange="updateL2Categories()">
+                                    <option value="">Select Category</option>
+                                    <?php foreach ($l1_categories as $cat): ?>
+                                        <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group-premium" id="l2_category_group" style="display: none;">
+                                <label for="category_id">Sub-Category *</label>
+                                <select id="category_id" name="category_id" class="premium-select" required
+                                    onchange="checkPerishable(this.value)">
+                                    <option value="">Select Sub-Category</option>
+                                </select>
+                            </div>
+                            <div class="form-group-premium" id="price_group">
+                                <label for="price" id="priceLabel">Price (₹) *</label>
+                                <div class="price-input-wrapper">
+                                    <span class="currency-symbol">₹</span>
+                                    <input type="number" id="price" name="price" step="0.01"
+                                        class="premium-input with-prefix" required placeholder="0.00">
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="expiry_date">Best Before / Expiry Date *</label>
-                        <input type="date" id="expiry_date" name="expiry_date" class="form-control"
-                            min="<?= date('Y-m-d') ?>">
-                    </div>
-                </div>
-
-                <script>
-                    const l2Categories = <?= $l2_json ?>;
-                    const catDetails = <?= $details_json ?>;
-
-                    function updateL2Categories() {
-                        const l1Select = document.getElementById('l1_category');
-                        const l2Group = document.getElementById('l2_category_group');
-                        const l2Select = document.getElementById('category_id');
-
-                        const selectedL1 = l1Select.value;
-                        l2Select.innerHTML = '<option value="">Select Sub-Category</option>';
-                        hidePerishableSection();
-
-                        if (selectedL1 && l2Categories[selectedL1]) {
-                            l2Group.style.display = 'block';
-                            l2Categories[selectedL1].forEach(cat => {
-                                const option = document.createElement('option');
-                                option.value = cat.id;
-                                option.textContent = cat.name;
-                                l2Select.appendChild(option);
-                            });
-                        } else {
-                            l2Group.style.display = 'none';
-                            if (selectedL1) {
-                                checkPerishable(selectedL1);
-                            }
-                        }
-                    }
-
-                    function checkPerishable(catId) {
-                        const section = document.getElementById('perishable_section');
-                        const expiryInput = document.getElementById('expiry_date');
-
-                        if (catId && catDetails[catId] && catDetails[catId].is_perishable == 1) {
-                            section.style.display = 'block';
-                            expiryInput.required = true;
-                        } else {
-                            hidePerishableSection();
-                        }
-                    }
-
-                    function hidePerishableSection() {
-                        const section = document.getElementById('perishable_section');
-                        const expiryInput = document.getElementById('expiry_date');
-                        section.style.display = 'none';
-                        expiryInput.required = false;
-                        expiryInput.value = '';
-                    }
-                </script>
-
-                <div class="form-group">
-                    <label for="price" id="priceLabel">Price (₹) *</label>
-                    <input type="number" id="price" name="price" step="0.01" class="form-control" required
-                        placeholder="Enter amount">
-                </div>
-
-                <div class="form-group">
-                    <label>Contact Options *</label>
-                    <div class="contact-options-grid">
-                        <input type="checkbox" id="contact_whatsapp_chk" name="contact_whatsapp" value="1"
-                            style="display: none;" onchange="toggleContact('whatsapp')">
-                        <label for="contact_whatsapp_chk" id="label_whatsapp" class="toggle-btn">
-                            <i class="fab fa-whatsapp" style="font-size: 18px;"></i> WhatsApp
-                        </label>
-
-                        <input type="checkbox" id="contact_phone_chk" name="contact_phone" value="1" style="display: none;"
-                            onchange="toggleContact('phone')">
-                        <label for="contact_phone_chk" id="label_phone" class="toggle-btn">
-                            <i class="fa fa-phone" style="font-size: 16px;"></i> Call
-                        </label>
-                    </div>
-
-                    <div id="whatsapp_group" style="display: none; margin-bottom: 15px;">
-                        <input type="tel" id="whatsapp_number" name="whatsapp_number" class="form-control"
-                            placeholder="WhatsApp Number">
-                    </div>
-                    <div id="phone_group" style="display: none; margin-bottom: 15px;">
-                        <input type="tel" id="phone_number" name="phone_number" class="form-control"
-                            placeholder="Phone Number">
-                    </div>
-                </div>
-
-                <script>
-                    function toggleContact(type) {
-                        const chk = document.getElementById('contact_' + type + '_chk');
-                        const group = document.getElementById(type + '_group');
-                        const input = document.getElementById(type + '_number');
-                        if (chk.checked) {
-                            group.style.display = 'block';
-                            input.required = true;
-                        } else {
-                            group.style.display = 'none';
-                            input.required = false;
-                        }
-                    }
-                </script>
-
-                <div class="form-group">
-                    <label for="description">Description</label>
-                    <textarea id="description" name="description" class="form-control" rows="5"
-                        placeholder="Describe the item... Include storage instructions for food items."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="location_name">Location *</label>
-                    <div class="location-detect-wrapper">
-                        <input type="text" id="location_name" name="location_name" class="form-control" required
-                            placeholder="City, Area"
-                            value="<?= htmlspecialchars($_SESSION['user_location']['name'] ?? '') ?>">
-                        <button type="button" onclick="detectPostLocation(event)" class="btn-secondary"
-                            style="padding: 8px 12px; white-space: nowrap;">
-                            <i class="fa fa-crosshairs"></i> Detect
+                    <div class="form-actions-premium">
+                        <button type="button" class="btn-next-premium" onclick="goToStep(2)">
+                            <span>Continue</span>
+                            <i class="fa fa-arrow-right"></i>
                         </button>
                     </div>
-                    <input type="hidden" id="latitude" name="latitude"
-                        value="<?= $_SESSION['user_location']['lat'] ?? '' ?>">
-                    <input type="hidden" id="longitude" name="longitude"
-                        value="<?= $_SESSION['user_location']['lng'] ?? '' ?>">
                 </div>
 
-                <div class="form-group">
-                    <label>Photos (Select multiple) *</label>
-                    <input type="file" id="images" name="images[]" class="form-control" multiple accept="image/*"
-                        style="display: none;" onchange="previewImages()">
-                    <div class="upload-zone" onclick="document.getElementById('images').click()">
-                        <i class="fa fa-camera upload-icon"></i>
-                        <p class="upload-text">Add Photos</p>
+                <!-- Step 2: Media -->
+                <div class="form-step" id="step-2">
+                    <div class="form-section-premium">
+                        <div class="section-header">
+                            <div class="section-num">02</div>
+                            <h3>Photos</h3>
+                        </div>
+                        <div class="photo-management-side-wise">
+                            <div class="add-photo-btn-card" onclick="document.getElementById('images').click()">
+                                <i class="fa fa-camera-retro"></i>
+                                <span>Add Photo</span>
+                                <input type="file" id="images" name="images[]" multiple accept="image/*"
+                                    style="display: none;" onchange="previewImages()">
+                            </div>
+                            <div id="image_preview_container" class="image-preview-side-container"></div>
+                        </div>
+                        <input type="hidden" id="cover_index" name="cover_index" value="0">
                     </div>
-                    <div id="image_preview_container" class="image-preview-grid"></div>
-                    <input type="hidden" id="cover_index" name="cover_index" value="0">
+                    <div class="form-actions-premium">
+                        <button type="button" class="btn-back-premium" onclick="goToStep(1)">Back</button>
+                        <button type="button" class="btn-next-premium" onclick="goToStep(3)">
+                            <span>Continue</span>
+                            <i class="fa fa-arrow-right"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 16px;">Post Ad Now</button>
+                <!-- Step 3: Final Details -->
+                <div class="form-step" id="step-3">
+                    <div id="perishable_section" class="perishable-warning-premium" style="display: none;">
+                        <div class="warning-icon"><i class="fa fa-leaf"></i></div>
+                        <div class="warning-content">
+                            <h4>Perishable Item</h4>
+                            <div class="form-group-premium" style="margin-top: 10px;">
+                                <label for="expiry_date">Expiry Date *</label>
+                                <input type="date" id="expiry_date" name="expiry_date" class="premium-input"
+                                    min="<?= date('Y-m-d') ?>">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section-premium">
+                        <div class="section-header">
+                            <div class="section-num">03</div>
+                            <h3>Details & Contact</h3>
+                        </div>
+                        <div class="form-group-premium full-width">
+                            <label for="description">Description</label>
+                            <textarea id="description" name="description" class="premium-textarea" rows="6"
+                                placeholder="Describe your item..."></textarea>
+                        </div>
+                        <div class="form-grid-premium">
+                            <div class="form-group-premium full-width">
+                                <label>Contact Options *</label>
+                                <div class="premium-contact-toggles">
+                                    <label class="contact-toggle">
+                                        <input type="checkbox" id="contact_whatsapp_chk" name="contact_whatsapp" value="1"
+                                            onchange="toggleContact('whatsapp')">
+                                        <div class="toggle-box whatsapp"><i
+                                                class="fab fa-whatsapp"></i><span>WhatsApp</span></div>
+                                    </label>
+                                    <label class="contact-toggle">
+                                        <input type="checkbox" id="contact_phone_chk" name="contact_phone" value="1"
+                                            onchange="toggleContact('phone')">
+                                        <div class="toggle-box phone"><i class="fa fa-phone"></i><span>Call</span></div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group-premium" id="whatsapp_group" style="display: none;">
+                                <label>WhatsApp Number</label>
+                                <input type="tel" id="whatsapp_number" name="whatsapp_number" class="premium-input">
+                            </div>
+                            <div class="form-group-premium" id="phone_group" style="display: none;">
+                                <label>Phone Number</label>
+                                <input type="tel" id="phone_number" name="phone_number" class="premium-input">
+                            </div>
+                            <div class="form-group-premium full-width">
+                                <label>Location *</label>
+                                <div class="premium-location-wrapper">
+                                    <div class="location-input-box">
+                                        <i class="fa fa-map-marker-alt"></i>
+                                        <input type="text" id="location_name" name="location_name"
+                                            class="premium-input with-icon" required placeholder="City, Area"
+                                            value="<?= htmlspecialchars($_SESSION['user_location']['name'] ?? '') ?>">
+                                    </div>
+                                    <button type="button" onclick="detectPostLocation(event)"
+                                        class="btn-detect-premium">Detect</button>
+                                </div>
+                                <input type="hidden" id="latitude" name="latitude"
+                                    value="<?= $_SESSION['user_location']['lat'] ?? '' ?>">
+                                <input type="hidden" id="longitude" name="longitude"
+                                    value="<?= $_SESSION['user_location']['lng'] ?? '' ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions-premium">
+                        <button type="button" class="btn-back-premium" onclick="goToStep(2)">Back</button>
+                        <button type="submit" class="btn-post-premium" id="submitBtn">
+                            <span>Publish Ad</span>
+                            <i class="fa fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
             </form>
         <?php endif; ?>
     </div>
 </div>
 
-<script>
-    function updateTypeUI(type) {
-        const btnSell = document.getElementById('btn-sell');
-        const btnBuy = document.getElementById('btn-buy');
-        const priceLabel = document.getElementById('priceLabel');
-        if (type === 'sell') {
-            btnSell.classList.add('active-sell'); btnSell.classList.remove('active-buy');
-            btnBuy.classList.remove('active-sell', 'active-buy');
-            priceLabel.innerText = "Price (₹)";
-        } else {
-            btnBuy.classList.add('active-buy'); btnBuy.classList.remove('active-sell');
-            btnSell.classList.remove('active-sell', 'active-buy');
-            priceLabel.innerText = "Budget (₹)";
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loader-box">
+        <div class="premium-spinner"></div>
+        <h3>Publishing Ad</h3>
+        <p>Please wait while we set everything up...</p>
+    </div>
+</div>
+
+<style>
+    .post-ad-page-premium {
+        padding: 40px 0 100px;
+        background: var(--background);
+    }
+
+    .stepper-wrapper-premium {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 50px;
+    }
+
+    .stepper-wrapper-premium .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        opacity: 0.4;
+        transition: 0.3s;
+    }
+
+    .stepper-wrapper-premium .step.active {
+        opacity: 1;
+    }
+
+    .stepper-wrapper-premium .dot {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #E2E8F0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        color: var(--text-dark);
+        border: 2px solid transparent;
+    }
+
+    .stepper-wrapper-premium .step.active .dot {
+        background: var(--primary-green);
+        color: white;
+        border-color: #f0fdf4;
+    }
+
+    .stepper-wrapper-premium .step span {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .stepper-wrapper-premium .step-line {
+        flex: 0 0 40px;
+        height: 2px;
+        background: #E2E8F0;
+        margin-bottom: 24px;
+    }
+
+    .form-step {
+        display: none;
+    }
+
+    .form-step.active {
+        display: block;
+        animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
     }
 
-    async function detectPostLocation(event) {
-        if (!navigator.geolocation) return;
-        const btn = event.currentTarget;
-        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
-        btn.disabled = true;
+    .form-section-premium {
+        background: white;
+        border-radius: 32px;
+        padding: 40px;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
+        border: 1px solid rgba(0, 0, 0, 0.02);
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 32px;
+    }
+
+    .section-num {
+        width: 28px;
+        height: 28px;
+        background: var(--primary-green);
+        color: white;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .section-header h3 {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-dark);
+    }
+
+    .form-grid-premium {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+
+    .full-width {
+        grid-column: span 2;
+    }
+
+    .premium-input,
+    .premium-select,
+    .premium-textarea {
+        width: 100%;
+        background: #F8FAFC;
+        border: 2px solid #F1F5F9;
+        border-radius: 16px;
+        padding: 14px 20px;
+        font-size: 15px;
+        color: var(--text-dark);
+        transition: 0.3s;
+    }
+
+    .premium-input:focus {
+        border-color: var(--primary-green);
+        background: white;
+        outline: none;
+    }
+
+    /* Type Button Group */
+    .type-button-group {
+        display: flex;
+        background: #F1F5F9;
+        padding: 6px;
+        border-radius: 18px;
+        gap: 6px;
+    }
+
+    .type-btn {
+        flex: 1;
+        cursor: pointer;
+    }
+
+    .type-btn input {
+        display: none;
+    }
+
+    .type-btn .btn-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-radius: 14px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-muted);
+        transition: all 0.3s;
+    }
+
+    .type-btn input:checked+.btn-content {
+        background: white;
+        color: var(--primary-green);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .type-btn .btn-content i {
+        font-size: 16px;
+    }
+
+    .form-actions-premium {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 30px;
+    }
+
+    .btn-next-premium,
+    .btn-post-premium {
+        background: var(--primary-green);
+        color: white;
+        border: none;
+        padding: 16px 40px;
+        border-radius: 20px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 10px 20px rgba(46, 125, 50, 0.1);
+    }
+
+    .btn-back-premium {
+        background: #E2E8F0;
+        color: var(--text-dark);
+        border: none;
+        padding: 16px 30px;
+        border-radius: 20px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn-next-premium:hover,
+    .btn-post-premium:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 15px 30px rgba(46, 125, 50, 0.2);
+    }
+
+    /* Contact Toggles */
+    .premium-contact-toggles {
+        display: flex;
+        gap: 12px;
+    }
+
+    .contact-toggle {
+        flex: 1;
+        cursor: pointer;
+    }
+
+    .contact-toggle input {
+        display: none;
+    }
+
+    .toggle-box {
+        padding: 14px;
+        background: #F8FAFC;
+        border: 2px solid #F1F5F9;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: 0.3s;
+        font-weight: 700;
+        color: var(--text-muted);
+    }
+
+    .contact-toggle input:checked+.toggle-box.whatsapp {
+        border-color: #25D366;
+        background: #F0FDF4;
+        color: #166534;
+    }
+
+    .contact-toggle input:checked+.toggle-box.phone {
+        border-color: var(--primary-green);
+        background: #F0FDF4;
+        color: var(--primary-green);
+    }
+
+    /* Perishable Warning */
+    .perishable-warning-premium {
+        background: #FFF7ED;
+        border: 2px solid #FFEDD5;
+        border-radius: 24px;
+        padding: 24px;
+        display: flex;
+        gap: 20px;
+        margin-bottom: 24px;
+        align-items: center;
+    }
+
+    .warning-icon {
+        width: 48px;
+        height: 48px;
+        background: #FFEDD5;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: #9A3412;
+    }
+
+    .warning-content h4 {
+        color: #9A3412;
+        font-weight: 800;
+        margin-bottom: 4px;
+        font-size: 16px;
+    }
+
+    /* Location */
+    .premium-location-wrapper {
+        display: flex;
+        gap: 10px;
+    }
+
+    .location-input-box {
+        flex: 1;
+        position: relative;
+    }
+
+    .location-input-box i {
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary-green);
+    }
+
+    .premium-input.with-icon {
+        padding-left: 45px;
+    }
+
+    .btn-detect-premium {
+        padding: 0 20px;
+        background: #F1F5F9;
+        border: none;
+        border-radius: 14px;
+        font-weight: 700;
+        color: var(--text-dark);
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn-detect-premium:hover {
+        background: #E2E8F0;
+    }
+
+    .upload-area-premium {
+        border: 2px dashed #E2E8F0;
+        border-radius: 24px;
+        padding: 60px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .upload-area-premium:hover {
+        border-color: var(--primary-green);
+        background: #F0FDF4;
+    }
+
+    .upload-icon-circle {
+        width: 56px;
+        height: 56px;
+        background: #F1F5F9;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: var(--text-muted);
+        margin: 0 auto 16px;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loader-box {
+        text-align: center;
+    }
+
+    .premium-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #f1f5f9;
+        border-top: 4px solid var(--primary-green);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }    /* Photo Management Side-Wise */
+    .photo-management-side-wise {
+        display: flex;
+        gap: 16px;
+        padding: 16px;
+        background: #f8fafc;
+        border-radius: 24px;
+        border: 2px dashed #e2e8f0;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        scroll-behavior: smooth;
+    }
+
+    .photo-management-side-wise::-webkit-scrollbar {
+        display: none;
+    }
+
+    .add-photo-btn-card {
+        min-width: 110px;
+        height: 110px;
+        background: white;
+        border-radius: 18px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        border: 2px solid #f1f5f9;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
+    .add-photo-btn-card:hover {
+        border-color: var(--primary-green);
+        color: var(--primary-green);
+        background: #f0fdf4;
+        transform: scale(0.98);
+    }
+
+    .add-photo-btn-card i {
+        font-size: 24px;
+    }
+
+    .add-photo-btn-card span {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .image-preview-side-container {
+        display: flex;
+        gap: 16px;
+    }
+
+    .preview-item {
+        width: 110px;
+        height: 110px;
+        border-radius: 18px;
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        border: 2px solid white;
+        background: white;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        flex-shrink: 0;
+    }
+
+    @keyframes popIn {
+        0% { transform: scale(0.5); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    .preview-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+        border-color: var(--primary-green);
+    }
+
+    .preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.4s;
+    }
+
+    .preview-item:hover img {
+        transform: scale(1.1);
+    }
+
+    .preview-item.is-cover {
+        border-color: var(--primary-green);
+        box-shadow: 0 8px 20px rgba(34, 197, 94, 0.2);
+    }
+
+    .cover-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: var(--primary-green);
+        color: white;
+        font-size: 8px;
+        font-weight: 900;
+        padding: 4px 8px;
+        border-radius: 10px;
+        display: none;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
+        z-index: 2;
+    }
+
+    .preview-item.is-cover .cover-badge {
+        display: block;
+    }   }
+
+    /* Selection overlay */
+    .selection-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(34, 197, 94, 0.4), transparent);
+        opacity: 0;
+        transition: 0.3s;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding-bottom: 10px;
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+    }
+
+    .preview-item:hover .selection-overlay {
+        opacity: 1;
+    }
+
+    .preview-item.is-cover .selection-overlay {
+        display: none;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Success Card Styles */
+    .post-success-card {
+        background: white;
+        border-radius: 40px;
+        padding: 80px 40px;
+        text-align: center;
+        max-width: 650px;
+        margin: 60px auto;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.02);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .animate-success {
+        animation: fadeInUpSuccess 0.8s cubic-bezier(0.2, 1, 0.3, 1);
+    }
+
+    .success-icon-wrapper {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .success-ring {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border: 4px solid #f0fdf4;
+        border-radius: 50%;
+        animation: pulseRingSuccess 2s infinite;
+    }
+
+    .success-bounce {
+        font-size: 80px;
+        color: var(--primary-green);
+        z-index: 2;
+        animation: iconBounceSuccess 1s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+    }
+
+    .success-title {
+        font-size: 32px;
+        font-weight: 900;
+        color: var(--text-dark);
+        margin-bottom: 16px;
+        letter-spacing: -0.5px;
+    }
+
+    .success-subtitle {
+        font-size: 16px;
+        color: #64748b;
+        max-width: 450px;
+        margin: 0 auto 40px;
+        line-height: 1.6;
+    }
+
+    .success-actions {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .btn-manage-premium {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 36px;
+        background: linear-gradient(135deg, var(--primary-green) 0%, #166534 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 16px;
+        box-shadow: 0 10px 25px rgba(22, 101, 52, 0.2);
+        transition: all 0.3s cubic-bezier(0.2, 1, 0.3, 1);
+    }
+
+    .btn-manage-premium:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 15px 35px rgba(22, 101, 52, 0.3);
+    }
+
+    .btn-home-premium {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 36px;
+        background: white;
+        color: var(--text-dark);
+        text-decoration: none;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 16px;
+        border: 2px solid #f1f5f9;
+        transition: all 0.3s ease;
+    }
+
+    .btn-home-premium:hover {
+        background: #f8fafc;
+        border-color: #e2e8f0;
+        transform: translateY(-2px);
+    }
+
+    @keyframes fadeInUpSuccess {
+        from {
+            opacity: 0;
+            transform: translateY(40px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes iconBounceSuccess {
+        0% {
+            transform: scale(0);
+        }
+
+        60% {
+            transform: scale(1.2);
+        }
+
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    @keyframes pulseRingSuccess {
+        0% {
+            transform: scale(0.8);
+            opacity: 0.5;
+        }
+
+        100% {
+            transform: scale(1.3);
+            opacity: 0;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .form-grid-premium {
+            grid-template-columns: 1fr;
+        }
+
+        .full-width {
+            grid-column: span 1;
+        }
+    }
+</style>
+
+<script>
+    let currentStep = 1;
+
+    function goToStep(step) {
+        if (step > currentStep) {
+            if (!validateCurrentStep()) return;
+        }
+
+        document.querySelectorAll('.form-step').forEach(el => el.classList.remove('active'));
+        document.getElementById('step-' + step).classList.add('active');
+
+        document.querySelectorAll('.stepper-wrapper-premium .step').forEach((el, idx) => {
+            if (idx < step) el.classList.add('active');
+            else el.classList.remove('active');
+        });
+
+        currentStep = step;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function validateCurrentStep() {
+        const activeSection = document.getElementById('step-' + currentStep);
+        const inputs = activeSection.querySelectorAll('[required]');
+        let valid = true;
+        inputs.forEach(input => {
+            if (!input.value) {
+                input.style.borderColor = '#ef4444';
+                valid = false;
+            } else {
+                input.style.borderColor = '#f1f5f9';
+            }
+        });
+        return valid;
+    }
+
+    document.getElementById('postAdForm')?.addEventListener('submit', function () {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    });
+
+    // Existing functions logic
+    const l2Categories = <?= $l2_json ?>;
+    const catDetails = <?= $details_json ?>;
+
+    function updateL2Categories() {
+        const l1 = document.getElementById('l1_category').value;
+        const l2Group = document.getElementById('l2_category_group');
+        const l2Select = document.getElementById('category_id');
+        l2Select.innerHTML = '<option value="">Select Sub-Category</option>';
+        if (l1 && l2Categories[l1]) {
+            l2Group.style.display = 'block';
+            l2Categories[l1].forEach(c => {
+                const op = document.createElement('option'); op.value = c.id; op.textContent = c.name; l2Select.appendChild(op);
+            });
+        } else {
+            l2Group.style.display = 'none';
+            if (l1) checkPerishable(l1);
+        }
+    }
+
+    function checkPerishable(id) {
+        const s = document.getElementById('perishable_section');
+        const e = document.getElementById('expiry_date');
+        if (id && catDetails[id]?.is_perishable == 1) { s.style.display = 'flex'; e.required = true; }
+        else { s.style.display = 'none'; e.required = false; }
+    }
+
+    function updateTypeUI(t) { document.getElementById('priceLabel').innerText = (t === 'sell' ? "Price (₹) *" : "Budget (₹) *"); }
+    function toggleContact(t) {
+        const chk = document.getElementById('contact_' + t + '_chk');
+        const g = document.getElementById(t + '_group');
+        const i = document.getElementById(t + '_number');
+        g.style.display = chk.checked ? 'block' : 'none';
+        i.required = chk.checked;
+    }
+
+    async function detectPostLocation(ev) {
+        const b = ev.currentTarget; b.disabled = true; b.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
         navigator.geolocation.getCurrentPosition(async (pos) => {
             const lat = pos.coords.latitude; const lng = pos.coords.longitude;
             document.getElementById('latitude').value = lat; document.getElementById('longitude').value = lng;
@@ -439,32 +1180,29 @@ require_once '../includes/header.php';
                 const d = await r.json();
                 document.getElementById('location_name').value = d.address.city || d.address.town || 'Current Location';
             } catch (e) { document.getElementById('location_name').value = 'Current Location'; }
-            btn.innerHTML = '<i class="fa fa-crosshairs"></i> Detect'; btn.disabled = false;
-        }, () => { btn.innerHTML = '<i class="fa fa-crosshairs"></i> Detect'; btn.disabled = false; });
+            b.disabled = false; b.innerHTML = 'Detect';
+        }, () => { b.disabled = false; b.innerHTML = 'Detect'; });
     }
 
     function previewImages() {
-        const container = document.getElementById('image_preview_container');
-        const files = document.getElementById('images').files;
-        container.innerHTML = '';
-        for (let i = 0; i < files.length; i++) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const div = document.createElement('div');
-                div.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
-                div.id = 'preview-' + i;
-                div.onclick = () => setAsCover(i);
-                div.innerHTML = `<img src="${e.target.result}"><div class="cover-badge">Main</div><div class="order-num">${i + 1}</div>`;
-                container.appendChild(div);
+        const c = document.getElementById('image_preview_container');
+        const f = document.getElementById('images').files;
+        c.innerHTML = '';
+        for (let i = 0; i < f.length; i++) {
+            const r = new FileReader();
+            r.onload = (e) => {
+                const d = document.createElement('div');
+                d.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
+                d.onclick = () => { document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover')); d.classList.add('is-cover'); document.getElementById('cover_index').value = i; };
+                d.innerHTML = `
+                    <img src="${e.target.result}">
+                    <div class="cover-badge">COVER</div>
+                    <div class="selection-overlay">Set as Main</div>
+                `;
+                c.appendChild(d);
             }
-            reader.readAsDataURL(files[i]);
+            r.readAsDataURL(f[i]);
         }
-    }
-
-    function setAsCover(i) {
-        document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
-        document.getElementById('preview-' + i).classList.add('is-cover');
-        document.getElementById('cover_index').value = i;
     }
 </script>
 

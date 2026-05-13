@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($product_id && $action) {
         if ($action === 'approve') {
-            $stmt = $pdo->prepare("UPDATE products SET status = 'active' WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE products SET status = 'active', is_verified = 1 WHERE id = ?");
             if ($stmt->execute([$product_id])) {
                 $success = "Product approved successfully.";
             }

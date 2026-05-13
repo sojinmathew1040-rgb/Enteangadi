@@ -126,7 +126,14 @@ try {
                 style="padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 100%;">
                 <div class="location-display" onclick="document.getElementById('location-modal').style.display='flex'">
                     <i class="fa fa-map-marker-alt"></i>
-                    <span id="current-location-text"><?= $_SESSION['user_location']['name'] ?? 'Set Location' ?></span>
+                    <span id="current-location-text">
+                        <?= $_SESSION['user_location']['name'] ?? 'Set Location' ?>
+                        <?php if (isset($_SESSION['user_location']['lat'])): ?>
+                            <small
+                                style="font-size: 10px; opacity: 0.7; margin-left: 5px;">(<?= round($_SESSION['user_location']['lat'], 2) ?>,
+                                <?= round($_SESSION['user_location']['lng'], 2) ?>)</small>
+                        <?php endif; ?>
+                    </span>
                     <i class="fa fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i>
                 </div>
 
@@ -154,6 +161,13 @@ try {
                 <button id="detect-location" class="btn-location-action">
                     <i class="fa fa-crosshairs"></i> Use Current Location (GPS)
                 </button>
+
+                <?php if (isset($_SESSION['user_location'])): ?>
+                    <button onclick="EnteangadiLocation.clearLocation()" class="btn-location-action"
+                        style="background: #fff1f2; color: #e11d48; border-color: #fee2e2; margin-top: 10px;">
+                        <i class="fa fa-trash-alt"></i> Reset Location
+                    </button>
+                <?php endif; ?>
 
                 <div class="divider"><span>OR SEARCH LOCATION</span></div>
 

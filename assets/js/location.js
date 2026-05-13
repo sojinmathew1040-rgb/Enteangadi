@@ -130,6 +130,25 @@ const EnteangadiLocation = {
         } catch (error) {
             console.error('Error setting location:', error);
         }
+    },
+
+    async clearLocation() {
+        try {
+            const formData = new FormData();
+            formData.append('action', 'clear_location');
+
+            const response = await fetch(`${EnteangadiConfig.baseUrl}/api/location.php`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                location.reload();
+            }
+        } catch (error) {
+            console.error('Error clearing location:', error);
+        }
     }
 };
 
