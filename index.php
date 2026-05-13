@@ -86,10 +86,9 @@ if (isset($_SESSION['user_id'])) {
     <!-- Browse Categories section -->
     <div class="category-section">
         <div class="category-header">
-            <h2 class="category-item-text" style="font-size: 24px; font-weight: 700;">Browse categories</h2>
+            <h2 class="section-title-premium">Browse categories</h2>
             <?php if ($category_filter): ?>
-                <a href="index.php" class="category-item-text" style="color: var(--primary-green); font-weight: 600;">Clear
-                    Filter</a>
+                <a href="index.php" class="btn-clear-filter">Clear Filter</a>
             <?php endif; ?>
         </div>
         <div class="category-scroll-container">
@@ -101,7 +100,7 @@ if (isset($_SESSION['user_id'])) {
                     <?php else: ?>
                         <div
                             class="category-item-placeholder <?= ($parent_id == $cat['id'] || $category_filter == $cat['id']) ? 'active' : '' ?>">
-                            <i class="fa fa-th-large" style="font-size: 24px; color: #999;"></i>
+                            <i class="fa fa-th-large category-placeholder-icon"></i>
                         </div>
                     <?php endif; ?>
                     <span
@@ -131,13 +130,13 @@ if (isset($_SESSION['user_id'])) {
 
     <?php if (empty($products)): ?>
         <div class="empty-state-card">
-            <i class="fa fa-box-open" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
-            <h3 style="color: var(--text-dark); margin-bottom: 8px;">No products found</h3>
-            <p style="color: var(--text-muted);">Be the first one to post an ad on Enteangadi!</p>
+            <i class="fa fa-box-open empty-state-icon"></i>
+            <h3 class="empty-state-title">No products found</h3>
+            <p class="empty-state-subtitle">Be the first one to post an ad on Enteangadi!</p>
             <?php if (isset($_SESSION['user_id'])): ?>
-                <a href="user/post_ad.php" class="btn-primary" style="display: inline-block; margin-top: 16px;">Post an Ad</a>
+                <a href="user/post_ad.php" class="btn-primary mt-16">Post an Ad</a>
             <?php else: ?>
-                <a href="login.php" class="btn-primary" style="display: inline-block; margin-top: 16px;">Login to Post</a>
+                <a href="login.php" class="btn-primary mt-16">Login to Post</a>
             <?php endif; ?>
         </div>
     <?php else: ?>
@@ -166,15 +165,13 @@ if (isset($_SESSION['user_id'])) {
                     <?php if ($product['main_image']): ?>
                         <img src="<?= htmlspecialchars($product['main_image']) ?>" class="product-card-image">
                     <?php else: ?>
-                        <div class="product-card-image"
-                            style="display: flex; align-items: center; justify-content: center; background: #e0e0e0;">
-                            <i class="fa fa-image" style="font-size: 40px; color: #999;"></i>
+                        <div class="product-card-image placeholder-bg">
+                            <i class="fa fa-image placeholder-icon"></i>
                         </div>
                     <?php endif; ?>
 
                     <div class="wishlist-icon-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)">
-                        <i class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart"
-                            style="color: <?= in_array($product['id'], $user_wishlist) ? 'var(--primary-green)' : '#999' ?>;"></i>
+                        <i class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart <?= in_array($product['id'], $user_wishlist) ? 'active' : '' ?>"></i>
                     </div>
 
                     <div class="product-card-content">
@@ -187,11 +184,10 @@ if (isset($_SESSION['user_id'])) {
                             <?php endif; ?>
                         </div>
                         <div class="product-card-meta">
-                            <span><i class="fa fa-map-marker-alt" style="font-size: 10px;"></i>
+                            <span><i class="fa fa-map-marker-alt meta-icon-sm"></i>
                                 <?= htmlspecialchars($product['location_name'] ?? 'Unknown') ?></span>
                             <?php if (isset($product['distance'])): ?>
-                                <span style="color: var(--primary-green); font-weight: 600;"><?= round($product['distance'], 1) ?>
-                                    km away</span>
+                                <span class="distance-badge"><?= round($product['distance'], 1) ?> km away</span>
                             <?php endif; ?>
                         </div>
                     </div>
