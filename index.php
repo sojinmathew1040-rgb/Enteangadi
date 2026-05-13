@@ -198,32 +198,8 @@ if (isset($_SESSION['user_id'])) {
 </div>
 
 <script>
-    async function toggleWishlist(event, productId) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        <?php if (!isset($_SESSION['user_id'])): ?>
-            window.location.href = 'login.php';
-            return;
-        <?php endif; ?>
-
-        const btn = event.currentTarget;
-        const icon = btn.querySelector('i');
-
-        try {
-            const formData = new FormData();
-            formData.append('product_id', productId);
-            const resp = await fetch('user/toggle_wishlist.php', { method: 'POST', body: formData });
-            const data = await resp.json();
-            if (data.status === 'success') {
-                if (data.action === 'added') {
-                    icon.classList.remove('far'); icon.classList.add('fas'); icon.style.color = 'var(--primary-green)';
-                } else {
-                    icon.classList.remove('fas'); icon.classList.add('far'); icon.style.color = '#999';
-                }
-            }
-        } catch (e) { console.error(e); }
-    }
+    const sessionUserId = <?= isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null' ?>;
 </script>
+<script src="assets/js/index.js"></script>
 
 <?php require_once 'includes/footer.php'; ?>
