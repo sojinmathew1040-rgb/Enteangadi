@@ -23,7 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->exec("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES 
             ('app_logo', ''),
             ('app_name', 'Enteangadi'),
-            ('app_tagline', 'Your Local Marketplace')");
+            ('app_tagline', 'Your Local Marketplace'),
+            ('announcement_poster', '')");
 
         $tagline = $_POST['app_tagline'] ?? '';
 
@@ -143,6 +144,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE products SET is_verified = ? WHERE id = ?");
             $stmt->execute([$new_status, $product_id]);
             $success = "Verification status updated.";
+        }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'announcement') {
+        // Handle deletion
+        if (isset($_POST['delete_poster']) && $_POST['delete_poster'] === '1') {
+            $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'announcement_poster'");
+            $stmt->execute();
+            $current = $stmt->fetchColumn();
+
+            if (!empty($current)) {
+                $file_to_delete = '../' . $current;
+                if (file_exists($file_to_delete)) {
+                    unlink($file_to_delete);
+                }
+            }
+            $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = '' WHERE setting_key = 'announcement_poster'");
+            $stmt->execute();
+            $success = "Announcement poster removed.";
+        }
+
+        // Handle upload
+        if (isset($_FILES['announcement_poster']) && $_FILES['announcement_poster']['error'] === UPLOAD_ERR_OK) {
+            $upload_dir = '../uploads/posters/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $file_ext = strtolower(pathinfo($_FILES['announcement_poster']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+            if (in_array($file_ext, $allowed)) {
+                $file_name = 'poster_' . time() . '.' . $file_ext;
+                $target_path = $upload_dir . $file_name;
+
+                if (move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
+                    $db_path = 'uploads/posters/' . $file_name;
+                    $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('announcement_poster', ?) 
+                                         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+                    $stmt->execute([$db_path]);
+                    $success = "Announcement poster uploaded successfully.";
+                }
+            }
         }
     }
 }
@@ -589,24 +631,36 @@ require_once 'includes/header.php';
     .back-btn {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        color: var(--text-muted);
+        gap: 12px;
+        color: var(--text-dark);
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 700;
         margin-bottom: 24px;
-        transition: all 0.2s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: pointer;
         background: var(--white);
         border: 1px solid var(--border-color);
-        padding: 8px 16px;
-        border-radius: 12px;
-        font-size: 14px;
+        padding: 14px 24px;
+        border-radius: 20px;
+        font-size: 13px;
+        box-shadow: var(--shadow-sm);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        outline: none;
+        -webkit-appearance: none;
+        width: auto;
     }
 
     .back-btn:hover {
-        color: var(--primary-green-dark);
+        color: white;
         border-color: var(--primary-green);
-        background: #f0fdf4;
+        background: var(--primary-green);
+        transform: translateX(-8px);
+        box-shadow: 0 15px 30px rgba(34, 197, 94, 0.3);
+    }
+
+    .back-btn i {
+        font-size: 16px;
     }
 
     .settings-form-wrapper {
@@ -798,6 +852,16 @@ require_once 'includes/header.php';
                 </div>
             <?php endif; ?>
 
+            <?php if (has_permission('manage_branding')): ?>
+                <div class="settings-card" onclick="showSection('announcement')">
+                    <i class="fa fa-bullhorn"></i>
+                    <div>
+                        <h3>Announcement</h3>
+                        <p>Manage home page poster</p>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php if (has_permission('manage_security')): ?>
                 <div class="settings-card" onclick="showSection('security')">
                     <i class="fa fa-key"></i>
@@ -947,6 +1011,53 @@ require_once 'includes/header.php';
 
                 <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save
                     Visual Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Announcement Section -->
+    <div id="section-announcement"
+        class="settings-section <?= (isset($_POST['action']) && $_POST['action'] === 'announcement') ? 'active' : '' ?>">
+        <button class="back-btn" onclick="showSection('grid')">
+            <i class="fa fa-arrow-left"></i> Back to Dashboard
+        </button>
+
+        <div class="settings-form-wrapper">
+            <div class="section-header">
+                <h2>Announcement Poster</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Upload a poster to show on the
+                    index page (Shown once per day per user).</p>
+            </div>
+
+            <form method="POST" action="settings.php" enctype="multipart/form-data">
+                <input type="hidden" name="action" value="announcement">
+
+                <div class="form-group">
+                    <label>Active Poster Preview</label>
+                    <div class="logo-preview-box" style="height: auto; min-height: 200px;">
+                        <?php if (!empty($app_settings['announcement_poster'])): ?>
+                            <img src="../<?= htmlspecialchars($app_settings['announcement_poster']) ?>" alt="Current Poster"
+                                style="max-width: 100%; border-radius: 12px; box-shadow: var(--shadow-sm);">
+                            <label
+                                style="display: flex; align-items: center; gap: 8px; color: #dc2626; cursor: pointer; font-size: 13px; font-weight: 600; margin-top: 12px;">
+                                <input type="checkbox" name="delete_poster" value="1"> Remove and disable poster
+                            </label>
+                        <?php else: ?>
+                            <i class="fa fa-bullhorn" style="font-size: 40px; color: #cbd5e1;"></i>
+                            <span style="color: var(--text-muted); font-size: 13px;">No announcement poster active</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 24px;">
+                    <label>Upload New Poster</label>
+                    <input type="file" name="announcement_poster" class="form-control" accept="image/*">
+                    <small style="color: var(--text-muted); display: block; margin-top: 8px;">Recommended: High
+                        resolution image. Mobile responsive cropping will apply.</small>
+                </div>
+
+                <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Update
+                    Announcement Poster</button>
             </form>
         </div>
     </div>

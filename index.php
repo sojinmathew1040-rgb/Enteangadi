@@ -1,6 +1,9 @@
 <?php
 require_once 'config.php';
 require_once 'includes/header.php';
+echo "<!-- DEBUG: Poster Path in DB: " . ($app_settings['announcement_poster'] ?? 'NOT_SET') . " -->";
+if (isset($_GET['debug_poster']))
+    echo "POSTER PATH: " . ($app_settings['announcement_poster'] ?? 'NOT SET');
 
 $category_filter = $_GET['category_id'] ?? null;
 $search_query = $_GET['search'] ?? null;
@@ -226,5 +229,71 @@ if (isset($_SESSION['user_id'])) {
 </script>
 <script src="assets/js/index.js"></script>
 <script src="assets/js/infinite-scroll.js"></script>
+
+
+<!-- Announcement Poster Modal Logic -->
+<?php
+$poster_path = $app_settings['announcement_poster'] ?? '';
+if (!empty($poster_path)):
+    ?>
+    <script>console.log('Announcement Modal Code Included in Page');</script>
+    <div id="announcement-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(8px); padding: 20px;">
+        <div
+            style="position: relative; max-width: 500px; width: 100%; background: var(--white); border-radius: 32px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: zoomInPoster 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+            <button onclick="closeAnnouncement()"
+                style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; backdrop-filter: blur(4px);">
+                <i class="fa fa-times" style="font-size: 20px;"></i>
+            </button>
+            <img src="<?= $base_url ?>/<?= htmlspecialchars($poster_path) ?>" alt="Announcement"
+                style="width: 100%; height: auto; display: block; max-height: 70vh; object-fit: contain; background: #000;"
+                onerror="console.error('FAILED TO LOAD POSTER IMAGE: ' + this.src)">
+            <div
+                style="padding: 24px; text-align: center; background: var(--white); border-top: 1px solid var(--border-color);">
+                <button onclick="closeAnnouncement()" class="btn-primary"
+                    style="width: 100%; padding: 14px; border-radius: 16px; font-weight: 800;">Continue to
+                    <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function closeAnnouncement() {
+            document.getElementById('announcement-modal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const modal = document.getElementById('announcement-modal');
+            if (!modal) {
+                console.log('Announcement Modal element not found');
+                return;
+            }
+
+            console.log('Announcement Poster Path: <?= $base_url ?>/<?= $app_settings['announcement_poster'] ?? "EMPTY" ?>');
+
+            // Show on every visit
+            setTimeout(() => {
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                console.log('Announcement Modal shown');
+            }, 800);
+        });
+    </script>
+
+    <style>
+        @keyframes zoomInPoster {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+<?php endif; ?>
 
 <?php require_once 'includes/footer.php'; ?>
