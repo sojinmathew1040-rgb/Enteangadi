@@ -93,3 +93,26 @@ if (!function_exists('compressAndResizeImage')) {
         return $result;
     }
 }
+
+/**
+ * Multi-language Translation Helper
+ */
+if (!function_exists('__')) {
+    function __($key)
+    {
+        static $translations = null;
+
+        if ($translations === null) {
+            $lang = $_SESSION['lang'] ?? 'en';
+            $lang_file = __DIR__ . "/lang/{$lang}.php";
+
+            if (file_exists($lang_file)) {
+                $translations = require $lang_file;
+            } else {
+                $translations = [];
+            }
+        }
+
+        return $translations[$key] ?? $key;
+    }
+}

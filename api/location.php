@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'lat' => $_POST['latitude'],
             'lng' => $_POST['longitude']
         ];
-        
+
         echo json_encode(['success' => true, 'location' => $_SESSION['user_location']]);
         exit;
     }

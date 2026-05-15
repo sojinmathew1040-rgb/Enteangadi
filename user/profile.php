@@ -124,7 +124,7 @@ require_once '../includes/header.php';
                 <div class="stat-icon" style="background: #e8f5e9; color: #2e7d32;"><i class="fa fa-rocket"></i></div>
                 <div class="stat-info">
                     <h3><?= $active_ads ?></h3>
-                    <p>Live Ads</p>
+                    <p><?= __('live_ads') ?></p>
                 </div>
             </div>
             <div class="stat-card">
@@ -132,14 +132,14 @@ require_once '../includes/header.php';
                 </div>
                 <div class="stat-info">
                     <h3><?= $sold_ads ?></h3>
-                    <p>Sold Items</p>
+                    <p><?= __('sold_items') ?></p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon" style="background: #fce4ec; color: #c2185b;"><i class="fa fa-heart"></i></div>
                 <div class="stat-info">
                     <h3><?= $wishlist_count ?></h3>
-                    <p>Wishlist</p>
+                    <p><?= __('wishlist') ?></p>
                 </div>
             </div>
         </div>
@@ -147,12 +147,12 @@ require_once '../includes/header.php';
         <!-- Menu Section -->
         <div class="profile-content-layout">
             <div class="profile-menu-premium">
-                <h2 class="menu-title">Account Management</h2>
+                <h2 class="menu-title"><?= __('account_management') ?></h2>
 
                 <a href="my_ads.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-th-large"></i></div>
-                        <span>My Dashboard & Ads</span>
+                        <span><?= __('my_dashboard') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -160,7 +160,7 @@ require_once '../includes/header.php';
                 <a href="wishlist.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-heart"></i></div>
-                        <span>Saved Favorites</span>
+                        <span><?= __('saved_favorites') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -168,7 +168,7 @@ require_once '../includes/header.php';
                 <a href="inbox.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-comment-alt"></i></div>
-                        <span>Messages</span>
+                        <span><?= __('messages') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -176,7 +176,7 @@ require_once '../includes/header.php';
                 <a href="settings.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-user-cog"></i></div>
-                        <span>Account Settings</span>
+                        <span><?= __('account_settings') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -184,7 +184,7 @@ require_once '../includes/header.php';
                 <a href="help_support.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-question-circle"></i></div>
-                        <span>Help & Support</span>
+                        <span><?= __('help_support') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -192,7 +192,7 @@ require_once '../includes/header.php';
                 <a href="../logout.php" class="menu-link logout-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-sign-out-alt"></i></div>
-                        <span>Logout</span>
+                        <span><?= __('logout') ?></span>
                     </div>
                     <i class="fa fa-chevron-right"></i>
                 </a>
@@ -305,7 +305,7 @@ require_once '../includes/header.php';
     }
 
     .stat-card {
-        background: white;
+        background: var(--white);
         padding: 24px;
         border-radius: var(--border-radius);
         box-shadow: var(--shadow-sm);
@@ -344,7 +344,7 @@ require_once '../includes/header.php';
 
     /* Menu Premium */
     .profile-menu-premium {
-        background: white;
+        background: var(--white);
         border-radius: var(--border-radius);
         padding: 24px;
         box-shadow: var(--shadow-sm);
@@ -372,7 +372,7 @@ require_once '../includes/header.php';
     }
 
     .menu-link:hover {
-        background: #f8fafc;
+        background: var(--background);
         transform: translateX(5px);
     }
 
@@ -385,7 +385,7 @@ require_once '../includes/header.php';
     .menu-icon {
         width: 40px;
         height: 40px;
-        background: #f1f5f9;
+        background: var(--background);
         color: var(--text-dark);
         display: flex;
         align-items: center;
@@ -407,19 +407,23 @@ require_once '../includes/header.php';
 
     .menu-link i.fa-chevron-right {
         font-size: 12px;
-        color: #cbd5e1;
+        color: var(--border-color);
     }
 
     .logout-link {
         color: var(--danger);
         margin-top: 16px;
-        border-top: 1px solid #f1f5f9;
+        border-top: 1px solid var(--border-color);
         padding-top: 24px;
     }
 
     .logout-link .menu-icon {
         background: #fef2f2;
         color: var(--danger);
+    }
+
+    [data-theme="dark"] .logout-link .menu-icon {
+        background: rgba(239, 68, 68, 0.1);
     }
 
     .logout-link:hover .menu-icon {

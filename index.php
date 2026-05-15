@@ -86,7 +86,7 @@ if (isset($_SESSION['user_id'])) {
     <!-- Browse Categories section -->
     <div class="category-section">
         <div class="category-header">
-            <h2 class="section-title-premium">Browse categories</h2>
+            <h2 class="section-title-premium"><?= __('browse_categories') ?></h2>
             <?php if ($category_filter): ?>
                 <a href="index.php" class="btn-clear-filter">Clear Filter</a>
             <?php endif; ?>
@@ -122,21 +122,22 @@ if (isset($_SESSION['user_id'])) {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+
     </div>
 
     <div class="category-header">
-        <h2 class="section-title-premium">Fresh Recommendations</h2>
+        <h2 class="section-title-premium"><?= __('fresh_recommendations') ?></h2>
     </div>
 
     <?php if (empty($products)): ?>
         <div class="empty-state-card">
             <i class="fa fa-box-open empty-state-icon"></i>
-            <h3 class="empty-state-title">No products found</h3>
-            <p class="empty-state-subtitle">Be the first one to post an ad on Enteangadi!</p>
+            <h3 class="empty-state-title"><?= __('no_products') ?></h3>
+            <p class="empty-state-subtitle"><?= __('be_the_first') ?></p>
             <?php if (isset($_SESSION['user_id'])): ?>
-                <a href="user/post_ad.php" class="btn-primary mt-16">Post an Ad</a>
+                <a href="user/post_ad.php" class="btn-primary mt-16"><?= __('post_an_ad') ?></a>
             <?php else: ?>
-                <a href="login.php" class="btn-primary mt-16">Login to Post</a>
+                <a href="login.php" class="btn-primary mt-16"><?= __('login_to_post') ?></a>
             <?php endif; ?>
         </div>
     <?php else: ?>
@@ -144,9 +145,9 @@ if (isset($_SESSION['user_id'])) {
             <?php foreach ($products as $product): ?>
                 <a href="product.php?id=<?= $product['id'] ?>" class="product-card">
                     <?php if ($product['type'] == 'buy'): ?>
-                        <div class="badge-wanted">Wanted</div>
+                        <div class="badge-wanted"><?= __('wanted') ?></div>
                     <?php else: ?>
-                        <div class="badge-selling">For Sale</div>
+                        <div class="badge-selling"><?= __('for_sale') ?></div>
                         <?php if (!empty($product['expiry_date'])): ?>
                             <?php
                             $expiry_date = strtotime($product['expiry_date']);
@@ -157,7 +158,7 @@ if (isset($_SESSION['user_id'])) {
                                 ?>
                                 <div class="badge-expiring">
                                     <i class="fa fa-clock"></i>
-                                    <?= ($days_left == 0) ? 'Expires Today' : 'Expiring Soon' ?>
+                                    <?= ($days_left == 0) ? __('expires_today') : __('expiring_soon') ?>
                                 </div>
                             <?php endif; ?>
                         <?php endif; ?>
@@ -171,7 +172,8 @@ if (isset($_SESSION['user_id'])) {
                     <?php endif; ?>
 
                     <div class="wishlist-icon-btn" onclick="toggleWishlist(event, <?= $product['id'] ?>)">
-                        <i class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart <?= in_array($product['id'], $user_wishlist) ? 'active' : '' ?>"></i>
+                        <i
+                            class="fa<?= in_array($product['id'], $user_wishlist) ? 's' : 'r' ?> fa-heart <?= in_array($product['id'], $user_wishlist) ? 'active' : '' ?>"></i>
                     </div>
 
                     <div class="product-card-content">
@@ -187,19 +189,42 @@ if (isset($_SESSION['user_id'])) {
                             <span><i class="fa fa-map-marker-alt meta-icon-sm"></i>
                                 <?= htmlspecialchars($product['location_name'] ?? 'Unknown') ?></span>
                             <?php if (isset($product['distance'])): ?>
-                                <span class="distance-badge"><?= round($product['distance'], 1) ?> km away</span>
+                                <span class="distance-badge"><?= round($product['distance'], 1) ?>
+                                    <?= __('distance_away') ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
                 </a>
             <?php endforeach; ?>
         </div>
+
+        <!-- Infinite Scroll Sentinel -->
+        <div id="infinite-scroll-sentinel" style="height: 20px; margin-bottom: 40px;"></div>
     <?php endif; ?>
 </div>
 
 <script>
     const sessionUserId = <?= isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null' ?>;
+
+    // Initialize Infinite Scroll
+    document.addEventListener('DOMContentLoaded', () => {
+        new EnteangadiInfiniteScroll({
+            containerSelector: '.product-grid',
+            loaderSelector: '#infinite-scroll-sentinel',
+            apiUrl: 'api/products.php',
+            params: {
+                category_id: '<?= $category_filter ?>',
+                search: '<?= $search_query ?>'
+            },
+            translations: {
+                distance_away: '<?= __('distance_away') ?>',
+                wanted: '<?= __('wanted') ?>',
+                for_sale: '<?= __('for_sale') ?>'
+            }
+        });
+    });
 </script>
 <script src="assets/js/index.js"></script>
+<script src="assets/js/infinite-scroll.js"></script>
 
 <?php require_once 'includes/footer.php'; ?>

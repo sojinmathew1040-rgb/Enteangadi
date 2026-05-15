@@ -32,7 +32,7 @@
 /* Media Section */
 .main-gallery-wrapper {
     position: relative;
-    background: white;
+    background: var(--white);
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: var(--shadow-md);
@@ -62,7 +62,7 @@
     height: 100%;
     object-fit: contain;
     cursor: zoom-in;
-    background: #f8fafc;
+    background: var(--background);
 }
 
 .badge-type {
@@ -115,7 +115,7 @@
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: white;
+    background: var(--white);
     border: none;
     box-shadow: var(--shadow-md);
     cursor: pointer;
@@ -159,7 +159,7 @@
 }
 
 .description-card-premium {
-    background: white;
+    background: var(--white);
     border-radius: var(--border-radius);
     padding: 32px;
     margin-top: 40px;
@@ -227,7 +227,7 @@
     height: 48px;
     border-radius: 50%;
     border: 1px solid var(--border-color);
-    background: white;
+    background: var(--white);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -312,7 +312,7 @@
 
 /* Seller Card */
 .seller-card-premium {
-    background: #f8fafc;
+    background: var(--background);
     border-radius: 20px;
     padding: 24px;
     margin-bottom: 30px;
@@ -693,7 +693,7 @@
 .btn-banner-action {
     margin-left: auto;
     padding: 10px 20px;
-    background: white;
+    background: var(--white);
     border: 1px solid #fee2e2;
     border-radius: 12px;
     text-decoration: none;
