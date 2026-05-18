@@ -270,12 +270,19 @@ if (!empty($poster_path)):
                 return;
             }
 
+            // Check if announcement was already shown in this session
+            if (sessionStorage.getItem('announcement_shown')) {
+                console.log('Announcement Modal already shown in this session');
+                return;
+            }
+
             console.log('Announcement Poster Path: <?= $base_url ?>/<?= $app_settings['announcement_poster'] ?? "EMPTY" ?>');
 
-            // Show on every visit
+            // Show and set session flag so it won't repeat
             setTimeout(() => {
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
+                sessionStorage.setItem('announcement_shown', 'true');
                 console.log('Announcement Modal shown');
             }, 800);
         });

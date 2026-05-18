@@ -350,7 +350,7 @@ require_once '../includes/header.php';
 
     /* Ad Card Styling */
     .my-ad-card {
-        background: white;
+        background: var(--white);
         border-radius: var(--border-radius);
         overflow: hidden;
         box-shadow: var(--shadow-sm);
@@ -383,12 +383,12 @@ require_once '../includes/header.php';
     .ad-image-placeholder {
         width: 100%;
         height: 100%;
-        background: #f1f5f9;
+        background: var(--skeleton-bg);
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 40px;
-        color: #cbd5e1;
+        color: var(--text-muted);
     }
 
     .ad-status-badge {
@@ -457,7 +457,7 @@ require_once '../includes/header.php';
         font-weight: 600;
         margin-bottom: 20px;
         padding-top: 12px;
-        border-top: 1px solid #f1f5f9;
+        border-top: 1px solid var(--border-color);
     }
 
     .ad-card-actions-premium {
@@ -470,8 +470,8 @@ require_once '../includes/header.php';
     .btn-view-listing {
         width: 100%;
         height: 44px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background: var(--background);
+        border: 1px solid var(--border-color);
         border-radius: 12px;
         display: flex;
         align-items: center;
@@ -486,7 +486,7 @@ require_once '../includes/header.php';
 
     .btn-view-listing:hover {
         background: var(--primary-green);
-        color: white;
+        color: white !important;
         border-color: var(--primary-green);
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
@@ -501,19 +501,19 @@ require_once '../includes/header.php';
         flex: 1;
         height: 44px;
         border-radius: 12px;
-        border: 1px solid #f1f5f9;
-        background: #f8fafc;
+        border: 1px solid var(--border-color);
+        background: var(--background);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s;
-        color: #64748b;
+        color: var(--text-muted);
         font-size: 14px;
     }
 
     .tool-btn:hover {
-        background: white;
+        background: var(--white);
         transform: translateY(-2px);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
@@ -597,12 +597,12 @@ require_once '../includes/header.php';
         display: flex;
         align-items: center;
         justify-content: space-between;
-        background: white;
+        background: var(--white);
         padding: 16px 20px;
         border-radius: 16px;
         margin-bottom: 24px;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-        border: 1px solid #f1f5f9;
+        border: 1px solid var(--border-color);
         position: relative;
         overflow: hidden;
         animation: slideInUp 0.4s ease;
@@ -699,7 +699,7 @@ require_once '../includes/header.php';
 
     /* Approval Toast */
     .approval-toast {
-        background: white;
+        background: var(--white);
         border-radius: 20px;
         padding: 24px;
         margin-bottom: 32px;
@@ -752,13 +752,14 @@ require_once '../includes/header.php';
     }
 
     .modal-content-premium {
-        background: white;
+        background: var(--white);
         width: 90%;
         max-width: 400px;
         padding: 32px;
         border-radius: 24px;
         box-shadow: var(--shadow-lg);
         animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        color: var(--text-dark);
     }
 
     @keyframes zoomIn {
@@ -785,12 +786,13 @@ require_once '../includes/header.php';
         align-items: center;
         gap: 12px;
         padding: 14px;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background: var(--background);
+        border: 1px solid var(--border-color);
         border-radius: 12px;
         cursor: pointer;
         font-weight: 600;
         font-size: 14px;
+        color: var(--text-dark);
     }
 
     .modal-footer-btns {
@@ -803,10 +805,11 @@ require_once '../includes/header.php';
         flex: 1;
         padding: 14px;
         border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        background: white;
+        border: 1px solid var(--border-color);
+        background: var(--white);
         font-weight: 700;
         cursor: pointer;
+        color: var(--text-dark);
     }
 
     .btn-confirm {

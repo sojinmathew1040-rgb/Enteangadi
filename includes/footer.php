@@ -1,37 +1,41 @@
 <!-- Mobile Bottom Navigation -->
+<?php
+$current_page = basename($_SERVER['PHP_SELF']);
+?>
 <nav class="mobile-bottom-nav">
-    <a href="<?= $base_url ?>/index.php"
-        class="nav-item <?= basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : '' ?>" title="Home">
-        <i class="fa fa-home"></i>
+    <a href="<?= $base_url ?>/index.php" class="nav-item <?= $current_page == 'index.php' ? 'active' : '' ?>"
+        title="Home">
+        <i class="fa-solid fa-house"></i>
         <span>Home</span>
     </a>
     <?php if (isset($_SESSION['user_id'])): ?>
         <a href="<?= $base_url ?>/user/inbox.php"
-            class="nav-item <?= basename($_SERVER['PHP_SELF']) == 'inbox.php' ? 'active' : '' ?>" title="Chats">
-            <i class="fa fa-comments"></i>
+            class="nav-item <?= ($current_page == 'inbox.php' || $current_page == 'chat.php') ? 'active' : '' ?>"
+            title="Chats">
+            <i class="fa-solid fa-comments"></i>
             <span>Chats</span>
             <span id="mobile-unread-badge"
                 style="display: none; position: absolute; top: 4px; right: 20%; background: var(--danger); color: white; border-radius: 50%; width: 14px; height: 14px; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; border: 2px solid white;">0</span>
         </a>
-        <a href="<?= $base_url ?>/user/post_ad.php" class="nav-item sell-center" title="Post">
-            <div class="sell-circle">
-                <i class="fa fa-plus"></i>
-            </div>
-            <span>POST</span>
+        <a href="<?= $base_url ?>/user/post_ad.php"
+            class="nav-item <?= ($current_page == 'post_ad.php') ? 'active' : '' ?> post-tab" title="Post">
+            <i class="fa-solid fa-circle-plus"></i>
+            <span>Post</span>
         </a>
-        <a href="<?= $base_url ?>/user/my_ads.php"
-            class="nav-item <?= basename($_SERVER['PHP_SELF']) == 'my_ads.php' ? 'active' : '' ?>" title="My Ads">
-            <i class="fa fa-list-alt"></i>
+        <a href="<?= $base_url ?>/user/my_ads.php" class="nav-item <?= $current_page == 'my_ads.php' ? 'active' : '' ?>"
+            title="My Ads">
+            <i class="fa-solid fa-list"></i>
             <span>My Ads</span>
         </a>
-        <a href="<?= $base_url ?>/user/profile.php"
-            class="nav-item <?= basename($_SERVER['PHP_SELF']) == 'profile.php' ? 'active' : '' ?>" title="Account">
-            <i class="fa fa-user"></i>
+        <a href="<?= $base_url ?>/user/profile.php" class="nav-item <?= $current_page == 'profile.php' ? 'active' : '' ?>"
+            title="Account">
+            <i class="fa-solid fa-user"></i>
             <span>Account</span>
         </a>
     <?php else: ?>
-        <a href="<?= $base_url ?>/login.php" class="nav-item" title="Login">
-            <i class="fa fa-sign-in-alt"></i>
+        <a href="<?= $base_url ?>/login.php" class="nav-item <?= $current_page == 'login.php' ? 'active' : '' ?>"
+            title="Login">
+            <i class="fa-solid fa-right-to-bracket"></i>
             <span>Login</span>
         </a>
     <?php endif; ?>

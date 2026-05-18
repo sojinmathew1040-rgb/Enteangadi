@@ -325,38 +325,77 @@ header nav a:hover {
     position: absolute !important;
     top: 12px !important;
     left: 12px !important;
-    background-color: #FFB300 !important;
-    /* Fallback */
-    background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%) !important;
-    color: white !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #FFB300 !important;
     padding: 4px 10px !important;
-    border-radius: 6px !important;
-    font-size: 10px !important;
+    border-radius: 8px !important;
+    font-size: 9px !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
     z-index: 10 !important;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-    letter-spacing: 0.5px !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+    letter-spacing: 0.8px !important;
     display: block !important;
+    border: 1px solid rgba(255, 179, 0, 0.35) !important;
 }
 
 .badge-selling {
     position: absolute !important;
     top: 12px !important;
     left: 12px !important;
-    background-color: #2E7D32 !important;
-    /* Green fallback */
-    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%) !important;
-    color: white !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #4CAF50 !important;
     padding: 4px 10px !important;
-    border-radius: 6px !important;
-    font-size: 10px !important;
+    border-radius: 8px !important;
+    font-size: 9px !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
     z-index: 10 !important;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-    letter-spacing: 0.5px !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+    letter-spacing: 0.8px !important;
     display: block !important;
+    border: 1px solid rgba(76, 175, 80, 0.35) !important;
+}
+
+.badge-expiring {
+    position: absolute !important;
+    top: 42px !important;
+    left: 12px !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #FF9800 !important;
+    padding: 4px 10px !important;
+    border-radius: 8px !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    z-index: 10 !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+    letter-spacing: 0.8px !important;
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255, 152, 0, 0.35) !important;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0% {
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15), 0 0 0 0px rgba(255, 152, 0, 0.3);
+    }
+
+    70% {
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15), 0 0 0 6px rgba(255, 152, 0, 0);
+    }
+
+    100% {
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15), 0 0 0 0px rgba(255, 152, 0, 0);
+    }
 }
 
 .product-card:hover {
@@ -545,14 +584,19 @@ footer {
     bottom: 0;
     left: 0;
     width: 100%;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur) saturate(180%);
+    -webkit-backdrop-filter: var(--glass-blur) saturate(180%);
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
     z-index: 2000;
-    border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+    border-top: 0.5px solid var(--border-color);
     height: 70px;
     padding-bottom: env(safe-area-inset-bottom);
+    transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94), background 0.3s, border 0.3s;
+}
+
+.mobile-bottom-nav--hidden {
+    transform: translateY(100%);
 }
 
 .mobile-bottom-nav .nav-item {
@@ -573,6 +617,7 @@ footer {
 
 .mobile-bottom-nav .nav-item i {
     font-size: 22px;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.2s;
 }
 
 .mobile-bottom-nav .nav-item.active {
@@ -580,89 +625,29 @@ footer {
 }
 
 .mobile-bottom-nav .nav-item.active i {
-    transform: scale(1.1);
+    transform: scale(1.15);
 }
 
-/* Central Sell Button (Pro Style) */
-.sell-center {
+/* Universal Product Post Tab (Standard Sleek Design) */
+.mobile-bottom-nav .post-tab {
     position: relative;
-    top: -24px;
-    z-index: 2001;
 }
 
-.badge-selling {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 800;
-    z-index: 10;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.badge-expiring {
-    position: absolute;
-    top: 40px;
-    left: 12px;
-    background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 6px;
-    font-size: 10px;
-    font-weight: 800;
-    z-index: 10;
-    text-transform: uppercase;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    animation: pulse-warning 2s infinite;
-}
-
-@keyframes pulse-warning {
-    0% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.8;
-    }
-
-    100% {
-        opacity: 1;
-    }
-}
-
-.sell-circle {
-    width: 64px;
-    height: 64px;
-    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 8px 25px rgba(46, 125, 50, 0.4);
-    border: 5px solid var(--white);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.sell-circle i {
+.mobile-bottom-nav .post-tab i {
     font-size: 26px !important;
-    color: white;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    color: var(--primary-green);
+    opacity: 0.85;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
 }
 
-.sell-center span {
-    margin-top: 4px;
-    font-weight: 700 !important;
-    color: var(--primary-green-dark);
+.mobile-bottom-nav .post-tab:hover i {
+    transform: scale(1.1);
+    opacity: 1;
 }
 
-.nav-item:active .sell-circle {
-    transform: scale(0.85) translateY(4px);
-    box-shadow: 0 4px 10px rgba(46, 125, 50, 0.2);
+.mobile-bottom-nav .post-tab.active i {
+    opacity: 1;
+    transform: scale(1.18);
 }
 
 .nav-item span {
@@ -675,6 +660,13 @@ footer {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+    [data-theme="dark"] {
+        --background: #000000;
+        --white: #0A0E14;
+        --border-color: #1F242C;
+        --glass-bg: rgba(10, 14, 20, 0.75);
+    }
+
     .desktop-nav {
         display: none !important;
     }
@@ -688,7 +680,7 @@ footer {
     }
 
     body {
-        padding-bottom: 64px;
+        padding-bottom: 74px;
         /* Space for the bottom nav */
     }
 
@@ -703,8 +695,20 @@ footer {
         grid-template-columns: 1fr;
     }
 
+    .main-sticky-header {
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-bottom: 1px solid var(--border-color);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+    }
+
     header {
         padding: 12px 16px;
+        background: transparent !important;
+        border-bottom: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
     }
 
     .container {
@@ -712,7 +716,8 @@ footer {
     }
 
     .product-card-image {
-        height: 150px;
+        aspect-ratio: 1 / 1;
+        height: auto !important;
     }
 
     .product-card-price {
@@ -725,7 +730,9 @@ footer {
 
     .location-bar {
         height: auto;
-        padding: 8px 0;
+        padding: 4px 0 8px 0;
+        background: transparent !important;
+        border-bottom: none !important;
     }
 
     .location-bar .container {
@@ -1055,6 +1062,9 @@ footer {
     padding-bottom: 8px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
 }
 
 .category-scroll-container::-webkit-scrollbar {
@@ -1069,6 +1079,7 @@ footer {
     align-items: center;
     width: 100px;
     transition: transform 0.2s;
+    scroll-snap-align: start;
 }
 
 .category-item:hover {
