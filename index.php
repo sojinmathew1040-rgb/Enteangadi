@@ -185,7 +185,7 @@ if (isset($_SESSION['user_id'])) {
                         <div class="product-card-title">
                             <?= htmlspecialchars($product['title']) ?>
                             <?php if ($product['is_verified']): ?>
-                                <span class="verified-badge" title="Verified Listing"><i class="fa fa-check"></i></span>
+                                <span class="verified-badge" title="Verified Listing"><i class="fas fa-check-circle"></i></span>
                             <?php endif; ?>
                         </div>
                         <div class="product-card-meta">
@@ -282,6 +282,20 @@ if (!empty($poster_path)):
     </script>
 
     <style>
+        .verified-badge {
+            color: #007bff !important;
+            font-size: 16px !important;
+            margin-left: 5px;
+            vertical-align: middle;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .verified-badge i {
+            font-weight: 900 !important;
+            text-shadow: 0px 0px 2px rgba(0, 123, 255, 0.4);
+        }
+
         @keyframes zoomInPoster {
             from {
                 opacity: 0;

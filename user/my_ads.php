@@ -326,6 +326,28 @@ require_once '../includes/header.php';
         box-shadow: 0 15px 30px rgba(46, 125, 50, 0.3);
     }
 
+    /* Ads Grid Layout */
+    .my-ads-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+        margin-top: 20px;
+    }
+
+    @media (max-width: 991px) {
+        .my-ads-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .my-ads-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 15px;
+        }
+    }
+
     /* Ad Card Styling */
     .my-ad-card {
         background: white;
