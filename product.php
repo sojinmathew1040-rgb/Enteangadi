@@ -191,8 +191,11 @@ require_once 'includes/header.php';
                                             <i class="fa fa-comment-dots"></i> Chat Now
                                         </a>
                                         <?php if (!empty($product['product_whatsapp'])): ?>
-                                            <a href="https://wa.me/<?= preg_replace('/\D/', '', $product['product_whatsapp']) ?>"
-                                                target="_blank" class="btn-whatsapp">
+                                            <?php
+                                            $whatsapp_msg = urlencode("Hello! I saw your listing '" . $product['title'] . "' on " . ($app_settings['app_name'] ?? 'Enteangadi') . ". Is it still available? I would love to make an offer.");
+                                            ?>
+                                            <a href="https://wa.me/<?= preg_replace('/\D/', '', $product['product_whatsapp']) ?>?text=<?= $whatsapp_msg ?>"
+                                                target="_blank" class="btn-whatsapp" title="Chat on WhatsApp">
                                                 <i class="fab fa-whatsapp"></i>
                                             </a>
                                         <?php endif; ?>

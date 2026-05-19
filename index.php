@@ -9,6 +9,11 @@ $category_filter = $_GET['category_id'] ?? null;
 $search_query = $_GET['search'] ?? null;
 $user_location = $_SESSION['user_location'] ?? null;
 
+$min_price = $_GET['min_price'] ?? null;
+$max_price = $_GET['max_price'] ?? null;
+$ad_type = $_GET['ad_type'] ?? null;
+$sort_by = $_GET['sort_by'] ?? 'newest';
+
 $where_clause = "WHERE p.status = 'active'";
 $params = [];
 
@@ -24,6 +29,21 @@ if ($search_query) {
     $params[] = "%$search_query%";
 }
 
+if ($min_price !== null && $min_price !== '') {
+    $where_clause .= " AND p.price >= ?";
+    $params[] = floatval($min_price);
+}
+
+if ($max_price !== null && $max_price !== '') {
+    $where_clause .= " AND p.price <= ?";
+    $params[] = floatval($max_price);
+}
+
+if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
+    $where_clause .= " AND p.type = ?";
+    $params[] = $ad_type;
+}
+
 $distance_select = "";
 $order_by = "p.created_at DESC";
 
@@ -32,7 +52,20 @@ if ($user_location && isset($user_location['lat']) && isset($user_location['lng'
     $lng = $user_location['lng'];
     // Haversine formula for distance in KM
     $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
-    $order_by = "p.created_at DESC, distance ASC";
+}
+
+if ($sort_by === 'price_asc') {
+    $order_by = "p.price ASC";
+} elseif ($sort_by === 'price_desc') {
+    $order_by = "p.price DESC";
+} elseif ($sort_by === 'distance' && !empty($distance_select)) {
+    $order_by = "distance ASC";
+} else {
+    if (!empty($distance_select)) {
+        $order_by = "p.created_at DESC, distance ASC";
+    } else {
+        $order_by = "p.created_at DESC";
+    }
 }
 
 // Fetch products
@@ -128,9 +161,168 @@ if (isset($_SESSION['user_id'])) {
 
     </div>
 
-    <div class="category-header">
-        <h2 class="section-title-premium"><?= __('fresh_recommendations') ?></h2>
+    <div class="category-header"
+        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+        <h2 class="section-title-premium" style="margin: 0;"><?= __('fresh_recommendations') ?></h2>
+
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button class="btn-filter-toggle" onclick="toggleFiltersDrawer()"
+                style="display: flex; align-items: center; gap: 8px; background: var(--white); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--text-dark); cursor: pointer; transition: all 0.3s ease; box-shadow: var(--shadow-sm);">
+                <i class="fa fa-sliders-h" style="color: var(--primary-green);"></i> Filters
+                <?php
+                $active_filter_count = 0;
+                if ($min_price !== null && $min_price !== '')
+                    $active_filter_count++;
+                if ($max_price !== null && $max_price !== '')
+                    $active_filter_count++;
+                if ($ad_type && $ad_type !== '')
+                    $active_filter_count++;
+                if ($sort_by && $sort_by !== 'newest')
+                    $active_filter_count++;
+                if ($active_filter_count > 0):
+                    ?>
+                    <span
+                        style="background: var(--primary-green); color: white; border-radius: 50%; font-size: 10px; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; margin-left: 4px;"><?= $active_filter_count ?></span>
+                <?php endif; ?>
+            </button>
+        </div>
     </div>
+
+    <!-- Collapsible Advanced Filters Drawer -->
+    <div id="advanced-filters-drawer"
+        style="max-height: 0px; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 24px;">
+        <div class="glass-card"
+            style="padding: 24px; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--white); box-shadow: var(--shadow-sm);">
+            <form action="index.php" method="GET" id="filtersForm">
+                <?php if ($category_filter): ?>
+                    <input type="hidden" name="category_id" value="<?= htmlspecialchars($category_filter) ?>">
+                <?php endif; ?>
+                <?php if ($search_query): ?>
+                    <input type="hidden" name="search" value="<?= htmlspecialchars($search_query) ?>">
+                <?php endif; ?>
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; align-items: end;">
+                    <!-- Filter: Ad Type -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label
+                            style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Listing
+                            Type</label>
+                        <div
+                            style="display: flex; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: var(--background);">
+                            <button type="button" class="type-btn <?= (!$ad_type) ? 'active' : '' ?>"
+                                onclick="setAdType('')"
+                                style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">All</button>
+                            <button type="button" class="type-btn <?= ($ad_type === 'sell') ? 'active' : '' ?>"
+                                onclick="setAdType('sell')"
+                                style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">Selling</button>
+                            <button type="button" class="type-btn <?= ($ad_type === 'buy') ? 'active' : '' ?>"
+                                onclick="setAdType('buy')"
+                                style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">Wanted</button>
+                        </div>
+                        <input type="hidden" name="ad_type" id="ad_type_input"
+                            value="<?= htmlspecialchars($ad_type ?? '') ?>">
+                    </div>
+
+                    <!-- Filter: Price Range -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label
+                            style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Price
+                            Range (₹)</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" name="min_price" placeholder="Min" class="form-control"
+                                value="<?= htmlspecialchars($min_price ?? '') ?>"
+                                style="padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); font-size: 13px; flex: 1; min-width: 0; background: var(--white); color: var(--text-dark);">
+                            <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">to</span>
+                            <input type="number" name="max_price" placeholder="Max" class="form-control"
+                                value="<?= htmlspecialchars($max_price ?? '') ?>"
+                                style="padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); font-size: 13px; flex: 1; min-width: 0; background: var(--white); color: var(--text-dark);">
+                        </div>
+                    </div>
+
+                    <!-- Filter: Sorting -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label
+                            style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Sort
+                            By</label>
+                        <select name="sort_by" class="form-control"
+                            style="padding: 10px; border-radius: 12px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 600; background: var(--white); color: var(--text-dark); width: 100%; cursor: pointer;">
+                            <option value="newest" <?= ($sort_by === 'newest') ? 'selected' : '' ?>>Newest First</option>
+                            <option value="price_asc" <?= ($sort_by === 'price_asc') ? 'selected' : '' ?>>Price: Low to
+                                High</option>
+                            <option value="price_desc" <?= ($sort_by === 'price_desc') ? 'selected' : '' ?>>Price: High to
+                                Low</option>
+                            <?php if ($user_location && isset($user_location['lat'])): ?>
+                                <option value="distance" <?= ($sort_by === 'distance') ? 'selected' : '' ?>>Nearest First
+                                </option>
+                            <?php endif; ?>
+                        </select>
+                    </div>
+
+                    <!-- Filter Actions -->
+                    <div style="display: flex; gap: 12px;">
+                        <button type="submit" class="btn-primary"
+                            style="flex: 2; padding: 12px; font-size: 13px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-weight: 600;"><i
+                                class="fa fa-filter"></i> Apply</button>
+                        <a href="index.php?<?= $category_filter ? 'category_id=' . htmlspecialchars($category_filter) : '' ?><?= $search_query ? ($category_filter ? '&' : '') . 'search=' . htmlspecialchars($search_query) : '' ?>"
+                            class="btn-secondary"
+                            style="flex: 1; padding: 12px; font-size: 13px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; font-weight: 600;"><i
+                                class="fa fa-undo"></i> Reset</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .type-btn {
+            background: transparent;
+            color: var(--text-muted);
+            border-radius: 10px;
+            margin: 2px;
+        }
+
+        .type-btn.active {
+            background: var(--white) !important;
+            color: var(--primary-green) !important;
+            box-shadow: var(--shadow-sm);
+        }
+
+        [data-theme="dark"] .type-btn.active {
+            background: var(--glass-bg) !important;
+        }
+
+        .btn-filter-toggle:hover {
+            border-color: var(--primary-green) !important;
+            transform: translateY(-1px);
+        }
+    </style>
+
+    <script>
+        function toggleFiltersDrawer() {
+            const drawer = document.getElementById('advanced-filters-drawer');
+            if (drawer.style.maxHeight === '0px' || drawer.style.maxHeight === '0' || drawer.style.maxHeight === '') {
+                drawer.style.maxHeight = '500px';
+            } else {
+                drawer.style.maxHeight = '0px';
+            }
+        }
+
+        function setAdType(type) {
+            document.getElementById('ad_type_input').value = type;
+            const buttons = document.querySelectorAll('.type-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        // Keep drawer open if active filters are present on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const activeFilters = <?= $active_filter_count ?>;
+            if (activeFilters > 0) {
+                document.getElementById('advanced-filters-drawer').style.maxHeight = '500px';
+            }
+        });
+    </script>
 
     <?php if (empty($products)): ?>
         <div class="empty-state-card">
@@ -217,7 +409,11 @@ if (isset($_SESSION['user_id'])) {
             apiUrl: 'api/products.php',
             params: {
                 category_id: '<?= $category_filter ?>',
-                search: '<?= $search_query ?>'
+                search: '<?= $search_query ?>',
+                min_price: '<?= htmlspecialchars($min_price ?? "") ?>',
+                max_price: '<?= htmlspecialchars($max_price ?? "") ?>',
+                ad_type: '<?= htmlspecialchars($ad_type ?? "") ?>',
+                sort_by: '<?= htmlspecialchars($sort_by ?? "") ?>'
             },
             translations: {
                 distance_away: '<?= __('distance_away') ?>',
