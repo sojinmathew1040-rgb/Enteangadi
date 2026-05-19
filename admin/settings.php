@@ -19,6 +19,28 @@ try {
         duration INT DEFAULT 5,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS staff_permissions_list (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        perm_key VARCHAR(50) UNIQUE NOT NULL,
+        perm_label VARCHAR(100) NOT NULL
+    )");
+
+    // Check count and seed if zero
+    $count = $pdo->query("SELECT COUNT(*) FROM staff_permissions_list")->fetchColumn();
+    if ($count == 0) {
+        $pdo->exec("INSERT INTO staff_permissions_list (perm_key, perm_label) VALUES 
+            ('manage_users', 'Users'),
+            ('manage_categories', 'Categories'),
+            ('manage_pending', 'Pending Ads'),
+            ('manage_listings', 'Active Ads'),
+            ('manage_branding', 'Branding'),
+            ('manage_security', 'Security'),
+            ('manage_general', 'General Config'),
+            ('manage_contact', 'Contact/Social'),
+            ('manage_approval', 'Approval Mode'),
+            ('manage_announcements', 'Announcement Poster')");
+    }
 } catch (PDOException $e) {
     // Fail silently
 }
@@ -160,105 +182,154 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = "Verification status updated.";
         }
     } elseif (isset($_POST['action']) && $_POST['action'] === 'announcement') {
-        // Handle deletion
-        if (isset($_POST['delete_poster']) && $_POST['delete_poster'] === '1') {
-            $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'announcement_poster'");
-            $stmt->execute();
-            $current = $stmt->fetchColumn();
+        if (!has_permission('manage_announcements')) {
+            $error = "Unauthorized: Access Denied.";
+        } else {
+            // Handle deletion
+            if (isset($_POST['delete_poster']) && $_POST['delete_poster'] === '1') {
+                $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'announcement_poster'");
+                $stmt->execute();
+                $current = $stmt->fetchColumn();
 
-            if (!empty($current)) {
-                $file_to_delete = '../' . $current;
-                if (file_exists($file_to_delete)) {
-                    unlink($file_to_delete);
+                if (!empty($current)) {
+                    $file_to_delete = '../' . $current;
+                    if (file_exists($file_to_delete)) {
+                        unlink($file_to_delete);
+                    }
+                }
+                $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = '' WHERE setting_key = 'announcement_poster'");
+                $stmt->execute();
+                $success = "Announcement poster removed.";
+            }
+
+            // Handle upload
+            if (isset($_FILES['announcement_poster']) && $_FILES['announcement_poster']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = '../uploads/posters/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0777, true);
+                }
+
+                $file_ext = strtolower(pathinfo($_FILES['announcement_poster']['name'], PATHINFO_EXTENSION));
+                $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (in_array($file_ext, $allowed)) {
+                    $file_name = 'poster_' . time() . '.' . $file_ext;
+                    $target_path = $upload_dir . $file_name;
+
+                    if (move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
+                        $db_path = 'uploads/posters/' . $file_name;
+                        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('announcement_poster', ?) 
+                                             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+                        $stmt->execute([$db_path]);
+                        $success = "Announcement poster uploaded successfully.";
+                    }
                 }
             }
-            $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = '' WHERE setting_key = 'announcement_poster'");
-            $stmt->execute();
-            $success = "Announcement poster removed.";
         }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'add_custom_permission') {
+        if (($_SESSION['admin_permissions'] ?? '') !== '*') {
+            $error = "Unauthorized: Root Access Required.";
+        } else {
+            $perm_key = strtolower(trim($_POST['perm_key'] ?? ''));
+            $perm_label = trim($_POST['perm_label'] ?? '');
 
-        // Handle upload
-        if (isset($_FILES['announcement_poster']) && $_FILES['announcement_poster']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = '../uploads/posters/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
+            // Remove spaces and non-alphanumeric chars for key
+            $perm_key = preg_replace('/[^a-z0-9_]/', '', $perm_key);
+
+            if (empty($perm_key) || empty($perm_label)) {
+                $error = "Both privilege key and display label are required.";
+            } else {
+                try {
+                    $stmt = $pdo->prepare("INSERT INTO staff_permissions_list (perm_key, perm_label) VALUES (?, ?)");
+                    $stmt->execute([$perm_key, $perm_label]);
+                    $success = "New privilege '$perm_label' successfully added to checklist!";
+                } catch (PDOException $e) {
+                    $error = "Privilege key '$perm_key' already exists.";
+                }
             }
-
-            $file_ext = strtolower(pathinfo($_FILES['announcement_poster']['name'], PATHINFO_EXTENSION));
-            $allowed = ['jpg', 'jpeg', 'png', 'webp'];
-
-            if (in_array($file_ext, $allowed)) {
-                $file_name = 'poster_' . time() . '.' . $file_ext;
-                $target_path = $upload_dir . $file_name;
-
-                if (move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
-                    $db_path = 'uploads/posters/' . $file_name;
-                    $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('announcement_poster', ?) 
-                                         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-                    $stmt->execute([$db_path]);
-                    $success = "Announcement poster uploaded successfully.";
+        }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'delete_custom_permission') {
+        if (($_SESSION['admin_permissions'] ?? '') !== '*') {
+            $error = "Unauthorized: Root Access Required.";
+        } else {
+            $perm_id = (int) ($_POST['perm_id'] ?? 0);
+            if ($perm_id > 0) {
+                try {
+                    $stmt = $pdo->prepare("DELETE FROM staff_permissions_list WHERE id = ?");
+                    $stmt->execute([$perm_id]);
+                    $success = "Privilege removed successfully.";
+                } catch (PDOException $e) {
+                    $error = "Failed to remove privilege.";
                 }
             }
         }
     } elseif (isset($_POST['action']) && $_POST['action'] === 'delete_interstitial_ad') {
-        $ad_id = (int) ($_POST['ad_id'] ?? 0);
-        if ($ad_id > 0) {
-            $stmt = $pdo->prepare("SELECT media_file FROM interstitial_ads WHERE id = ?");
-            $stmt->execute([$ad_id]);
-            $file = $stmt->fetchColumn();
+        if (!has_permission('manage_ads')) {
+            $error = "Unauthorized: Access Denied.";
+        } else {
+            $ad_id = (int) ($_POST['ad_id'] ?? 0);
+            if ($ad_id > 0) {
+                $stmt = $pdo->prepare("SELECT media_file FROM interstitial_ads WHERE id = ?");
+                $stmt->execute([$ad_id]);
+                $file = $stmt->fetchColumn();
 
-            if (!empty($file)) {
-                $file_to_delete = '../' . $file;
-                if (file_exists($file_to_delete)) {
-                    unlink($file_to_delete);
+                if (!empty($file)) {
+                    $file_to_delete = '../' . $file;
+                    if (file_exists($file_to_delete)) {
+                        unlink($file_to_delete);
+                    }
                 }
-            }
 
-            $stmt = $pdo->prepare("DELETE FROM interstitial_ads WHERE id = ?");
-            $stmt->execute([$ad_id]);
-            $success = "Ad removed from the rotation queue successfully.";
+                $stmt = $pdo->prepare("DELETE FROM interstitial_ads WHERE id = ?");
+                $stmt->execute([$ad_id]);
+                $success = "Ad removed from the rotation queue successfully.";
+            }
         }
     } elseif (isset($_POST['action']) && $_POST['action'] === 'interstitial_ads') {
-        // Handle global settings updates
-        $ad_active = isset($_POST['interstitial_ad_active']) ? '1' : '0';
-        $ad_frequency = (int) ($_POST['interstitial_ad_frequency'] ?? 10);
+        if (!has_permission('manage_ads')) {
+            $error = "Unauthorized: Access Denied.";
+        } else {
+            // Handle global settings updates
+            $ad_active = isset($_POST['interstitial_ad_active']) ? '1' : '0';
+            $ad_frequency = (int) ($_POST['interstitial_ad_frequency'] ?? 10);
 
-        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_active', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->execute([$ad_active]);
+            $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_active', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute([$ad_active]);
 
-        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_frequency', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-        $stmt->execute([$ad_frequency]);
+            $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_frequency', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute([$ad_frequency]);
 
-        $success = "Global interstitial ad configurations updated.";
+            $success = "Global interstitial ad configurations updated.";
 
-        // Handle new ad upload if provided
-        if (isset($_FILES['interstitial_ad_file']) && $_FILES['interstitial_ad_file']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = '../uploads/interstitial_ads/';
-            if (!is_dir($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
-            }
-
-            $file_ext = strtolower(pathinfo($_FILES['interstitial_ad_file']['name'], PATHINFO_EXTENSION));
-            $allowed_imgs = ['jpg', 'jpeg', 'png', 'webp'];
-            $allowed_vids = ['mp4', 'webm', 'ogg'];
-            $allowed = array_merge($allowed_imgs, $allowed_vids);
-
-            if (in_array($file_ext, $allowed)) {
-                $file_name = 'ad_' . time() . '_' . rand(1000, 9999) . '.' . $file_ext;
-                $target_path = $upload_dir . $file_name;
-
-                if (move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
-                    $db_path = 'uploads/interstitial_ads/' . $file_name;
-                    $ad_type = in_array($file_ext, $allowed_vids) ? 'video' : 'image';
-                    $ad_link = $_POST['interstitial_ad_link'] ?? '';
-                    $ad_duration = (int) ($_POST['interstitial_ad_duration'] ?? 5);
-
-                    $stmt = $pdo->prepare("INSERT INTO interstitial_ads (media_file, media_type, link_url, duration) VALUES (?, ?, ?, ?)");
-                    $stmt->execute([$db_path, $ad_type, $ad_link, $ad_duration]);
-                    $success = "New ad published to rotation queue successfully.";
+            // Handle new ad upload if provided
+            if (isset($_FILES['interstitial_ad_file']) && $_FILES['interstitial_ad_file']['error'] === UPLOAD_ERR_OK) {
+                $upload_dir = '../uploads/interstitial_ads/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0777, true);
                 }
-            } else {
-                $error = "Unsupported file format. Please upload JPG, PNG, WebP or MP4.";
+
+                $file_ext = strtolower(pathinfo($_FILES['interstitial_ad_file']['name'], PATHINFO_EXTENSION));
+                $allowed_imgs = ['jpg', 'jpeg', 'png', 'webp'];
+                $allowed_vids = ['mp4', 'webm', 'ogg'];
+                $allowed = array_merge($allowed_imgs, $allowed_vids);
+
+                if (in_array($file_ext, $allowed)) {
+                    $file_name = 'ad_' . time() . '_' . rand(1000, 9999) . '.' . $file_ext;
+                    $target_path = $upload_dir . $file_name;
+
+                    if (move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
+                        $db_path = 'uploads/interstitial_ads/' . $file_name;
+                        $ad_type = in_array($file_ext, $allowed_vids) ? 'video' : 'image';
+                        $ad_link = $_POST['interstitial_ad_link'] ?? '';
+                        $ad_duration = (int) ($_POST['interstitial_ad_duration'] ?? 5);
+
+                        $stmt = $pdo->prepare("INSERT INTO interstitial_ads (media_file, media_type, link_url, duration) VALUES (?, ?, ?, ?)");
+                        $stmt->execute([$db_path, $ad_type, $ad_link, $ad_duration]);
+                        $success = "New ad published to rotation queue successfully.";
+                    }
+                } else {
+                    $error = "Unsupported file format. Please upload JPG, PNG, WebP or MP4.";
+                }
             }
         }
     }
@@ -283,6 +354,14 @@ try {
     $active_ads = $stmt->fetchAll();
 } catch (PDOException $e) {
     $active_ads = [];
+}
+
+// Fetch dynamic permissions checklist
+$available_permissions = [];
+try {
+    $available_permissions = $pdo->query("SELECT * FROM staff_permissions_list ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $available_permissions = [];
 }
 
 // Fetch pending products for the integrated approval section
@@ -356,7 +435,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'reveal_user_data') {
     $admin = $stmt->fetch();
 
     if ($admin && password_verify($admin_pass, $admin['password'])) {
-        $user_stmt = $pdo->prepare("SELECT email, phone FROM users WHERE id = ?");
+        $user_stmt = $pdo->prepare("SELECT email, phone_number AS phone FROM users WHERE id = ?");
         $user_stmt->execute([$target_user_id]);
         echo json_encode(['success' => true, 'data' => $user_stmt->fetch()]);
     } else {
@@ -394,19 +473,38 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_reset_password') {
 if (isset($_POST['action']) && $_POST['action'] === 'admin_delete_user') {
     $target_user_id = $_POST['target_user_id'];
 
-    // 1. Fetch images before deletion
-    $stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ?");
-    $stmt->execute([$target_user_id]);
-    $profile_pic = $stmt->fetchColumn();
+    // 1. Prevent self-deletion
+    if ($target_user_id == $_SESSION['admin_id']) {
+        echo json_encode(['success' => false, 'message' => 'You cannot delete your own administrative account']);
+        exit;
+    }
 
+    // 2. Fetch target user details for security checks
+    $stmt_check = $pdo->prepare("SELECT permissions, username, profile_picture FROM users WHERE id = ?");
+    $stmt_check->execute([$target_user_id]);
+    $target_user = $stmt_check->fetch();
+
+    if (!$target_user) {
+        echo json_encode(['success' => false, 'message' => 'User not found']);
+        exit;
+    }
+
+    // 3. Security: Sub-admins cannot delete Root Admins or users with * permissions
+    if ($target_user['permissions'] === '*' && ($_SESSION['admin_permissions'] ?? '') !== '*') {
+        echo json_encode(['success' => false, 'message' => 'CRITICAL SECURITY: Non-Root accounts cannot delete a Root Administrator']);
+        exit;
+    }
+
+    // 4. Fetch product images before deletion
+    $profile_pic = $target_user['profile_picture'];
     $stmt = $pdo->prepare("SELECT pi.image_path FROM product_images pi JOIN products p ON pi.product_id = p.id WHERE p.user_id = ?");
     $stmt->execute([$target_user_id]);
     $product_images = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-    // 2. Delete from DB (is_admin = 0 check for safety)
-    $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND is_admin = 0");
+    // 5. Delete from DB
+    $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
     if ($stmt->execute([$target_user_id])) {
-        // 3. Physical cleanup
+        // 6. Physical cleanup
         if ($profile_pic && file_exists('../' . $profile_pic))
             unlink('../' . $profile_pic);
         foreach ($product_images as $img) {
@@ -415,13 +513,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_delete_user') {
         }
         echo json_encode(['success' => true, 'message' => 'User and media permanently removed']);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to delete user or user is an admin']);
+        echo json_encode(['success' => false, 'message' => 'Failed to delete user due to a database error']);
     }
     exit;
 }
 
 // Handle Administrative User Creation
 if (isset($_POST['action']) && $_POST['action'] === 'admin_create_user') {
+    if (($_SESSION['admin_permissions'] ?? '') !== '*') {
+        echo json_encode(['success' => false, 'message' => 'Unauthorized: Root Access Required']);
+        exit;
+    }
     $username = trim($_POST['username']);
     $email = trim($_POST['email']);
     $phone = trim($_POST['phone']);
@@ -446,7 +548,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_create_user') {
     $hashed = password_hash($password, PASSWORD_DEFAULT);
     $permissions = isset($_POST['permissions']) ? $_POST['permissions'] : ''; // Comma separated string
 
-    $stmt = $pdo->prepare("INSERT INTO users (username, email, phone, password, is_admin, role, permissions) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $pdo->prepare("INSERT INTO users (username, email, phone_number, password, is_admin, role, permissions) VALUES (?, ?, ?, ?, ?, ?, ?)");
     $role = $is_admin ? 'admin' : 'user';
 
     if ($stmt->execute([$username, $email, $phone, $hashed, $is_admin, $role, $permissions])) {
@@ -936,7 +1038,7 @@ require_once 'includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <?php if (has_permission('manage_branding')): ?>
+            <?php if (has_permission('manage_announcements')): ?>
                 <div class="settings-card" onclick="showSection('announcement')">
                     <i class="fa fa-bullhorn"></i>
                     <div>
@@ -946,7 +1048,7 @@ require_once 'includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <?php if (has_permission('manage_branding')): ?>
+            <?php if (has_permission('manage_ads')): ?>
                 <div class="settings-card" onclick="showSection('interstitial_ads')">
                     <i class="fa fa-photo-video"></i>
                     <div>
@@ -1030,13 +1132,24 @@ require_once 'includes/header.php';
                         <p>Manage users & privacy</p>
                     </div>
                 </div>
+            <?php endif; ?>
 
+            <?php if (($_SESSION['admin_permissions'] ?? '') === '*'): ?>
                 <div class="settings-card" onclick="openCreateUserModal()"
                     style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border-color: #10b981;">
                     <i class="fa fa-user-plus" style="color: #10b981;"></i>
                     <div>
                         <h3 style="color: #065f46;">Provision Staff</h3>
                         <p style="color: #047857;">Onboard new accounts</p>
+                    </div>
+                </div>
+
+                <div class="settings-card" onclick="showSection('privileges')"
+                    style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #a855f7;">
+                    <i class="fa fa-shield-alt" style="color: #a855f7;"></i>
+                    <div>
+                        <h3 style="color: #6b21a8;">Staff Privileges</h3>
+                        <p style="color: #7e22ce;">Custom admin role items</p>
                     </div>
                 </div>
             <?php endif; ?>
@@ -1058,6 +1171,129 @@ require_once 'includes/header.php';
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if (($_SESSION['admin_permissions'] ?? '') === '*'): ?>
+        <!-- Staff Privileges Section -->
+        <div id="section-privileges"
+            class="settings-section <?= (isset($_POST['action']) && ($_POST['action'] === 'add_custom_permission' || $_POST['action'] === 'delete_custom_permission')) ? 'active' : '' ?>">
+            <button class="back-btn" onclick="showSection('grid')" style="margin-bottom: 24px;">
+                <i class="fa fa-arrow-left"></i> Back to Dashboard
+            </button>
+
+            <div class="settings-form-wrapper"
+                style="max-width: 1000px; padding: 32px; background: white; border-radius: 32px; border: 1.5px solid #e2e8f0; box-shadow: var(--shadow-sm);">
+                <div class="section-header"
+                    style="margin-bottom: 28px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
+                    <h2 style="margin: 0; color: #1e293b; font-weight: 800; font-size: 24px;">Configure Admin Privileges
+                    </h2>
+                    <p style="margin: 4px 0 0 0; color: #64748b; font-size: 14px;">Add or remove custom feature access keys
+                        that populate in the System Administrator checkboxes.</p>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 36px;">
+                    <!-- Left panel: Add new privilege -->
+                    <div style="background: #faf5ff; padding: 28px; border-radius: 24px; border: 1.5px solid #f3e8ff;">
+                        <h3
+                            style="margin-top: 0; margin-bottom: 20px; color: #6b21a8; font-weight: 800; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa fa-plus-circle"></i> Add Custom Privilege
+                        </h3>
+                        <form method="POST" action="settings.php" style="display: grid; gap: 20px;">
+                            <input type="hidden" name="action" value="add_custom_permission">
+
+                            <div class="form-group">
+                                <label
+                                    style="font-size: 11px; font-weight: 800; color: #7e22ce; text-transform: uppercase; margin-bottom: 8px; display: block;">Select
+                                    Privilege Key (Unique ID)</label>
+                                <select id="perm_key_select" onchange="handlePrivilegeSelect(this.value)"
+                                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #d8b4fe; font-size: 15px; background: white; cursor: pointer; margin-bottom: 12px; font-weight: 700; color: #1e293b;">
+                                    <option value="">-- Choose Settings Feature Key --</option>
+                                    <option value="manage_users" data-label="User Management / Onboard Staff">manage_users
+                                        (User Management / Onboard Staff)</option>
+                                    <option value="manage_pending" data-label="Pending Ads Review">manage_pending (Pending
+                                        Ads Review)</option>
+                                    <option value="manage_listings" data-label="Active Ads / Manage Ads">manage_listings
+                                        (Active Ads / Manage Ads)</option>
+                                    <option value="manage_announcements" data-label="Announcement Poster">
+                                        manage_announcements
+                                        (Announcement Poster)</option>
+                                    <option value="manage_branding" data-label="Visual Identity (Branding)">manage_branding
+                                        (Visual Identity (Branding))</option>
+                                    <option value="manage_general" data-label="General Config">manage_general (General
+                                        Config)</option>
+                                    <option value="manage_contact" data-label="Contact & Social Media">manage_contact
+                                        (Contact & Social Media)</option>
+                                    <option value="manage_approval" data-label="Ad Approval Mode Settings">manage_approval
+                                        (Ad Approval Mode Settings)</option>
+                                    <option value="manage_ads" data-label="Sponsored Ads (Interstitial Queue)">manage_ads
+                                        (Sponsored Ads (Interstitial Queue))</option>
+                                    <option value="manage_closure" data-label="Closure Insights (User Feedback)">
+                                        manage_closure (Closure Insights (User Feedback))</option>
+                                    <option value="custom">Other (Create Custom Key...)</option>
+                                </select>
+
+                                <div id="custom_key_wrapper" style="display: none;">
+                                    <input type="text" id="perm_key_input" name="perm_key"
+                                        placeholder="Enter custom unique key (e.g. manage_billing)" required
+                                        style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #d8b4fe; font-size: 15px; background: white;">
+                                    <small
+                                        style="color: #8b5cf6; display: block; margin-top: 6px; font-weight: 600;">Lowercase
+                                        alphanumeric and underscores only.</small>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label
+                                    style="font-size: 11px; font-weight: 800; color: #7e22ce; text-transform: uppercase; margin-bottom: 8px; display: block;">Display
+                                    Label</label>
+                                <input type="text" id="perm_label_input" name="perm_label"
+                                    placeholder="e.g. Interstitial Ads" required
+                                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #d8b4fe; font-size: 15px; background: white;">
+                            </div>
+
+                            <button type="submit"
+                                style="width: 100%; padding: 16px; border-radius: 18px; border: none; background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%); color: white; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(168,85,247,0.3); margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <i class="fa fa-shield-alt"></i> ADD PRIVILEGE
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right panel: Active Privileges list -->
+                    <div
+                        style="background: white; padding: 28px; border-radius: 24px; border: 1.5px solid #e2e8f0; display: flex; flex-direction: column; max-height: 480px;">
+                        <h3
+                            style="margin-top: 0; margin-bottom: 16px; color: #0f172a; font-weight: 800; font-size: 18px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa fa-list-ul"></i> Active Privilege Checklist
+                        </h3>
+                        <div style="overflow-y: auto; flex: 1; display: grid; gap: 12px; padding-right: 4px;">
+                            <?php foreach ($available_permissions as $perm): ?>
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-radius: 16px; background: #f8fafc; border: 1px solid #e2e8f0;">
+                                    <div>
+                                        <span
+                                            style="font-size: 14px; font-weight: 700; color: #1e293b; display: block;"><?= htmlspecialchars($perm['perm_label']) ?></span>
+                                        <code
+                                            style="font-size: 11px; color: #a855f7; font-weight: 700; font-family: 'Courier New', monospace;"><?= htmlspecialchars($perm['perm_key']) ?></code>
+                                    </div>
+                                    <!-- Delete action -->
+                                    <form method="POST" action="settings.php"
+                                        onsubmit="return confirm('Are you sure you want to delete this privilege? Current staff with this permission will retain access unless their profile is updated.');"
+                                        style="margin: 0;">
+                                        <input type="hidden" name="action" value="delete_custom_permission">
+                                        <input type="hidden" name="perm_id" value="<?= $perm['id'] ?>">
+                                        <button type="submit"
+                                            style="background: #fef2f2; border: none; width: 38px; height: 38px; border-radius: 12px; color: #ef4444; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                                            title="Remove Privilege">
+                                            <i class="fa fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <!-- Branding Section -->
     <div id="section-branding"
@@ -1180,7 +1416,8 @@ require_once 'includes/header.php';
                     <h3
                         style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; color: var(--text-color);">
                         <i class="fa fa-plus-circle" style="color: var(--primary-green);"></i> Add New Ad / Edit
-                        Config</h3>
+                        Config
+                    </h3>
 
                     <form method="POST" action="settings.php" enctype="multipart/form-data">
                         <input type="hidden" name="action" value="interstitial_ads">
@@ -1202,8 +1439,8 @@ require_once 'includes/header.php';
 
                         <div class="form-group" style="margin-bottom: 20px;">
                             <label style="font-size: 13px; font-weight: 700;">Page Views Threshold</label>
-                            <input type="number" name="interstitial_ad_frequency" class="form-control" min="1"
-                                max="100" style="padding: 10px;"
+                            <input type="number" name="interstitial_ad_frequency" class="form-control" min="1" max="100"
+                                style="padding: 10px;"
                                 value="<?= htmlspecialchars($app_settings['interstitial_ad_frequency'] ?? '10') ?>">
                             <small
                                 style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">If
@@ -1211,8 +1448,7 @@ require_once 'includes/header.php';
                                 pages).</small>
                         </div>
 
-                        <div
-                            style="margin-top: 24px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                        <div style="margin-top: 24px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
                             <div class="form-group" style="margin-bottom: 20px;">
                                 <label style="font-size: 13px; font-weight: 700;">Publish Ad File (Image / MP4
                                     Video)</label>
@@ -1256,13 +1492,13 @@ require_once 'includes/header.php';
                     <h3
                         style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; color: var(--text-color);">
                         <i class="fa fa-list" style="color: var(--primary-green);"></i> Active Playlist Queue
-                        (<?= count($active_ads) ?> ads)</h3>
+                        (<?= count($active_ads) ?> ads)
+                    </h3>
 
                     <?php if (empty($active_ads)): ?>
                         <div
                             style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 12px; background: #fdfdfd; padding: 20px; text-align: center;">
-                            <i class="fa fa-photo-video"
-                                style="font-size: 48px; color: #cbd5e1; margin-bottom: 16px;"></i>
+                            <i class="fa fa-photo-video" style="font-size: 48px; color: #cbd5e1; margin-bottom: 16px;"></i>
                             <span style="font-weight: 600; font-size: 14px; color: #64748b;">No Ads Published Yet</span>
                             <span style="font-size: 12px; color: #94a3b8; max-width: 250px; margin-top: 6px;">Upload
                                 your first video or image ad on the left to start the rotation playlist!</span>
@@ -1279,7 +1515,8 @@ require_once 'includes/header.php';
                                     style="display: flex; gap: 16px; align-items: center; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; transition: all 0.3s ease;">
                                     <div class="ad-order-badge"
                                         style="position: absolute; top: -8px; left: -8px; background: var(--primary-green); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border: 2px solid white; box-shadow: var(--shadow-sm);">
-                                        <?= $idx ?></div>
+                                        <?= $idx ?>
+                                    </div>
 
                                     <!-- Ad thumbnail -->
                                     <div
@@ -2128,192 +2365,213 @@ require_once 'includes/header.php';
 
 <!-- Create User Modal -->
 <div id="createUserModal"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); z-index: 4000; align-items: center; justify-content: center;">
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); z-index: 4000; align-items: center; justify-content: center; transition: all 0.3s ease;">
     <div
-        style="background: white; padding: 32px; border-radius: 32px; width: 95%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-            <h3 style="margin: 0; color: #0f172a; font-weight: 800; font-size: 22px;">Provision Account</h3>
+        style="background: white; padding: 36px; border-radius: 36px; width: 95%; max-width: 550px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.3); border: 1px solid rgba(226, 232, 240, 0.8); position: relative; scrollbar-width: thin;">
+
+        <!-- Header -->
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div
+                    style="width: 48px; height: 48px; background: #ecfdf5; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #10b981; font-size: 20px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);">
+                    <i class="fa fa-user-plus"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #0f172a; font-weight: 850; font-size: 22px; letter-spacing: -0.5px;">
+                        Onboard Staff</h3>
+                    <p style="margin: 2px 0 0 0; color: #64748b; font-size: 13px;">Create a secure credentials profile
+                        for new administrators.</p>
+                </div>
+            </div>
             <button onclick="closeCreateUserModal()"
-                style="background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 12px; color: #64748b; cursor: pointer;"><i
-                    class="fa fa-times"></i></button>
+                style="background: #f1f5f9; border: none; width: 40px; height: 40px; border-radius: 14px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                onmouseover="this.style.background='#fee2e2'; this.style.color='#ef4444';"
+                onmouseout="this.style.background='#f1f5f9'; this.style.color='#64748b';">
+                <i class="fa fa-times" style="font-size: 16px;"></i>
+            </button>
         </div>
 
+        <!-- Form fields inside grid layout -->
         <div style="display: grid; gap: 20px;">
-            <div class="form-group">
-                <label
-                    style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block;">Username</label>
-                <input type="text" id="new_username" placeholder="Enter username"
-                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 15px;">
+            <!-- Row 1: Username & Password -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-user" style="color: #10b981;"></i> Username
+                    </label>
+                    <input type="text" id="new_username" placeholder="e.g. john_doe"
+                        style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 14px; color: #1e293b; font-weight: 600; outline: none; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#e2e8f0';">
+                </div>
+                <div class="form-group">
+                    <label
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-key" style="color: #10b981;"></i> Password
+                    </label>
+                    <input type="password" id="new_password" placeholder="Set temporary key"
+                        style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 14px; color: #1e293b; font-weight: 600; outline: none; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#e2e8f0';">
+                </div>
             </div>
-            <div class="form-group">
-                <label
-                    style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block;">Email
-                    Address</label>
-                <input type="email" id="new_email" placeholder="email@example.com"
-                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 15px;">
+
+            <!-- Row 2: Email & Phone -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-envelope" style="color: #10b981;"></i> Email Address
+                    </label>
+                    <input type="email" id="new_email" placeholder="john@enteangadi.com"
+                        style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 14px; color: #1e293b; font-weight: 600; outline: none; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#e2e8f0';">
+                </div>
+                <div class="form-group">
+                    <label
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-phone" style="color: #10b981;"></i> Phone Number
+                    </label>
+                    <input type="text" id="new_phone" placeholder="10-digit number"
+                        style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 14px; color: #1e293b; font-weight: 600; outline: none; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#e2e8f0';">
+                </div>
             </div>
+
+            <!-- Clearance Dropdown -->
             <div class="form-group">
                 <label
-                    style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block;">Phone
-                    Number</label>
-                <input type="text" id="new_phone" placeholder="Contact number"
-                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 15px;">
-            </div>
-            <div class="form-group">
-                <label
-                    style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block;">Temporary
-                    Password</label>
-                <input type="password" id="new_password" placeholder="Set password"
-                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 15px;">
-            </div>
-            <div class="form-group">
-                <label
-                    style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; display: block;">Account
-                    Clearance</label>
+                    style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa fa-shield-alt" style="color: #10b981;"></i> Account Clearance Role
+                </label>
                 <select id="new_is_admin" onchange="togglePermissionMatrix(this.value)"
-                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 15px; background: white;">
-                    <option value="0">Community Member (Standard)</option>
-                    <option value="1">System Administrator (Custom Access)</option>
+                    style="width: 100%; padding: 14px; border-radius: 16px; border: 1.5px solid #e2e8f0; font-size: 14px; background: white; font-weight: 700; color: #1e293b; cursor: pointer; transition: all 0.2s; outline: none;"
+                    onfocus="this.style.borderColor='#10b981';" onblur="this.style.borderColor='#e2e8f0';">
+                    <option value="0">Community Member (Standard Platform Account)</option>
+                    <option value="1">System Administrator (Custom Permission Matrix)</option>
                 </select>
             </div>
 
             <!-- Permission Matrix (Hidden by default) -->
             <div id="permissionMatrix"
-                style="display: none; background: #f8fafc; padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0;">
+                style="display: none; background: #faf5ff; padding: 24px; border-radius: 24px; border: 1.5px solid #f3e8ff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); transition: all 0.3s ease;">
                 <label
-                    style="font-size: 11px; font-weight: 800; color: #db2777; text-transform: uppercase; margin-bottom: 12px; display: block;">Access
-                    Privileges</label>
+                    style="font-size: 11px; font-weight: 800; color: #7e22ce; text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa fa-unlock-alt"></i> Fine-Grained Permissions
+                </label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #db2777; font-weight: 800; cursor: pointer; grid-column: 1 / -1; background: #fff1f2; padding: 8px; border-radius: 10px; border: 1.5px dashed #fecdd3;">
-                        <input type="checkbox" class="perm-check" value="*"> Grant Full Root Access
+                        style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #7e22ce; font-weight: 800; cursor: pointer; grid-column: 1 / -1; background: #f3e8ff; padding: 12px 16px; border-radius: 14px; border: 1.5px dashed #c084fc; transition: all 0.2s;"
+                        onmouseover="this.style.background='#ebe0ff';" onmouseout="this.style.background='#f3e8ff';">
+                        <input type="checkbox" class="perm-check" value="*"
+                            style="width: 18px; height: 18px; accent-color: #8b5cf6;"> Grant Full Root Access
                     </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_users" checked> Users
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_categories"> Categories
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_pending" checked> Pending Ads
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_listings" checked> Active Ads
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_branding"> Branding
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_security"> Security
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_general"> General Config
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_contact"> Contact/Social
-                    </label>
-                    <label
-                        style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                        <input type="checkbox" class="perm-check" value="manage_approval"> Approval Mode
-                    </label>
+                    <?php foreach ($available_permissions as $perm):
+                        $checked = in_array($perm['perm_key'], ['manage_users', 'manage_pending', 'manage_listings']) ? 'checked' : '';
+                        ?>
+                        <label
+                            style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #3b0764; font-weight: 700; cursor: pointer; background: white; padding: 10px 14px; border-radius: 12px; border: 1px solid #e9d5ff; transition: all 0.2s;"
+                            onmouseover="this.style.borderColor='#c084fc'; this.style.background='#fdfaff';"
+                            onmouseout="this.style.borderColor='#e9d5ff'; this.style.background='white';">
+                            <input type="checkbox" class="perm-check" value="<?= htmlspecialchars($perm['perm_key']) ?>"
+                                <?= $checked ?> style="width: 16px; height: 16px; accent-color: #8b5cf6;">
+                            <?= htmlspecialchars($perm['perm_label']) ?>
+                        </label>
+                    <?php endforeach; ?>
                 </div>
             </div>
         </div>
 
         <button onclick="confirmCreateUser()"
-            style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 18px; border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(16,185,129,0.3);">
-            CREATE ACCOUNT
+            style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 18px; border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(16,185,129,0.35); display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 12px 20px -3px rgba(16,185,129,0.45)';"
+            onmouseout="this.style.transform='none'; this.style.boxShadow='0 10px 15px -3px rgba(16,185,129,0.35)';">
+            <i class="fa fa-user-check"></i> PROVISION STAFF ACCOUNT
         </button>
     </div>
 </div>
 
 <!-- Edit Permissions Modal -->
 <div id="editPermissionsModal"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); z-index: 4000; align-items: center; justify-content: center;">
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); z-index: 4000; align-items: center; justify-content: center; transition: all 0.3s ease;">
     <div
-        style="background: white; padding: 32px; border-radius: 32px; width: 95%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-            <h3 style="margin: 0; color: #0f172a; font-weight: 800; font-size: 22px;">Recalibrate Access</h3>
+        style="background: white; padding: 36px; border-radius: 36px; width: 95%; max-width: 550px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.3); border: 1px solid rgba(226, 232, 240, 0.8); position: relative; scrollbar-width: thin;">
+
+        <!-- Header -->
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; border-bottom: 2px solid #f1f5f9; padding-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div
+                    style="width: 48px; height: 48px; background: #f5f3ff; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #8b5cf6; font-size: 20px; box-shadow: 0 4px 10px rgba(139, 92, 246, 0.15);">
+                    <i class="fa fa-user-shield"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #0f172a; font-weight: 850; font-size: 22px; letter-spacing: -0.5px;">
+                        Recalibrate Access</h3>
+                    <p style="margin: 2px 0 0 0; color: #64748b; font-size: 13px;">Adjust privileges for <strong
+                            id="editPermUsername" style="color: #1e293b;"></strong></p>
+                </div>
+            </div>
             <button onclick="closeEditPermissionsModal()"
-                style="background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 12px; color: #64748b; cursor: pointer;"><i
-                    class="fa fa-times"></i></button>
+                style="background: #f1f5f9; border: none; width: 40px; height: 40px; border-radius: 14px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                onmouseover="this.style.background='#fee2e2'; this.style.color='#ef4444';"
+                onmouseout="this.style.background='#f1f5f9'; this.style.color='#64748b';">
+                <i class="fa fa-times" style="font-size: 16px;"></i>
+            </button>
         </div>
 
-        <p style="margin: -10px 0 24px 0; font-size: 14px; color: #64748b;">Adjusting privileges for <strong
-                id="editPermUsername" style="color: #1e293b;"></strong></p>
         <input type="hidden" id="editPermUserId">
 
-        <div style="margin-bottom: 24px;">
-            <label
-                style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px; display: block;">Account
-                Status</label>
-            <label
-                style="display: flex; align-items: center; justify-content: space-between; background: #f1f5f9; padding: 12px 20px; border-radius: 16px; cursor: pointer;">
-                <span style="font-size: 14px; font-weight: 700; color: #1e293b;">Administrative Access</span>
-                <input type="checkbox" id="editIsAdmin" style="width: 20px; height: 20px; accent-color: #8b5cf6;">
-            </label>
-        </div>
+        <div style="display: grid; gap: 24px;">
+            <!-- Administrative Access Toggle -->
+            <div>
+                <label
+                    style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 10px; display: block; letter-spacing: 0.5px;">Account
+                    Status</label>
+                <label
+                    style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 16px 20px; border-radius: 20px; border: 1.5px solid #e2e8f0; cursor: pointer; transition: all 0.2s;"
+                    onmouseover="this.style.borderColor='#8b5cf6';" onmouseout="this.style.borderColor='#e2e8f0';">
+                    <span style="font-size: 15px; font-weight: 750; color: #1e293b;">Administrative Access
+                        Enabled</span>
+                    <input type="checkbox" id="editIsAdmin"
+                        style="width: 22px; height: 22px; accent-color: #8b5cf6; cursor: pointer;">
+                </label>
+            </div>
 
-        <div id="editPermissionMatrix"
-            style="background: #f8fafc; padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0;">
-            <label
-                style="font-size: 11px; font-weight: 800; color: #db2777; text-transform: uppercase; margin-bottom: 12px; display: block;">Access
-                Matrix</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <!-- Permission Matrix -->
+            <div id="editPermissionMatrix"
+                style="background: #faf5ff; padding: 24px; border-radius: 24px; border: 1.5px solid #f3e8ff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
                 <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #db2777; font-weight: 800; cursor: pointer; grid-column: 1 / -1; background: #fff1f2; padding: 8px; border-radius: 10px; border: 1.5px dashed #fecdd3;">
-                    <input type="checkbox" class="edit-perm-check" value="*"> Grant Full Root Access
+                    style="font-size: 11px; font-weight: 800; color: #7e22ce; text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; letter-spacing: 0.5px;">
+                    <i class="fa fa-unlock-alt"></i> Access Matrix Privileges
                 </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_users"> Users
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_categories"> Categories
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_pending"> Pending Ads
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_listings"> Active Ads
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_branding"> Branding
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_security"> Security
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_general"> General Config
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_contact"> Contact/Social
-                </label>
-                <label
-                    style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1e293b; cursor: pointer;">
-                    <input type="checkbox" class="edit-perm-check" value="manage_approval"> Approval Mode
-                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <label
+                        style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #7e22ce; font-weight: 800; cursor: pointer; grid-column: 1 / -1; background: #f3e8ff; padding: 12px 16px; border-radius: 14px; border: 1.5px dashed #c084fc; transition: all 0.2s;"
+                        onmouseover="this.style.background='#ebe0ff';" onmouseout="this.style.background='#f3e8ff';">
+                        <input type="checkbox" class="edit-perm-check" value="*"
+                            style="width: 18px; height: 18px; accent-color: #8b5cf6;"> Grant Full Root Access
+                    </label>
+                    <?php foreach ($available_permissions as $perm): ?>
+                        <label
+                            style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #3b0764; font-weight: 700; cursor: pointer; background: white; padding: 10px 14px; border-radius: 12px; border: 1px solid #e9d5ff; transition: all 0.2s;"
+                            onmouseover="this.style.borderColor='#c084fc'; this.style.background='#fdfaff';"
+                            onmouseout="this.style.borderColor='#e9d5ff'; this.style.background='white';">
+                            <input type="checkbox" class="edit-perm-check"
+                                value="<?= htmlspecialchars($perm['perm_key']) ?>"
+                                style="width: 16px; height: 16px; accent-color: #8b5cf6;">
+                            <?= htmlspecialchars($perm['perm_label']) ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </div>
 
         <button onclick="confirmUpdatePermissions()"
-            style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 18px; border: none; background: #1e293b; color: white; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(30,41,59,0.3);">
-            SAVE PRIVILEGES
+            style="width: 100%; margin-top: 32px; padding: 16px; border-radius: 18px; border: none; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: white; font-weight: 800; font-size: 15px; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(139,92,246,0.35); display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 12px 20px -3px rgba(139,92,246,0.45)';"
+            onmouseout="this.style.transform='none'; this.style.boxShadow='0 10px 15px -3px rgba(139,92,246,0.35)';">
+            <i class="fa fa-save"></i> SAVE PRIVILEGES CONFIG
         </button>
     </div>
 </div>
@@ -2482,7 +2740,7 @@ require_once 'includes/header.php';
     // Support for deep linking via hash
     window.addEventListener('DOMContentLoaded', () => {
         const hash = window.location.hash.substring(1);
-        if (hash === 'branding' || hash === 'password' || hash === 'general' || hash === 'contact' || hash === 'approval' || hash === 'pending' || hash === 'manage_ads' || hash === 'closure_feedback' || hash === 'users') {
+        if (hash === 'branding' || hash === 'password' || hash === 'general' || hash === 'contact' || hash === 'approval' || hash === 'pending' || hash === 'manage_ads' || hash === 'closure_feedback' || hash === 'users' || hash === 'privileges') {
             showSection(hash);
         }
     });
@@ -2618,6 +2876,34 @@ require_once 'includes/header.php';
     function closeRevealModal() {
         document.getElementById('revealModal').style.display = 'none';
         currentTargetUserId = null;
+    }
+
+    function handlePrivilegeSelect(val) {
+        const customWrapper = document.getElementById('custom_key_wrapper');
+        const keyInput = document.getElementById('perm_key_input');
+        const labelInput = document.getElementById('perm_label_input');
+        const selectEl = document.getElementById('perm_key_select');
+
+        if (val === 'custom') {
+            customWrapper.style.display = 'block';
+            keyInput.value = '';
+            keyInput.placeholder = "Enter custom unique key (e.g. manage_billing)";
+            labelInput.value = '';
+        } else if (val === '') {
+            customWrapper.style.display = 'none';
+            keyInput.value = '';
+            labelInput.value = '';
+        } else {
+            customWrapper.style.display = 'none';
+            keyInput.value = val;
+
+            // Find selected option's data-label attribute
+            const selectedOption = selectEl.options[selectEl.selectedIndex];
+            const label = selectedOption.getAttribute('data-label');
+            if (label) {
+                labelInput.value = label;
+            }
+        }
     }
 
     function confirmReveal() {

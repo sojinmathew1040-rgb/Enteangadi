@@ -141,7 +141,8 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
             $has_any_setting = has_permission('manage_branding') || has_permission('manage_security') ||
                 has_permission('manage_general') || has_permission('manage_contact') ||
                 has_permission('manage_approval') || has_permission('manage_pending') ||
-                has_permission('manage_listings') || has_permission('manage_users');
+                has_permission('manage_listings') || has_permission('manage_users') ||
+                has_permission('manage_announcements') || has_permission('manage_ads');
             ?>
 
             <?php if ($has_any_setting): ?>
@@ -165,9 +166,56 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
             <div style="display: flex; gap: 16px; align-items: center;">
                 <a href="../guest/index.php" target="_blank" class="btn-secondary"
                     style="padding: 6px 12px; font-size: 13px;"><i class="fa fa-external-link-alt"></i> View Site</a>
-                <span style="font-weight: 500; font-size: 14px;"><i class="fa fa-user-circle"
-                        style="color: var(--primary-green);"></i>
-                    <?= htmlspecialchars($_SESSION['admin_username'] ?? 'Admin') ?></span>
+                <span
+                    style="font-weight: 500; font-size: 14px; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2;">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-user-circle" style="color: var(--primary-green);"></i>
+                        <?= htmlspecialchars($_SESSION['admin_username'] ?? 'Admin') ?>
+                    </span>
+                    <span
+                        style="font-size: 10px; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; text-align: right; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                        title="<?php
+                        if (($_SESSION['admin_permissions'] ?? '') === '*') {
+                            echo 'Root Administrator';
+                        } else {
+                            $assigned_perms = explode(',', $_SESSION['admin_permissions'] ?? '');
+                            if (!empty($assigned_perms) && !empty($_SESSION['admin_permissions'])) {
+                                $in_clause = implode(',', array_fill(0, count($assigned_perms), '?'));
+                                try {
+                                    $stmt_labels = $pdo->prepare("SELECT perm_label FROM staff_permissions_list WHERE perm_key IN ($in_clause)");
+                                    $stmt_labels->execute($assigned_perms);
+                                    $labels = $stmt_labels->fetchAll(PDO::FETCH_COLUMN);
+                                    echo !empty($labels) ? htmlspecialchars(implode(' | ', $labels)) : 'System Administrator';
+                                } catch (Exception $e) {
+                                    echo 'System Administrator';
+                                }
+                            } else {
+                                echo 'System Administrator (No Permissions)';
+                            }
+                        }
+                        ?>">
+                        <?php
+                        if (($_SESSION['admin_permissions'] ?? '') === '*') {
+                            echo 'Root Administrator';
+                        } else {
+                            $assigned_perms = explode(',', $_SESSION['admin_permissions'] ?? '');
+                            if (!empty($assigned_perms) && !empty($_SESSION['admin_permissions'])) {
+                                $in_clause = implode(',', array_fill(0, count($assigned_perms), '?'));
+                                try {
+                                    $stmt_labels = $pdo->prepare("SELECT perm_label FROM staff_permissions_list WHERE perm_key IN ($in_clause)");
+                                    $stmt_labels->execute($assigned_perms);
+                                    $labels = $stmt_labels->fetchAll(PDO::FETCH_COLUMN);
+                                    echo !empty($labels) ? htmlspecialchars(implode(' | ', $labels)) : 'System Administrator';
+                                } catch (Exception $e) {
+                                    echo 'System Administrator';
+                                }
+                            } else {
+                                echo 'System Administrator (No Permissions)';
+                            }
+                        }
+                        ?>
+                    </span>
+                </span>
             </div>
         </header>
         <div class="admin-content">
