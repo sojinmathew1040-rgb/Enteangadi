@@ -231,36 +231,44 @@ if (isset($_SESSION['user_id'])) {
 <script src="assets/js/infinite-scroll.js"></script>
 
 
-<!-- Announcement Poster Modal Logic -->
+<!-- Premium Full-Screen Announcement Modal -->
 <?php
 $poster_path = $app_settings['announcement_poster'] ?? '';
 if (!empty($poster_path)):
     ?>
     <script>console.log('Announcement Modal Code Included in Page');</script>
-    <div id="announcement-modal"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(8px); padding: 20px;">
-        <div
-            style="position: relative; max-width: 500px; width: 100%; background: var(--white); border-radius: 32px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); animation: zoomInPoster 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
-            <button onclick="closeAnnouncement()"
-                style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; backdrop-filter: blur(4px);">
-                <i class="fa fa-times" style="font-size: 20px;"></i>
+    <div id="announcement-modal" style="display: none;">
+        <div class="announcement-wrapper">
+            <!-- Close Trigger -->
+            <button class="announcement-close-btn" onclick="closeAnnouncement()">
+                <i class="fa fa-times" style="font-size: 14px;"></i> Close
             </button>
-            <img src="<?= $base_url ?>/<?= htmlspecialchars($poster_path) ?>" alt="Announcement"
-                style="width: 100%; height: auto; display: block; max-height: 70vh; object-fit: contain; background: #000;"
-                onerror="console.error('FAILED TO LOAD POSTER IMAGE: ' + this.src)">
-            <div
-                style="padding: 24px; text-align: center; background: var(--white); border-top: 1px solid var(--border-color);">
-                <button onclick="closeAnnouncement()" class="btn-primary"
-                    style="width: 100%; padding: 14px; border-radius: 16px; font-weight: 800;">Continue to
-                    <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?></button>
+
+            <!-- Media Container -->
+            <div class="announcement-media-container">
+                <img id="announcement-poster-img"
+                    src="<?= !empty($base_url) ? ($base_url . '/') : '' ?><?= htmlspecialchars($poster_path) ?>"
+                    alt="Daily Announcement" onerror="console.error('FAILED TO LOAD POSTER IMAGE: ' + this.src)">
             </div>
+
+            <!-- Sleek Action Continue Button at the bottom -->
+            <button onclick="closeAnnouncement()" class="announcement-cta-button">
+                Continue to <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?> <i class="fa fa-arrow-right"
+                    style="margin-left: 6px; font-size: 11px;"></i>
+            </button>
         </div>
     </div>
 
     <script>
         function closeAnnouncement() {
-            document.getElementById('announcement-modal').style.display = 'none';
-            document.body.style.overflow = 'auto';
+            const modal = document.getElementById('announcement-modal');
+            if (modal) {
+                modal.classList.remove('active');
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }, 400);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -278,9 +286,27 @@ if (!empty($poster_path)):
 
             console.log('Announcement Poster Path: <?= $base_url ?>/<?= $app_settings['announcement_poster'] ?? "EMPTY" ?>');
 
+            // Aspect ratio check for dynamic layout adjustment
+            const imgEl = document.getElementById('announcement-poster-img');
+            const wrapper = document.querySelector('.announcement-wrapper');
+            if (imgEl && wrapper) {
+                imgEl.addEventListener('load', () => {
+                    if (imgEl.naturalWidth < imgEl.naturalHeight) {
+                        wrapper.classList.add('portrait-mode');
+                    }
+                });
+                if (imgEl.complete) {
+                    if (imgEl.naturalWidth < imgEl.naturalHeight) {
+                        wrapper.classList.add('portrait-mode');
+                    }
+                }
+            }
+
             // Show and set session flag so it won't repeat
             setTimeout(() => {
                 modal.style.display = 'flex';
+                modal.offsetHeight; // Force reflow
+                modal.classList.add('active');
                 document.body.style.overflow = 'hidden';
                 sessionStorage.setItem('announcement_shown', 'true');
                 console.log('Announcement Modal shown');
@@ -289,6 +315,131 @@ if (!empty($poster_path)):
     </script>
 
     <style>
+        #announcement-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: -webkit-fill-available;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        #announcement-modal.active {
+            opacity: 1;
+        }
+
+        .announcement-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 1000px;
+            max-width: 90vw;
+            max-height: 650px;
+            max-height: 80vh;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalPopUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: max-width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), max-height 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .announcement-wrapper.portrait-mode {
+            max-width: 520px;
+            max-height: 85vh;
+        }
+
+        .announcement-media-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .announcement-media-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .announcement-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .announcement-close-btn:hover {
+            transform: scale(1.05);
+            background: #ffffff;
+            color: #0f172a;
+            border-color: #ffffff;
+        }
+
+        .announcement-cta-button {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-green);
+            color: #ffffff;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 10px 25px -5px rgba(22, 163, 74, 0.4);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+        }
+
+        .announcement-cta-button:hover {
+            background: #15803d;
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 12px 30px -5px rgba(22, 163, 74, 0.6);
+            color: #ffffff;
+        }
+
         .verified-badge {
             color: #007bff !important;
             font-size: 16px !important;
@@ -303,15 +454,33 @@ if (!empty($poster_path)):
             text-shadow: 0px 0px 2px rgba(0, 123, 255, 0.4);
         }
 
-        @keyframes zoomInPoster {
+        @keyframes modalPopUp {
             from {
                 opacity: 0;
-                transform: scale(0.9);
+                transform: scale(0.9) translateY(20px);
             }
 
             to {
                 opacity: 1;
-                transform: scale(1);
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            #announcement-modal {
+                padding: 0;
+            }
+
+            .announcement-wrapper {
+                max-width: 100vw;
+                max-height: 100vh;
+                border-radius: 0;
+                border: none;
+            }
+
+            .announcement-close-btn {
+                top: env(safe-area-inset-top, 24px);
+                right: 16px;
             }
         }
     </style>

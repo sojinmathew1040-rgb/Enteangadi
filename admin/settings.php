@@ -9,6 +9,20 @@ if (!isset($_SESSION['admin_id']) || $_SESSION['admin_role'] !== 'admin') {
 $success = '';
 $error = '';
 
+// Ensure dynamic SQL tables exist on load
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS interstitial_ads (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        media_file VARCHAR(255) NOT NULL,
+        media_type VARCHAR(50) NOT NULL,
+        link_url VARCHAR(255) DEFAULT '',
+        duration INT DEFAULT 5,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+} catch (PDOException $e) {
+    // Fail silently
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'branding') {
         // Ensure table exists
@@ -186,6 +200,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'delete_interstitial_ad') {
+        $ad_id = (int) ($_POST['ad_id'] ?? 0);
+        if ($ad_id > 0) {
+            $stmt = $pdo->prepare("SELECT media_file FROM interstitial_ads WHERE id = ?");
+            $stmt->execute([$ad_id]);
+            $file = $stmt->fetchColumn();
+
+            if (!empty($file)) {
+                $file_to_delete = '../' . $file;
+                if (file_exists($file_to_delete)) {
+                    unlink($file_to_delete);
+                }
+            }
+
+            $stmt = $pdo->prepare("DELETE FROM interstitial_ads WHERE id = ?");
+            $stmt->execute([$ad_id]);
+            $success = "Ad removed from the rotation queue successfully.";
+        }
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'interstitial_ads') {
+        // Handle global settings updates
+        $ad_active = isset($_POST['interstitial_ad_active']) ? '1' : '0';
+        $ad_frequency = (int) ($_POST['interstitial_ad_frequency'] ?? 10);
+
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_active', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute([$ad_active]);
+
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('interstitial_ad_frequency', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute([$ad_frequency]);
+
+        $success = "Global interstitial ad configurations updated.";
+
+        // Handle new ad upload if provided
+        if (isset($_FILES['interstitial_ad_file']) && $_FILES['interstitial_ad_file']['error'] === UPLOAD_ERR_OK) {
+            $upload_dir = '../uploads/interstitial_ads/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $file_ext = strtolower(pathinfo($_FILES['interstitial_ad_file']['name'], PATHINFO_EXTENSION));
+            $allowed_imgs = ['jpg', 'jpeg', 'png', 'webp'];
+            $allowed_vids = ['mp4', 'webm', 'ogg'];
+            $allowed = array_merge($allowed_imgs, $allowed_vids);
+
+            if (in_array($file_ext, $allowed)) {
+                $file_name = 'ad_' . time() . '_' . rand(1000, 9999) . '.' . $file_ext;
+                $target_path = $upload_dir . $file_name;
+
+                if (move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
+                    $db_path = 'uploads/interstitial_ads/' . $file_name;
+                    $ad_type = in_array($file_ext, $allowed_vids) ? 'video' : 'image';
+                    $ad_link = $_POST['interstitial_ad_link'] ?? '';
+                    $ad_duration = (int) ($_POST['interstitial_ad_duration'] ?? 5);
+
+                    $stmt = $pdo->prepare("INSERT INTO interstitial_ads (media_file, media_type, link_url, duration) VALUES (?, ?, ?, ?)");
+                    $stmt->execute([$db_path, $ad_type, $ad_link, $ad_duration]);
+                    $success = "New ad published to rotation queue successfully.";
+                }
+            } else {
+                $error = "Unsupported file format. Please upload JPG, PNG, WebP or MP4.";
+            }
+        }
     }
 }
 
@@ -199,6 +274,15 @@ try {
     }
 } catch (PDOException $e) {
     $app_settings = ['app_name' => 'Enteangadi'];
+}
+
+// Fetch active interstitial ads list for the queue display
+$active_ads = [];
+try {
+    $stmt = $pdo->query("SELECT * FROM interstitial_ads ORDER BY id ASC");
+    $active_ads = $stmt->fetchAll();
+} catch (PDOException $e) {
+    $active_ads = [];
 }
 
 // Fetch pending products for the integrated approval section
@@ -862,6 +946,16 @@ require_once 'includes/header.php';
                 </div>
             <?php endif; ?>
 
+            <?php if (has_permission('manage_branding')): ?>
+                <div class="settings-card" onclick="showSection('interstitial_ads')">
+                    <i class="fa fa-photo-video"></i>
+                    <div>
+                        <h3>Interstitial Ads</h3>
+                        <p>Manage full-screen ads</p>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <?php if (has_permission('manage_security')): ?>
                 <div class="settings-card" onclick="showSection('security')">
                     <i class="fa fa-key"></i>
@@ -1059,6 +1153,181 @@ require_once 'includes/header.php';
                 <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Update
                     Announcement Poster</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Interstitial Ads Section -->
+    <div id="section-interstitial_ads"
+        class="settings-section <?= (isset($_POST['action']) && ($_POST['action'] === 'interstitial_ads' || $_POST['action'] === 'delete_interstitial_ad')) ? 'active' : '' ?>">
+        <button class="back-btn" onclick="showSection('grid')">
+            <i class="fa fa-arrow-left"></i> Back to Dashboard
+        </button>
+
+        <div class="settings-form-wrapper" style="max-width: 1200px;">
+            <div class="section-header">
+                <h2>Full-Screen Interstitial Ads Playlist</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Publish multiple image or
+                    video advertisements. They will be displayed to users sequentially in a circular rotation.</p>
+            </div>
+
+            <!-- Two-column layouts grid -->
+            <div class="interstitial-grid-container"
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; align-items: start;">
+
+                <!-- Left panel: config & upload -->
+                <div class="interstitial-panel-left"
+                    style="background: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                    <h3
+                        style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; color: var(--text-color);">
+                        <i class="fa fa-plus-circle" style="color: var(--primary-green);"></i> Add New Ad / Edit
+                        Config</h3>
+
+                    <form method="POST" action="settings.php" enctype="multipart/form-data">
+                        <input type="hidden" name="action" value="interstitial_ads">
+
+                        <div class="form-group"
+                            style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                            <div>
+                                <label
+                                    style="font-weight: 700; margin-bottom: 2px; display: block; cursor: pointer; font-size: 13px;">Enable
+                                    Interstitial Ads</label>
+                                <span style="font-size: 11px; color: var(--text-muted);">Toggle ads globally.</span>
+                            </div>
+                            <label class="switch" style="transform: scale(0.9);">
+                                <input type="checkbox" name="interstitial_ad_active" value="1"
+                                    <?= ($app_settings['interstitial_ad_active'] ?? '0') === '1' ? 'checked' : '' ?>>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 13px; font-weight: 700;">Page Views Threshold</label>
+                            <input type="number" name="interstitial_ad_frequency" class="form-control" min="1"
+                                max="100" style="padding: 10px;"
+                                value="<?= htmlspecialchars($app_settings['interstitial_ad_frequency'] ?? '10') ?>">
+                            <small
+                                style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">If
+                                set to 10, the ad displays ONLY on the 10th page view (and resets to repeat every 10
+                                pages).</small>
+                        </div>
+
+                        <div
+                            style="margin-top: 24px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 13px; font-weight: 700;">Publish Ad File (Image / MP4
+                                    Video)</label>
+                                <input type="file" name="interstitial_ad_file" class="form-control"
+                                    accept="image/*,video/*" style="padding: 8px;">
+                                <small
+                                    style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">Select
+                                    a premium photo or video clip to publish to the active playlist
+                                    rotation.</small>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 13px; font-weight: 700;">Redirect Target URL</label>
+                                <input type="url" name="interstitial_ad_link" class="form-control"
+                                    style="padding: 10px;" placeholder="https://example.com/promo or internal link">
+                                <small
+                                    style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">Specify
+                                    where the user is redirected when tapping this ad.</small>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="font-size: 13px; font-weight: 700;">Countdown Wait Time
+                                    (Seconds)</label>
+                                <input type="number" name="interstitial_ad_duration" class="form-control" min="0"
+                                    max="60" style="padding: 10px;" value="5">
+                                <small
+                                    style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">Number
+                                    of seconds the user must watch before the skip/close button unlocks.</small>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-primary"
+                            style="margin-top: 24px; width: 100%; padding: 12px; font-size: 14px; font-weight: 700;">Update
+                            Settings & Add to Queue</button>
+                    </form>
+                </div>
+
+                <!-- Right panel: playlist queue -->
+                <div class="interstitial-panel-right"
+                    style="background: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); min-height: 450px;">
+                    <h3
+                        style="font-size: 16px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; color: var(--text-color);">
+                        <i class="fa fa-list" style="color: var(--primary-green);"></i> Active Playlist Queue
+                        (<?= count($active_ads) ?> ads)</h3>
+
+                    <?php if (empty($active_ads)): ?>
+                        <div
+                            style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 12px; background: #fdfdfd; padding: 20px; text-align: center;">
+                            <i class="fa fa-photo-video"
+                                style="font-size: 48px; color: #cbd5e1; margin-bottom: 16px;"></i>
+                            <span style="font-weight: 600; font-size: 14px; color: #64748b;">No Ads Published Yet</span>
+                            <span style="font-size: 12px; color: #94a3b8; max-width: 250px; margin-top: 6px;">Upload
+                                your first video or image ad on the left to start the rotation playlist!</span>
+                        </div>
+                    <?php else: ?>
+                        <div class="interstitial-playlist-roster"
+                            style="display: flex; flex-direction: column; gap: 16px; max-height: 520px; overflow-y: auto; padding-right: 4px;">
+                            <?php
+                            $idx = 0;
+                            foreach ($active_ads as $ad):
+                                $idx++;
+                                ?>
+                                <div class="playlist-item"
+                                    style="display: flex; gap: 16px; align-items: center; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; transition: all 0.3s ease;">
+                                    <div class="ad-order-badge"
+                                        style="position: absolute; top: -8px; left: -8px; background: var(--primary-green); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border: 2px solid white; box-shadow: var(--shadow-sm);">
+                                        <?= $idx ?></div>
+
+                                    <!-- Ad thumbnail -->
+                                    <div
+                                        style="width: 80px; height: 60px; border-radius: 8px; overflow: hidden; background: #000; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <?php if ($ad['media_type'] === 'video'): ?>
+                                            <video src="../<?= htmlspecialchars($ad['media_file']) ?>"
+                                                style="width: 100%; height: 100%; object-fit: cover;" muted autoplay loop
+                                                playsinline></video>
+                                        <?php else: ?>
+                                            <img src="../<?= htmlspecialchars($ad['media_file']) ?>"
+                                                style="width: 100%; height: 100%; object-fit: cover;">
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- Ad details -->
+                                    <div style="flex-grow: 1; min-width: 0;">
+                                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                                            <span
+                                                style="font-size: 11px; font-weight: 800; text-transform: uppercase; background: <?= $ad['media_type'] === 'video' ? '#dbeafe; color: #1e40af;' : '#dcfce7; color: #166534;' ?>; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px;"><?= htmlspecialchars($ad['media_type']) ?></span>
+                                            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;"><i
+                                                    class="fa fa-clock"></i> <?= htmlspecialchars($ad['duration']) ?>s
+                                                wait</span>
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--text-color); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                                            title="<?= htmlspecialchars($ad['link_url']) ?>">
+                                            <i class="fa fa-link" style="color: #94a3b8;"></i>
+                                            <?= !empty($ad['link_url']) ? htmlspecialchars($ad['link_url']) : '<span style="color: #cbd5e1; font-weight:500;">No Redirect URL</span>' ?>
+                                        </div>
+                                    </div>
+
+                                    <!-- Delete action -->
+                                    <form method="POST" action="settings.php"
+                                        onsubmit="return confirm('Are you sure you want to remove this ad from the rotation playlist?');">
+                                        <input type="hidden" name="action" value="delete_interstitial_ad">
+                                        <input type="hidden" name="ad_id" value="<?= $ad['id'] ?>">
+                                        <button type="submit"
+                                            style="background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; padding: 8px; transition: transform 0.2s;"
+                                            onmouseover="this.style.transform='scale(1.1)'"
+                                            onmouseout="this.style.transform='scale(1)'">
+                                            <i class="fa fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
     </div>
 

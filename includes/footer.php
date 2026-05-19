@@ -192,6 +192,475 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </script>
 <?php endif; ?>
 
+<?php
+$ad_active = ($app_settings['interstitial_ad_active'] ?? '0') === '1';
+$ad_frequency = (int) ($app_settings['interstitial_ad_frequency'] ?? 10);
+$interstitial_ads = [];
+
+if ($ad_active) {
+    try {
+        $stmt = $pdo->query("SELECT * FROM interstitial_ads ORDER BY id ASC");
+        $interstitial_ads = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $interstitial_ads = [];
+    }
+}
+
+if ($ad_active && !empty($interstitial_ads)):
+    // Format ads list for secure Javascript serialization
+    $formatted_ads = [];
+    foreach ($interstitial_ads as $ad) {
+        $formatted_ads[] = [
+            'id' => $ad['id'],
+            'media_url' => (!empty($base_url) ? $base_url . '/' : '') . $ad['media_file'],
+            'media_type' => $ad['media_type'],
+            'link_url' => !empty($ad['link_url']) ? htmlspecialchars($ad['link_url']) : '#',
+            'duration' => (int) $ad['duration']
+        ];
+    }
+    ?>
+    <!-- Premium Full-Screen Interstitial Ad Modal -->
+    <div id="interstitial-ad-overlay" style="display: none;">
+        <div class="interstitial-ad-wrapper">
+            <!-- Close / Countdown Skip Trigger -->
+            <button id="interstitial-skip-btn" onclick="dismissInterstitialAd()" disabled>
+                Skip in <span id="interstitial-timer-count">5</span>s
+            </button>
+
+            <!-- Interactive Floating Speaker/Audio Toggle Overlay -->
+            <button id="interstitial-volume-btn" style="display: none;" onclick="toggleInterstitialVolume(event)"
+                title="Toggle Sound">
+                <i class="fa fa-volume-mute"></i>
+            </button>
+
+            <!-- Media Container (No longer clickable directly) -->
+            <div id="interstitial-ad-media" class="interstitial-ad-media-container">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+            <!-- Sleek Action Button Overlay at the bottom -->
+            <a id="interstitial-cta-btn" href="#" target="_blank" class="interstitial-cta-button"
+                onclick="dismissInterstitialAd()">
+                Visit Sponsor <i class="fa fa-external-link-alt" style="margin-left: 6px; font-size: 11px;"></i>
+            </a>
+        </div>
+    </div>
+
+    <style>
+        #interstitial-ad-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: -webkit-fill-available;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        #interstitial-ad-overlay.active {
+            opacity: 1;
+        }
+
+        .interstitial-ad-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 1000px;
+            max-width: 90vw;
+            max-height: 650px;
+            max-height: 80vh;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalPopUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: max-width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), max-height 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .interstitial-ad-wrapper.portrait-mode {
+            max-width: 520px;
+            max-height: 85vh;
+        }
+
+        .interstitial-ad-media-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            overflow: hidden;
+        }
+
+        .interstitial-ad-media-container img,
+        .interstitial-ad-media-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .interstitial-cta-button {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-green);
+            color: #ffffff;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 10px 25px -5px rgba(22, 163, 74, 0.4);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 10;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .interstitial-cta-button:hover {
+            background: #15803d;
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 12px 30px -5px rgba(22, 163, 74, 0.6);
+            color: #ffffff;
+        }
+
+        #interstitial-skip-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: not-allowed;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        #interstitial-skip-btn.ready {
+            cursor: pointer;
+            background: #ffffff;
+            color: #0f172a;
+            border-color: #ffffff;
+        }
+
+        #interstitial-skip-btn.ready:hover {
+            transform: scale(1.05);
+        }
+
+        #interstitial-volume-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: volumePulse 2s infinite;
+        }
+
+        #interstitial-volume-btn:hover {
+            background: #ffffff;
+            color: #0f172a;
+            border-color: #ffffff;
+            transform: scale(1.1);
+        }
+
+        body.ad-lock-scroll {
+            overflow: hidden !important;
+            touch-action: none;
+        }
+
+        @keyframes modalPopUp {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        @keyframes volumePulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 255, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+            }
+        }
+
+        /* Full Screen bleeding view specifically on mobile */
+        @media (max-width: 768px) {
+            #interstitial-ad-overlay {
+                padding: 0;
+            }
+
+            .interstitial-ad-wrapper {
+                max-width: 100vw;
+                max-height: 100vh;
+                border-radius: 0;
+                border: none;
+            }
+
+            #interstitial-skip-btn {
+                top: env(safe-area-inset-top, 24px);
+                right: 16px;
+            }
+        }
+    </style>
+
+    <script>
+        const interstitialAdsList = <?= json_encode($formatted_ads) ?>;
+
+        function dismissInterstitialAd() {
+            const btn = document.getElementById('interstitial-skip-btn');
+            if (btn && !btn.classList.contains('ready')) {
+                return; // Not clickable yet
+            }
+            const overlay = document.getElementById('interstitial-ad-overlay');
+            if (overlay) {
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    document.body.classList.remove('ad-lock-scroll');
+
+                    // Stop video if active to save battery
+                    const videoAd = document.getElementById('interstitial-ad-video');
+                    if (videoAd) {
+                        videoAd.pause();
+                    }
+                }, 400);
+            }
+        }
+
+        function toggleInterstitialVolume(event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const videoAd = document.getElementById('interstitial-ad-video');
+            const volumeBtn = document.getElementById('interstitial-volume-btn');
+
+            if (videoAd && volumeBtn) {
+                videoAd.muted = !videoAd.muted;
+                if (videoAd.muted) {
+                    volumeBtn.innerHTML = '<i class="fa fa-volume-mute"></i>';
+                } else {
+                    volumeBtn.innerHTML = '<i class="fa fa-volume-up"></i>';
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (interstitialAdsList.length === 0) return;
+
+            // 1. Block interstitial ads if an active announcement poster has not been shown yet in this session
+            const hasActiveAnnouncement = <?= !empty($app_settings['announcement_poster']) ? 'true' : 'false' ?>;
+            if (hasActiveAnnouncement && !sessionStorage.getItem('announcement_shown')) {
+                console.log("Interstitial ad blocked: waiting for announcement poster to be shown first.");
+                return;
+            }
+
+            // 2. Manage Page View tracking count
+            const adFrequency = <?= $ad_frequency ?>;
+            let pageViews = parseInt(localStorage.getItem('enteangadi_interstitial_page_views') || '0');
+
+            // Increment page views
+            pageViews++;
+            localStorage.setItem('enteangadi_interstitial_page_views', pageViews);
+
+            // 3. Check if we should trigger the overlay
+            if (pageViews >= adFrequency) {
+                // Reset counter immediately
+                localStorage.setItem('enteangadi_interstitial_page_views', '0');
+
+                // Fetch circular index
+                let adIndex = parseInt(localStorage.getItem('enteangadi_interstitial_ad_index') || '0');
+                if (adIndex >= interstitialAdsList.length) {
+                    adIndex = 0;
+                }
+
+                const activeAd = interstitialAdsList[adIndex];
+
+                // Store next index in circular rotation
+                localStorage.setItem('enteangadi_interstitial_ad_index', (adIndex + 1) % interstitialAdsList.length);
+
+                // Build and render HTML contents inside overlay
+                const adMediaContainer = document.getElementById('interstitial-ad-media');
+                const volumeBtn = document.getElementById('interstitial-volume-btn');
+                const ctaBtn = document.getElementById('interstitial-cta-btn');
+                const overlay = document.getElementById('interstitial-ad-overlay');
+
+                // Reset wrapper layout styling classes first
+                const adWrapper = document.querySelector('.interstitial-ad-wrapper');
+                if (adWrapper) {
+                    adWrapper.classList.remove('portrait-mode');
+                }
+
+                if (adMediaContainer && overlay) {
+                    // Populate media tag
+                    if (activeAd.media_type === 'video') {
+                        adMediaContainer.innerHTML = `
+                            <video id="interstitial-ad-video" src="${activeAd.media_url}" muted autoplay playsinline loop style="width: 100%; height: 100%; object-fit: contain; display: block;"></video>
+                        `;
+                        // Show volume button
+                        if (volumeBtn) {
+                            volumeBtn.style.display = 'flex';
+                            volumeBtn.innerHTML = '<i class="fa fa-volume-mute"></i>';
+                        }
+
+                        // Flex wrapper according to video aspect ratio
+                        const videoAd = document.getElementById('interstitial-ad-video');
+                        if (videoAd && adWrapper) {
+                            videoAd.addEventListener('loadedmetadata', () => {
+                                if (videoAd.videoWidth < videoAd.videoHeight) {
+                                    adWrapper.classList.add('portrait-mode');
+                                }
+                            });
+                            // Immediately flex if metadata is already loaded (cached case)
+                            if (videoAd.readyState >= 1) {
+                                if (videoAd.videoWidth < videoAd.videoHeight) {
+                                    adWrapper.classList.add('portrait-mode');
+                                }
+                            }
+                        }
+                    } else {
+                        adMediaContainer.innerHTML = `
+                            <img id="interstitial-ad-image" src="${activeAd.media_url}" alt="Sponsored Advertisement" style="width: 100%; height: 100%; object-fit: contain; display: block;">
+                        `;
+                        // Hide volume button
+                        if (volumeBtn) {
+                            volumeBtn.style.display = 'none';
+                        }
+
+                        // Flex wrapper according to image aspect ratio
+                        const imageAd = document.getElementById('interstitial-ad-image');
+                        if (imageAd && adWrapper) {
+                            imageAd.addEventListener('load', () => {
+                                if (imageAd.naturalWidth < imageAd.naturalHeight) {
+                                    adWrapper.classList.add('portrait-mode');
+                                }
+                            });
+                            // Trigger check immediately if cached
+                            if (imageAd.complete) {
+                                if (imageAd.naturalWidth < imageAd.naturalHeight) {
+                                    adWrapper.classList.add('portrait-mode');
+                                }
+                            }
+                        }
+                    }
+
+                    // Handle CTA button display
+                    if (ctaBtn) {
+                        if (activeAd.link_url && activeAd.link_url !== '#' && activeAd.link_url.trim() !== '') {
+                            ctaBtn.href = activeAd.link_url;
+                            ctaBtn.style.display = 'flex';
+                        } else {
+                            ctaBtn.style.display = 'none';
+                        }
+                    }
+
+                    // Open overlay popup modal
+                    overlay.style.display = 'flex';
+                    overlay.offsetWidth; // force layout reflow
+                    overlay.classList.add('active');
+                    document.body.classList.add('ad-lock-scroll');
+
+                    // Start video if active
+                    const videoAd = document.getElementById('interstitial-ad-video');
+                    if (videoAd) {
+                        videoAd.play().catch(e => console.log("Autoplay was blocked by browser", e));
+                    }
+
+                    // 3. Countdown timer execution
+                    let remainingSeconds = activeAd.duration;
+                    const timerCount = document.getElementById('interstitial-timer-count');
+                    const skipBtn = document.getElementById('interstitial-skip-btn');
+
+                    if (skipBtn) {
+                        skipBtn.classList.remove('ready');
+                        skipBtn.disabled = true;
+
+                        if (remainingSeconds <= 0) {
+                            skipBtn.innerHTML = '<i class="fa fa-times" style="font-size: 14px;"></i> Close';
+                            skipBtn.classList.add('ready');
+                            skipBtn.disabled = false;
+                        } else {
+                            if (timerCount) {
+                                timerCount.textContent = remainingSeconds;
+                            }
+                            skipBtn.innerHTML = `Skip in <span id="interstitial-timer-count">${remainingSeconds}</span>s`;
+
+                            const countdownInterval = setInterval(() => {
+                                remainingSeconds--;
+                                const activeTimerCount = document.getElementById('interstitial-timer-count');
+                                if (activeTimerCount) {
+                                    activeTimerCount.textContent = remainingSeconds;
+                                }
+
+                                if (remainingSeconds <= 0) {
+                                    clearInterval(countdownInterval);
+                                    skipBtn.innerHTML = '<i class="fa fa-times" style="font-size: 14px;"></i> Close';
+                                    skipBtn.classList.add('ready');
+                                    skipBtn.disabled = false;
+                                }
+                            }, 1000);
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+<?php endif; ?>
+
 <script src="<?= $base_url ?? '/Enteangadi' ?>/assets/js/main.js"></script>
 </body>
 
