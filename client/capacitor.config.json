@@ -1,0 +1,9 @@
+{
+  "appId": "com.enteangadi.app",
+  "appName": "Enteangadi",
+  "webDir": "dist",
+  "server": {
+    "url": "http://192.168.1.6/Enteangadi",
+    "cleartext": true
+  }
+}

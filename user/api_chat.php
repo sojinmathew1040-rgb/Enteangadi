@@ -25,6 +25,35 @@ if ($action === 'send') {
     } else {
         echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
     }
+} elseif ($action === 'send_audio') {
+    $receiver_id = $_POST['receiver_id'] ?? 0;
+    $product_id = $_POST['product_id'] ?? 0;
+
+    if ($receiver_id && $product_id && isset($_FILES['audio_data'])) {
+        try {
+            $upload_dir = '../uploads/voice_chats/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $file_name = 'voice_' . time() . '_' . rand(1000, 9999) . '.wav';
+            $target_file = $upload_dir . $file_name;
+
+            if (move_uploaded_file($_FILES['audio_data']['tmp_name'], $target_file)) {
+                $db_path = '[AUDIO]:uploads/voice_chats/' . $file_name;
+
+                $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$my_id, $receiver_id, $product_id, $db_path]);
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Failed to save audio file']);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Invalid audio parameters']);
+    }
 } elseif ($action === 'fetch') {
     $other_id = $_POST['other_id'] ?? $_GET['other_id'] ?? 0;
     $product_id = $_POST['product_id'] ?? $_GET['product_id'] ?? 0;

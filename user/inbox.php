@@ -119,7 +119,12 @@ require_once '../includes/header.php';
                                 <?php if ($conv['last_sender_id'] == $my_id): ?>
                                     <span class="you-prefix">You: </span>
                                 <?php endif; ?>
-                                <?= htmlspecialchars($conv['last_message']) ?>
+                                <?php if (strpos($conv['last_message'], '[AUDIO]:') === 0): ?>
+                                    <span style="color: var(--primary-green); font-weight: 600;"><i class="fa fa-microphone"></i>
+                                        Voice note</span>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($conv['last_message']) ?>
+                                <?php endif; ?>
                             </div>
                         </div>
 

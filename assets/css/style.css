@@ -477,6 +477,21 @@ header nav a:hover {
     padding: 40px;
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
+    animation: authSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+@keyframes authSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(30px) scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .form-group {
@@ -3503,14 +3518,26 @@ input[type="checkbox"]:checked+.toggle-btn {
 
 /* Chat & Real-time Messaging */
 .chat-page-wrapper {
-    padding: 30px 0;
+    position: fixed;
+    top: 110px;
+    /* Header + Location Bar height on desktop */
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: var(--background);
-    min-height: calc(100vh - 80px);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
 }
 
 .chat-main-container {
     max-width: 900px;
-    height: 750px;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 .chat-window-premium {
@@ -3685,6 +3712,8 @@ input[type="checkbox"]:checked+.toggle-btn {
 /* Messages Styling */
 .messages-area {
     flex: 1;
+    min-height: 0;
+    /* Crucial flexbox scroll fix */
     overflow-y: auto;
     padding: 24px;
     display: flex;
@@ -3693,6 +3722,7 @@ input[type="checkbox"]:checked+.toggle-btn {
     background: var(--white);
     background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
     background-size: 200px 20px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .message-row {
@@ -3789,23 +3819,25 @@ input[type="checkbox"]:checked+.toggle-btn {
 }
 
 .btn-send-chat {
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     background: var(--primary-green);
     color: white;
     border: none;
     cursor: pointer;
-    transition: 0.3s;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 15px;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+    flex-shrink: 0;
 }
 
 .btn-send-chat:hover {
-    transform: scale(1.05) rotate(-5deg);
-    box-shadow: 0 5px 15px rgba(34, 197, 94, 0.3);
+    transform: scale(1.08) rotate(-5deg);
+    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.3);
 }
 
 /* Loading & Empty States */
@@ -3846,15 +3878,62 @@ input[type="checkbox"]:checked+.toggle-btn {
     font-size: 14px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+
+    /* Prevent page-level scroll and double-scroll bugs */
+    body.chat-page-body {
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    body.chat-page-body .main-sticky-header {
+        display: none !important;
+    }
+
+    body.chat-page-body .chat-page-wrapper {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        height: 100% !important;
+        height: 100dvh !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    body.chat-page-body .chat-main-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+    }
+
     .chat-page-wrapper {
+        position: fixed;
+        top: 110px;
+        /* Fallback top position if not locked to top */
+        left: 0;
+        right: 0;
+        bottom: 0;
         padding: 0;
-        height: calc(100vh - 60px);
+    }
+
+    .chat-main-container {
+        height: 100%;
+        min-height: 0;
     }
 
     .chat-window-premium {
         border-radius: 0;
         border: none;
+        height: 100%;
+        min-height: 0;
     }
 
     .message-bubble {
@@ -3864,4 +3943,189 @@ input[type="checkbox"]:checked+.toggle-btn {
     .mini-title {
         max-width: 120px;
     }
+}
+
+/* Microphone & Voice Note Chat Premium UI */
+.btn-mic-chat {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.btn-mic-chat:hover {
+    color: var(--primary-green);
+    background: rgba(34, 197, 94, 0.08);
+    transform: scale(1.08);
+}
+
+.btn-mic-chat.recording-active {
+    background: #ef4444 !important;
+    color: white !important;
+    animation: recordingBtnPulse 1.2s infinite alternate !important;
+}
+
+@keyframes recordingBtnPulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    100% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+}
+
+.recording-status-premium {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    color: #ef4444;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.recording-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+    display: inline-block;
+}
+
+.recording-dot.animate-pulse {
+    animation: voicePulse 1s infinite alternate;
+}
+
+@keyframes voicePulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+
+    100% {
+        transform: scale(1.3);
+        opacity: 1;
+    }
+}
+
+.recording-timer {
+    font-family: monospace;
+    font-size: 16px;
+    color: var(--text-dark, #1e293b);
+}
+
+.recording-label {
+    font-size: 14px;
+    color: var(--text-muted, #64748b);
+}
+
+.btn-cancel-rec {
+    background: transparent;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: auto;
+    padding: 8px;
+    transition: transform 0.2s;
+}
+
+.btn-cancel-rec:hover {
+    transform: scale(1.1);
+}
+
+/* Custom Audio Note Player bubble styles */
+.message-audio-player {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 200px;
+    max-width: 300px;
+    padding: 6px 4px;
+}
+
+.audio-play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.msg-me .audio-play-btn {
+    background: var(--white);
+    color: var(--primary-green);
+}
+
+.msg-other .audio-play-btn {
+    background: var(--primary-green);
+    color: var(--white);
+}
+
+.audio-play-btn:active {
+    transform: scale(0.95);
+}
+
+.audio-waveform-wrapper {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    position: relative;
+}
+
+.msg-me .audio-waveform-wrapper {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.msg-other .audio-waveform-wrapper {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.audio-track-wave {
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+}
+
+.audio-progress-wave {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    border-radius: 2px;
+}
+
+.msg-me .audio-progress-wave {
+    background: var(--white);
+}
+
+.msg-other .audio-progress-wave {
+    background: var(--primary-green);
+}
+
+.audio-duration-tag {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.8;
 }

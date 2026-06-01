@@ -47,7 +47,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!empty($title) && !empty($category_id) && !empty($price)) {
         $is_cat_perishable = $cat_details[$category_id]['is_perishable'] ?? 0;
-        if ($is_cat_perishable && empty($expiry_date)) {
+
+        // 1. Server-side text profanity and NSFW moderation
+        if (isTextInappropriate($title) || isTextInappropriate($description)) {
+            $error = "Your ad title or description contains restricted keywords.";
+        }
+        // 2. Server-side video file exclusion
+        elseif (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
+            foreach ($_FILES['images']['type'] as $type) {
+                if (strpos($type, 'video/') === 0) {
+                    $error = "Videos are not allowed on ad postings.";
+                    break;
+                }
+            }
+            if (empty($error)) {
+                // 3. Server-side image NSFW classification via Sightengine (with local fallback if empty API keys)
+                foreach ($_FILES['images']['tmp_name'] as $tmp_name) {
+                    if (!empty($tmp_name) && isImageNSFW($tmp_name)) {
+                        $error = "Inappropriate content detected: one or more of your uploaded images violate our safety guidelines.";
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!empty($error)) {
+            // Keep error message
+        } elseif ($is_cat_perishable && empty($expiry_date)) {
             $error = "Expiry date is mandatory for perishable / edible items.";
         } elseif (($contact_whatsapp && empty($whatsapp_number)) || ($contact_phone && empty($phone_number))) {
             $error = "Please provide the required contact numbers.";

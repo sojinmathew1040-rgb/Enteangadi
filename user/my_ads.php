@@ -343,8 +343,194 @@ require_once '../includes/header.php';
 
     @media (max-width: 768px) {
         .my-ads-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 15px;
+            grid-template-columns: 1fr !important;
+            gap: 12px;
+            padding: 0 4px;
+        }
+
+        .my-ad-card {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            grid-template-rows: auto auto;
+            grid-template-areas:
+                "image details"
+                "actions actions";
+            gap: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            background: var(--white);
+            border: 1px solid var(--border-color);
+        }
+
+        .ad-card-image-box {
+            grid-area: image;
+            width: 100px;
+            height: 100px;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            margin-right: 0;
+            aspect-ratio: 1;
+        }
+
+        .ad-card-details {
+            grid-area: details;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            min-width: 0;
+            padding: 0;
+        }
+
+        .ad-price {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+            margin-top: 0;
+        }
+
+        .ad-title {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 500;
+        }
+
+        .ad-stats-mini {
+            margin-bottom: 0;
+            padding-top: 0;
+            border-top: none;
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: row;
+            gap: 12px;
+        }
+
+        .ad-stats-mini span {
+            margin-right: 0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ad-card-actions-premium {
+            grid-area: actions;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 6px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+            width: 100%;
+        }
+
+        .btn-view-listing {
+            width: 100%;
+            height: 42px;
+            font-size: 13px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.15);
+            color: var(--primary-green-dark);
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-view-listing:hover {
+            background: var(--primary-green);
+            color: white !important;
+            border-color: var(--primary-green);
+        }
+
+        .action-tools-grid {
+            width: 100%;
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-btn {
+            height: 40px;
+            border-radius: 8px;
+            font-size: 14px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            background: var(--background);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover {
+            background: var(--white);
+            transform: translateY(-1px);
+        }
+
+        .tool-btn.deleted-status-mini {
+            flex: 3;
+            height: 40px;
+            font-size: 11px;
+            gap: 6px;
+            background: #fee2e2;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+        }
+
+        .tool-btn.activate-request {
+            flex: 3;
+            height: 40px;
+            font-size: 11px;
+            gap: 6px;
+            background: var(--primary-green);
+            color: white;
+            border: none;
+        }
+
+        .approval-pending-card-mini {
+            flex: 3;
+            height: 40px;
+            border-radius: 8px;
+            font-size: 11px;
+            gap: 6px;
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            color: #d97706;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ad-status-badge {
+            font-size: 9px;
+            padding: 4px 6px;
+            top: 4px;
+            left: 4px;
+            border-radius: 4px;
+        }
+
+        .dashboard-header-premium {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .btn-premium-action {
+            width: 100%;
+            justify-content: center;
         }
     }
 
@@ -470,18 +656,18 @@ require_once '../includes/header.php';
     .btn-view-listing {
         width: 100%;
         height: 44px;
-        background: var(--background);
-        border: 1px solid var(--border-color);
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.15);
         border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        color: var(--text-dark);
+        color: var(--primary-green-dark);
         font-weight: 700;
         font-size: 13px;
         text-decoration: none;
-        transition: all 0.3s;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .btn-view-listing:hover {
@@ -489,7 +675,7 @@ require_once '../includes/header.php';
         color: white !important;
         border-color: var(--primary-green);
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+        box-shadow: 0 6px 15px rgba(34, 197, 94, 0.3);
     }
 
     .action-tools-grid {
@@ -821,19 +1007,6 @@ require_once '../includes/header.php';
         color: white;
         font-weight: 700;
         cursor: pointer;
-    }
-
-    @media (max-width: 768px) {
-        .dashboard-header-premium {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 20px;
-        }
-
-        .btn-premium-action {
-            width: 100%;
-            justify-content: center;
-        }
     }
 </style>
 

@@ -78,58 +78,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $longitude = !empty($_POST['longitude']) ? $_POST['longitude'] : null;
 
     if (!empty($title) && !empty($category_id) && !empty($price)) {
-        try {
-            $pdo->beginTransaction();
-
-            $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, description = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = 'pending' WHERE id = ?");
-            $stmt->execute([$category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $product_id]);
-
-            // Handle image deletions
-            if (isset($_POST['delete_images'])) {
-                foreach ($_POST['delete_images'] as $del_img_id) {
-                    $sel_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE id = ? AND product_id = ?");
-                    $sel_stmt->execute([$del_img_id, $product_id]);
-                    $path = $sel_stmt->fetchColumn();
-                    if ($path && file_exists('../' . $path))
-                        @unlink('../' . $path);
-
-                    $del_stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ?");
-                    $del_stmt->execute([$del_img_id]);
+        // 1. Server-side text profanity and NSFW moderation
+        if (isTextInappropriate($title) || isTextInappropriate($description)) {
+            $error = "Your ad title or description contains restricted keywords.";
+        }
+        // 2. Server-side video file exclusion
+        elseif (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
+            foreach ($_FILES['images']['type'] as $type) {
+                if (strpos($type, 'video/') === 0) {
+                    $error = "Videos are not allowed on ad postings.";
+                    break;
                 }
             }
-
-            // Handle new image uploads
-            if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
-                $upload_dir = '../uploads/products/';
-                if (!is_dir($upload_dir))
-                    mkdir($upload_dir, 0777, true);
-
-                foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
-                    if (empty($tmp_name))
-                        continue;
-
-                    $file_name = time() . '_' . $key . '.jpg';
-                    $target_file = $upload_dir . $file_name;
-
-                    if (function_exists('imagecreatefromjpeg') && compressProductImageLocal($tmp_name, $target_file, 800, 60)) {
-                        $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
-                        $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
-                    } else {
-                        $file_name = time() . '_' . $key . '_' . basename($_FILES['images']['name'][$key]);
-                        $target_file = $upload_dir . $file_name;
-                        if (move_uploaded_file($tmp_name, $target_file)) {
-                            $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
-                            $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
-                        }
+            if (empty($error)) {
+                // 3. Server-side image NSFW classification via Sightengine (with local fallback if empty API keys)
+                foreach ($_FILES['images']['tmp_name'] as $tmp_name) {
+                    if (!empty($tmp_name) && isImageNSFW($tmp_name)) {
+                        $error = "Inappropriate content detected: one or more of your uploaded images violate our safety guidelines.";
+                        break;
                     }
                 }
             }
+        }
 
-            $pdo->commit();
-            $success = true;
-        } catch (PDOException $e) {
-            $pdo->rollBack();
-            $error = "Error updating ad. Please try again.";
+        if (!empty($error)) {
+            // Keep error message
+        } else {
+            try {
+                $pdo->beginTransaction();
+
+                $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, description = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = 'pending' WHERE id = ?");
+                $stmt->execute([$category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $product_id]);
+
+                // Handle image deletions
+                if (isset($_POST['delete_images'])) {
+                    foreach ($_POST['delete_images'] as $del_img_id) {
+                        $sel_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE id = ? AND product_id = ?");
+                        $sel_stmt->execute([$del_img_id, $product_id]);
+                        $path = $sel_stmt->fetchColumn();
+                        if ($path && file_exists('../' . $path))
+                            @unlink('../' . $path);
+
+                        $del_stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ?");
+                        $del_stmt->execute([$del_img_id]);
+                    }
+                }
+
+                // Handle new image uploads
+                if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
+                    $upload_dir = '../uploads/products/';
+                    if (!is_dir($upload_dir))
+                        mkdir($upload_dir, 0777, true);
+
+                    foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
+                        if (empty($tmp_name))
+                            continue;
+
+                        $file_name = time() . '_' . $key . '.jpg';
+                        $target_file = $upload_dir . $file_name;
+
+                        if (function_exists('imagecreatefromjpeg') && compressProductImageLocal($tmp_name, $target_file, 800, 60)) {
+                            $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
+                            $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
+                        } else {
+                            $file_name = time() . '_' . $key . '_' . basename($_FILES['images']['name'][$key]);
+                            $target_file = $upload_dir . $file_name;
+                            if (move_uploaded_file($tmp_name, $target_file)) {
+                                $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
+                                $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
+                            }
+                        }
+                    }
+                }
+
+                $pdo->commit();
+                $success = true;
+            } catch (PDOException $e) {
+                $pdo->rollBack();
+                $error = "Error updating ad. Please try again.";
+            }
         }
     } else {
         $error = "Please fill out all required fields.";
@@ -413,10 +440,13 @@ require_once '../includes/header.php';
     </div>
 </div>
 
-
-
-
-
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loader-box">
+        <div class="premium-spinner"></div>
+        <h3 id="loaderTitle">Saving Changes</h3>
+        <p id="loaderDesc">Please wait while we update your ad...</p>
+    </div>
+</div>
 
 <script>
     const l2Categories = <?= $l2_json ?>;

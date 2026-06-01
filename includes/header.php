@@ -57,7 +57,9 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         const EnteangadiConfig = {
-            baseUrl: '<?= $base_url ?>'
+            baseUrl: '<?= $base_url ?>',
+            hasLocation: <?= isset($_SESSION['user_location']) ? 'true' : 'false' ?>,
+            location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>
         };
 
         // Theme initialization
@@ -66,7 +68,9 @@ try {
             document.documentElement.setAttribute('data-theme', savedTheme);
         })();
     </script>
+    <script src="<?= $base_url ?>/capacitor.js"></script>
     <script src="<?= $base_url ?>/assets/js/location.js" defer></script>
+    <script src="<?= $base_url ?>/assets/js/app-native.js" defer></script>
 
 </head>
 

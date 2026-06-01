@@ -42,6 +42,10 @@ if (!$other_user || !$product) {
 require_once '../includes/header.php';
 ?>
 
+<script>
+    document.body.classList.add('chat-page-body');
+</script>
+
 <div class="chat-page-wrapper">
     <div class="container chat-main-container">
         <div class="chat-window-premium">
@@ -99,7 +103,21 @@ require_once '../includes/header.php';
             <!-- Input Area -->
             <div class="chat-input-area">
                 <div class="input-wrapper-premium">
+                    <div id="recording-status" class="recording-status-premium" style="display: none;">
+                        <span class="recording-dot animate-pulse"></span>
+                        <span class="recording-timer">00:00</span>
+                        <span class="recording-label">Recording Voice...</span>
+                        <button type="button" id="cancelRecBtn" class="btn-cancel-rec" title="Discard">
+                            <i class="fa fa-trash-alt"></i>
+                        </button>
+                    </div>
+                    
                     <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                    
+                    <button type="button" id="micBtn" class="btn-mic-chat" title="Record Voice Note">
+                        <i class="fa fa-microphone"></i>
+                    </button>
+                    
                     <button onclick="sendMessage()" id="sendBtn" class="btn-send-chat">
                         <i class="fa fa-paper-plane"></i>
                     </button>
