@@ -175,7 +175,13 @@ function checkPerishable(id) {
 function updateTypeUI(t) {
     const priceLabel = document.getElementById('priceLabel');
     if (priceLabel) {
-        priceLabel.innerText = (t === 'sell' ? "Price (₹) *" : "Budget (₹) *");
+        if (t === 'sell') {
+            priceLabel.innerText = "Price (₹) *";
+        } else if (t === 'rent') {
+            priceLabel.innerText = "Rent Price (₹) *";
+        } else {
+            priceLabel.innerText = "Budget (₹) *";
+        }
     }
 }
 

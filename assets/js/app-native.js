@@ -4,7 +4,7 @@
  */
 
 // Inject Action Sheet CSS Styles dynamically for modularity
-(function() {
+(function () {
     const style = document.createElement('style');
     style.innerHTML = `
     .mobile-action-sheet-backdrop {
@@ -104,18 +104,106 @@ window.EnteangadiMobile = {
     /**
      * Checks if the app is currently running inside Capacitor WebView container.
      */
-    isRunningInMobile: function() {
+    isRunningInMobile: function () {
         return !!(window.Capacitor && window.Capacitor.Plugins);
     },
-    
+
     /**
-     * Automatically requests permissions for Location, Camera, Microphone (Mike), and Media files.
+     * Request Notification permissions for both mobile push/local notifications and web standard notifications
      */
-    requestAllPermissions: async function() {
-        if (!this.isRunningInMobile()) return;
-        
+    requestNotificationPermission: async function () {
+        if (this.isRunningInMobile() && window.Capacitor.Plugins.LocalNotifications) {
+            try {
+                const result = await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+                console.log("Capacitor local notifications permission result:", result);
+                return result.display === 'granted';
+            } catch (e) {
+                console.warn("Capacitor native LocalNotifications permission request error:", e);
+                return false;
+            }
+        } else if (typeof Notification !== 'undefined') {
+            try {
+                const permission = await Notification.requestPermission();
+                console.log("Web standard notification permission status:", permission);
+                return permission === 'granted';
+            } catch (e) {
+                console.warn("Web standard notification permission request error:", e);
+                return false;
+            }
+        }
+        return false;
+    },
+
+    /**
+     * Trigger a native or standard web notification
+     */
+    showLocalNotification: function (senderName, messageText) {
+        // App logo resolution (fallback to logo_1778137117.jpg if app_logo setting not specified)
+        let logoUrl = '/Enteangadi/uploads/logo/logo_1778137117.jpg';
+        if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.baseUrl) {
+            const logoPath = EnteangadiConfig.appLogo || 'uploads/logo/logo_1778137117.jpg';
+            logoUrl = `${EnteangadiConfig.baseUrl}/${logoPath}`;
+        }
+
+        // Clean up text if it is voice note or shared photo
+        let bodyText = messageText || '';
+        if (bodyText.startsWith('[AUDIO]:')) {
+            bodyText = '🎙️ Voice note';
+        } else if (bodyText.startsWith('[IMAGE]:')) {
+            bodyText = '📷 Shared photo';
+        }
+
+        if (this.isRunningInMobile() && window.Capacitor.Plugins.LocalNotifications) {
+            try {
+                window.Capacitor.Plugins.LocalNotifications.schedule({
+                    notifications: [{
+                        title: "Enteangadi - " + senderName,
+                        body: bodyText,
+                        id: Math.floor(Math.random() * 1000000),
+                        schedule: { at: new Date(Date.now() + 100) },
+                        sound: "default",
+                        smallIcon: "res://ic_stat_logo",
+                        largeIcon: "res://ic_launcher"
+                    }]
+                });
+                console.log("Capacitor local notification scheduled successfully.");
+            } catch (err) {
+                console.error("Failed to schedule Capacitor native local notification:", err);
+            }
+        } else if (typeof Notification !== 'undefined') {
+            if (Notification.permission === 'granted') {
+                new Notification("Enteangadi - " + senderName, {
+                    body: bodyText,
+                    icon: logoUrl
+                });
+            } else if (Notification.permission === 'default') {
+                Notification.requestPermission().then(perm => {
+                    if (perm === 'granted') {
+                        new Notification("Enteangadi - " + senderName, {
+                            body: bodyText,
+                            icon: logoUrl
+                        });
+                    }
+                });
+            }
+        }
+    },
+
+    /**
+     * Automatically requests permissions for Location, Camera, Microphone (Mike), Media files, and Notifications.
+     */
+    requestAllPermissions: async function () {
+        // Request Web notification permissions first if not in mobile wrapper
+        if (!this.isRunningInMobile()) {
+            await this.requestNotificationPermission();
+            return;
+        }
+
         console.log("Initializing premium permission checks for mobile application...");
-        
+
+        // 0. Notification Native Permission request
+        await this.requestNotificationPermission();
+
         // 1. Geolocation Native Permission request
         if (window.Capacitor.Plugins.Geolocation) {
             try {
@@ -124,7 +212,7 @@ window.EnteangadiMobile = {
                 console.warn("Capacitor native Geolocation permission request error:", e);
             }
         }
-        
+
         // 2. Camera and Photos Native Permission request
         if (window.Capacitor.Plugins.Camera) {
             try {
@@ -133,25 +221,35 @@ window.EnteangadiMobile = {
                 console.warn("Capacitor native Camera/Photo Library permission request error:", e);
             }
         }
-        
-        // 3. Microphone & Camera via browser interface (automatically binds native container prompts)
+
+        // 3. Microphone native mapping via browser interface
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 stream.getTracks().forEach(track => track.stop()); // Immediately shut down to free hardware
             }
         } catch (e) {
-            console.warn("Web API native media (Camera/Mic) permission mapping error:", e);
+            console.warn("Web API native microphone permission mapping error:", e);
+        }
+
+        // 4. Camera native mapping via browser interface
+        try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach(track => track.stop()); // Immediately shut down to free hardware
+            }
+        } catch (e) {
+            console.warn("Web API native camera permission mapping error:", e);
         }
     },
-    
+
     /**
      * Helper to render Action Sheet slide-up menu on mobile viewports
      */
-    showPhotoSourceSelection: function(onSuccess) {
+    showPhotoSourceSelection: function (onSuccess) {
         const backdrop = document.createElement('div');
         backdrop.className = 'mobile-action-sheet-backdrop';
-        
+
         backdrop.innerHTML = `
             <div class="mobile-action-sheet">
                 <h3>Select Image Source</h3>
@@ -166,47 +264,47 @@ window.EnteangadiMobile = {
                 </button>
             </div>
         `;
-        
+
         document.body.appendChild(backdrop);
-        
+
         // Trigger smooth slide animation
         setTimeout(() => backdrop.classList.add('active'), 10);
-        
+
         const closeSheet = () => {
             backdrop.classList.remove('active');
             setTimeout(() => backdrop.remove(), 300);
         };
-        
+
         backdrop.querySelector('#btn-cancel-sheet').onclick = closeSheet;
-        
+
         backdrop.querySelector('#btn-take-photo').onclick = async () => {
             closeSheet();
             await this.capturePhotoNatively('CAMERA', onSuccess);
         };
-        
+
         backdrop.querySelector('#btn-choose-gallery').onclick = async () => {
             closeSheet();
             await this.capturePhotoNatively('PHOTOS', onSuccess);
         };
-        
+
         backdrop.onclick = (e) => {
             if (e.target === backdrop) closeSheet();
         };
     },
-    
-    capturePhotoNatively: async function(sourceType, onSuccess) {
+
+    capturePhotoNatively: async function (sourceType, onSuccess) {
         try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
                 // Secure camera/photos permissions first
                 await window.Capacitor.Plugins.Camera.requestPermissions();
-                
+
                 const photo = await window.Capacitor.Plugins.Camera.getPhoto({
                     quality: 80,
                     allowEditing: false,
                     resultType: 'dataUrl', // return base64 dataUrl string
                     source: sourceType     // 'CAMERA' or 'PHOTOS'
                 });
-                
+
                 if (photo && photo.dataUrl) {
                     onSuccess(photo.dataUrl);
                 }
@@ -261,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Capacitor Back Button Listener registered successfully.');
         }
     }
-    
+
     // 2. Automate permission prompts on initial app launch
     if (window.EnteangadiMobile.isRunningInMobile()) {
         if (!sessionStorage.getItem('mobile-permissions-requested')) {
@@ -270,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('mobile-permissions-requested', 'true');
             }, 2500); // 2.5s delay to prevent UI splash stuttering
         }
-        
+
         // Hijack inline clicks for Profile Picture Avatar Wrapper
         const avatarWrapper = document.querySelector('.profile-avatar-wrapper');
         if (avatarWrapper) {
@@ -324,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Fallback dynamic click listener for late-rendered or dynamically loaded templates
 document.addEventListener('click', (e) => {
     if (!window.EnteangadiMobile.isRunningInMobile()) return;
-    
+
     // A. Intercept Profile picture upload
     const avatarWrapper = e.target.closest('.profile-avatar-wrapper');
     if (avatarWrapper && avatarWrapper.getAttribute('onclick')) {
@@ -332,7 +430,7 @@ document.addEventListener('click', (e) => {
         e.stopPropagation();
         avatarWrapper.removeAttribute('onclick'); // prevent repeating
         avatarWrapper.onclick = null; // clear
-        
+
         window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
             const file = dataURLtoFile(dataUrl, 'profile_picture.jpg');
             const input = document.getElementById('profile_picture_input');
@@ -346,7 +444,7 @@ document.addEventListener('click', (e) => {
         });
         return;
     }
-    
+
     // B. Intercept Ad Post/Edit photo card click
     const addPhotoCard = e.target.closest('.add-photo-btn-card');
     if (addPhotoCard && addPhotoCard.getAttribute('onclick')) {
@@ -354,7 +452,7 @@ document.addEventListener('click', (e) => {
         e.stopPropagation();
         addPhotoCard.removeAttribute('onclick'); // prevent repeating
         addPhotoCard.onclick = null; // clear
-        
+
         window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
             const file = dataURLtoFile(dataUrl, `photo_${Date.now()}.jpg`);
             const input = document.getElementById('images');

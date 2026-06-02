@@ -1,8 +1,9 @@
 <?php
 require_once 'config.php';
 try {
-    $pdo->exec('ALTER TABLE products ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL AFTER price');
-    echo "Column added successfully";
+    // Modify products type to support 'rent'
+    $pdo->exec("ALTER TABLE products MODIFY COLUMN type ENUM('sell', 'buy', 'rent') DEFAULT 'sell'");
+    echo "Database modified successfully: ENUM('sell', 'buy', 'rent') applied to type column.";
 } catch (PDOException $e) {
     echo "Error: " . $e->getMessage();
 }

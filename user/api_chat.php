@@ -9,6 +9,20 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $my_id = $_SESSION['user_id'];
 
+// Security check: Check if product is deleted
+if (in_array($action, ['send', 'send_audio', 'send_image'])) {
+    $product_id = $_POST['product_id'] ?? 0;
+    if ($product_id) {
+        $prod_stmt = $pdo->prepare("SELECT status FROM products WHERE id = ?");
+        $prod_stmt->execute([$product_id]);
+        $prod_status = $prod_stmt->fetchColumn();
+        if ($prod_status === 'deleted') {
+            echo json_encode(['success' => false, 'error' => 'Product deleted by the seller']);
+            exit;
+        }
+    }
+}
+
 if ($action === 'send') {
     $receiver_id = $_POST['receiver_id'] ?? 0;
     $product_id = $_POST['product_id'] ?? 0;
@@ -53,6 +67,37 @@ if ($action === 'send') {
         }
     } else {
         echo json_encode(['success' => false, 'error' => 'Invalid audio parameters']);
+    }
+} elseif ($action === 'send_image') {
+    $receiver_id = $_POST['receiver_id'] ?? 0;
+    $product_id = $_POST['product_id'] ?? 0;
+
+    if ($receiver_id && $product_id && isset($_FILES['image_data'])) {
+        try {
+            $upload_dir = '../uploads/chat_images/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0777, true);
+            }
+
+            $ext = pathinfo($_FILES['image_data']['name'], PATHINFO_EXTENSION);
+            if (empty($ext)) $ext = 'jpg';
+            $file_name = 'img_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
+            $target_file = $upload_dir . $file_name;
+
+            if (move_uploaded_file($_FILES['image_data']['tmp_name'], $target_file)) {
+                $db_path = '[IMAGE]:uploads/chat_images/' . $file_name;
+
+                $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$my_id, $receiver_id, $product_id, $db_path]);
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Failed to save image file']);
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Invalid image parameters']);
     }
 } elseif ($action === 'fetch') {
     $other_id = $_POST['other_id'] ?? $_GET['other_id'] ?? 0;

@@ -60,6 +60,7 @@
   color: var(--text-h);
   background: linear-gradient(135deg, var(--accent), #3b82f6);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -101,13 +102,7 @@
   box-sizing: border-box;
 }
 
-@media (max-width: 900px) {
-  .app-main {
-    flex-direction: column;
-    padding: 1rem;
-    gap: 1.5rem;
-  }
-}
+/* Media query removed to maintain desktop layout on mobile */
 
 /* Sidebar Filters */
 .filters-sidebar {
@@ -122,12 +117,7 @@
   text-align: left;
 }
 
-@media (max-width: 900px) {
-  .filters-sidebar {
-    width: 100%;
-    box-sizing: border-box;
-  }
-}
+/* Media query removed to maintain desktop layout on mobile */
 
 .section-title {
   font-size: 1.3rem;
@@ -360,6 +350,11 @@
   box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
 }
 
+.ad-type-badge.rent {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3);
+}
+
 .ad-type-badge.buy {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
@@ -390,6 +385,7 @@
   /* Multi-line clamp */
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   height: 2.6rem;
@@ -550,11 +546,7 @@
   min-height: 500px;
 }
 
-@media (max-width: 768px) {
-  .modal-body {
-    grid-template-columns: 1fr;
-  }
-}
+/* Media query removed to maintain desktop layout on mobile */
 
 .modal-gallery {
   background-color: var(--code-bg);
@@ -722,4 +714,475 @@
 .whatsapp-btn:hover {
   background-color: var(--whatsapp-hover);
   transform: translateY(-2px);
+}
+
+.chat-btn {
+  background-color: #10b981;
+  color: white;
+}
+
+.chat-btn:hover {
+  background-color: #059669;
+  transform: translateY(-2px);
+}
+
+/* Premium In-App Chat overlay */
+.chat-pane-app {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 500px;
+  max-height: 550px;
+  background-color: var(--bg);
+  box-sizing: border-box;
+  text-align: left;
+}
+
+/* Media query removed to maintain desktop layout on mobile */
+
+.chat-pane-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+
+.chat-back-btn {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  transition: var(--transition);
+}
+
+.chat-back-btn:hover {
+  background: var(--border);
+}
+
+.chat-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-username {
+  font-weight: 750;
+  font-size: 1.05rem;
+  color: var(--text-h);
+}
+
+.chat-status {
+  font-size: 0.75rem;
+  color: #10b981;
+  font-weight: 600;
+}
+
+.chat-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.chat-bubble-row {
+  display: flex;
+  width: 100%;
+}
+
+.chat-bubble-row.msg-me {
+  justify-content: flex-end;
+}
+
+.chat-bubble-row.msg-other {
+  justify-content: flex-start;
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.msg-me .chat-bubble {
+  background-color: #10b981;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.msg-other .chat-bubble {
+  background-color: var(--code-bg);
+  color: var(--text-h);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.message-text {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.msg-time {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  align-self: flex-end;
+}
+
+.msg-me .msg-time {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chat-loading,
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem;
+  opacity: 0.8;
+}
+
+.chat-mini-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+
+/* Chat inputs styling */
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.chat-text-input {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background-color: var(--code-bg);
+  color: var(--text-h);
+  outline: none;
+  font-size: 0.95rem;
+  transition: var(--transition);
+}
+
+.chat-text-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.btn-send-react,
+.btn-mic-react,
+.btn-discard {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-send-react {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-send-react:hover {
+  transform: scale(1.06);
+}
+
+.btn-mic-react {
+  background-color: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+}
+
+.btn-mic-react:hover {
+  background-color: var(--border);
+  transform: scale(1.06);
+}
+
+.btn-mic-react.recording-active {
+  background-color: #ef4444 !important;
+  color: white !important;
+  border-color: #ef4444 !important;
+  animation: recordingPulseReact 1.2s infinite alternate;
+}
+
+@keyframes recordingPulseReact {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.08); box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+}
+
+.recording-status {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 8px 16px;
+  border-radius: 24px;
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  animation: recordingBlinkReact 1s infinite alternate;
+}
+
+@keyframes recordingBlinkReact {
+  0% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.recording-timer {
+  font-family: monospace;
+  font-size: 1.05rem;
+}
+
+.btn-discard {
+  margin-left: auto;
+  background: transparent;
+  color: #ef4444;
+  font-size: 1.1rem;
+}
+
+.btn-discard:hover {
+  transform: scale(1.1);
+}
+
+/* React Audio note player */
+.message-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  min-width: 160px;
+}
+
+.react-audio-btn {
+  background: white;
+  color: #10b981;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: var(--transition);
+}
+
+.msg-other .react-audio-btn {
+  background: #10b981;
+  color: white;
+}
+
+.react-audio-btn:hover {
+  transform: scale(1.05);
+}
+
+.audio-duration-tag {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Premium React Splash Loader Screen */
+.react-loader-wrapper {
+  position: fixed;
+  inset: 0;
+  background-color: #2E7D32; /* Primary green */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: white;
+}
+
+.react-loader-logo {
+  font-size: 38px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+  animation: react-pulse 2s infinite ease-in-out;
+}
+
+.react-loader-tagline {
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 30px;
+}
+
+.react-loader-location-status {
+  position: absolute;
+  bottom: 40px;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 10px 20px;
+  border-radius: 30px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.react-loader-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: react-spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes react-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.04); opacity: 0.9; }
+}
+
+@keyframes react-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Swiggy-Style Fading Splash Transition */
+.react-loader-wrapper {
+  transition: opacity 0.8s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.react-loader-wrapper.loader-hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Swiggy-style React Top Location Bar */
+.app-location-bar {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.location-display-react {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-h);
+  transition: opacity 0.2s ease;
+  user-select: none;
+}
+
+.location-display-react:hover {
+  opacity: 0.85;
+}
+
+.loc-marker {
+  font-size: 1.05rem;
+  color: #10b981;
+}
+
+.current-location-text-react {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-h);
+}
+
+.coords-text-react {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.65;
+  margin-left: 6px;
+}
+
+.chevron-icon {
+  font-size: 0.7rem;
+  margin-left: 4px;
+  opacity: 0.75;
+}
+
+/* Swiggy-style Pulse Locating Dot (React) */
+.location-pulse-dot-react {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: locationPulseReact 1.2s infinite ease-in-out;
+  vertical-align: middle;
+}
+
+@keyframes locationPulseReact {
+  0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Media Queries for responsive location display */
+@media (max-width: 768px) {
+  .app-location-bar {
+    padding: 0.6rem 1.25rem;
+  }
+  .location-display-react {
+    font-size: 0.85rem;
+  }
 }

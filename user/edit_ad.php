@@ -206,6 +206,7 @@ function compressProductImageLocal($source, $destination, $max_width, $quality)
 
 require_once '../includes/header.php';
 ?>
+<link rel="stylesheet" href="../assets/css/post_ad.css?v=1.3">
 
 <div class="post-ad-page-premium">
     <div class="container">
@@ -267,6 +268,12 @@ require_once '../includes/header.php';
                                         <input type="radio" name="type" value="sell" <?= $product['type'] == 'sell' ? 'checked' : '' ?> onchange="updateTypeUI(this.value)">
                                         <span class="btn-content">
                                             <i class="fa fa-tag"></i> Sell Item
+                                        </span>
+                                    </label>
+                                    <label class="type-btn">
+                                        <input type="radio" name="type" value="rent" <?= $product['type'] == 'rent' ? 'checked' : '' ?> onchange="updateTypeUI(this.value)">
+                                        <span class="btn-content">
+                                            <i class="fa fa-key"></i> Rent Item
                                         </span>
                                     </label>
                                     <label class="type-btn">

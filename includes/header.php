@@ -58,6 +58,7 @@ try {
     <script>
         const EnteangadiConfig = {
             baseUrl: '<?= $base_url ?>',
+            appLogo: '<?= !empty($app_settings['app_logo']) ? htmlspecialchars($app_settings['app_logo']) : 'uploads/logo/logo_1778137117.jpg' ?>',
             hasLocation: <?= isset($_SESSION['user_location']) ? 'true' : 'false' ?>,
             location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>
         };
@@ -88,6 +89,10 @@ try {
         <?php if (!empty($app_settings['app_tagline'])): ?>
             <div class="loader-tagline"><?= htmlspecialchars($app_settings['app_tagline']) ?></div>
         <?php endif; ?>
+
+        <div class="loader-location-status" id="loader-location-status">
+            <i class="fa fa-spinner fa-spin"></i> Detecting location...
+        </div>
     </div>
     <script>
         // Loader / Splash Screen logic
@@ -95,28 +100,32 @@ try {
             const loader = document.getElementById('loader-wrapper');
             if (!loader) return;
 
+            // If we have already loaded the app in this session, hide the loader immediately to prevent showing on page shifts
+            if (sessionStorage.getItem('hasLoadedBefore') === 'true') {
+                loader.style.display = 'none';
+                window.hideLoader = () => {};
+                return;
+            }
+
             // Add a class for the "entrance" animation
             loader.classList.add('loader-active');
 
-            const hideLoader = () => {
-                loader.classList.add('loader-hide');
+            window.hideLoader = () => {
                 setTimeout(() => {
-                    loader.style.display = 'none';
-                    sessionStorage.setItem('loaderShown', 'true');
-                }, 800); // Wait for fade out
+                    loader.classList.add('loader-hide');
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                        sessionStorage.setItem('hasLoadedBefore', 'true');
+                    }, 800); // Wait for fade out
+                }, 800); // Premium brief display pause so user can read detected city
             };
 
-            if (sessionStorage.getItem('loaderShown')) {
-                loader.style.display = 'none';
-            } else {
-                window.addEventListener('load', () => {
-                    // Show for at least 1.5 seconds for branding effect
-                    setTimeout(hideLoader, 1500);
-                });
-
-                // Fallback timeout
-                setTimeout(hideLoader, 4000);
-            }
+            // Safeguard fallback: Always hide loader after maximum 6.5s to ensure app access
+            setTimeout(() => {
+                if (loader.style.display !== 'none') {
+                    window.hideLoader();
+                }
+            }, 6500);
         })();
 
         function toggleTheme() {

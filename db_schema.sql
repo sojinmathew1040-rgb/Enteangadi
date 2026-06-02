@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS products (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     price DECIMAL(10, 2) NOT NULL,
-    type ENUM('sell', 'buy') DEFAULT 'sell',
+    type ENUM('sell', 'buy', 'rent') DEFAULT 'sell',
     expiry_date DATE DEFAULT NULL,
     whatsapp_number VARCHAR(20) DEFAULT NULL,
     phone_number VARCHAR(20) DEFAULT NULL,

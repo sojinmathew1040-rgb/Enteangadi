@@ -43,6 +43,17 @@ function renderMessages(messages) {
         return;
     }
 
+    // Trigger native/web notifications for incoming new messages
+    if (!isFirstLoad && messages.length > lastMessageCount) {
+        const newMessages = messages.slice(lastMessageCount);
+        newMessages.forEach(msg => {
+            const isMe = typeof myId !== 'undefined' && msg.sender_id == myId;
+            if (!isMe && window.EnteangadiMobile && typeof window.EnteangadiMobile.showLocalNotification === 'function') {
+                window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'Buyer/Seller', msg.message_text);
+            }
+        });
+    }
+
     lastMessageCount = messages.length;
 
     let html = '';
@@ -64,6 +75,14 @@ function renderMessages(messages) {
                         <div class="audio-progress-wave"></div>
                     </div>
                     <span class="audio-duration-tag">Voice note</span>
+                </div>
+            `;
+        } else if (msg.message_text.startsWith('[IMAGE]:')) {
+            const imgPath = msg.message_text.replace('[IMAGE]:', '');
+            const imgFullUrl = `${EnteangadiConfig.baseUrl}/${imgPath}`;
+            messageContent = `
+                <div class="message-image-wrapper">
+                    <img src="${imgFullUrl}" class="message-chat-image" onclick="window.open('${imgFullUrl}', '_blank')" alt="Shared Photo">
                 </div>
             `;
         } else {
@@ -142,6 +161,7 @@ function sendMessage() {
     if (!text) return;
 
     messageInput.value = '';
+    updateInputButtons();
     messageInput.focus();
 
     if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
@@ -177,6 +197,10 @@ async function toggleVoiceRecording() {
             // Trigger native mobile OS permission requests if in WebView wrapper
             if (window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile()) {
                 await window.EnteangadiMobile.requestAllPermissions();
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("SECURE_CONTEXT_REQUIRED");
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -218,7 +242,11 @@ async function toggleVoiceRecording() {
 
         } catch (err) {
             console.error("Microphone capture failed:", err);
-            alert("Microphone permission is required to record voice notes.");
+            if (err.message === "SECURE_CONTEXT_REQUIRED" || err.name === "TypeError") {
+                alert("Microphone access requires a secure context (HTTPS or localhost).\n\nTo test voice recording on your phone, run 'adb reverse tcp:80 tcp:80' and configure your Capacitor config to load from 'http://localhost/Enteangadi'.");
+            } else {
+                alert("Microphone permission is required to record voice notes.");
+            }
         }
     } else {
         stopVoiceRecording(true);
@@ -244,13 +272,13 @@ function stopVoiceRecording(shouldSend) {
     const recStatus = document.getElementById('recording-status');
 
     if (msgInput) msgInput.style.display = 'block';
-    if (sendBtn) sendBtn.style.display = 'flex';
     if (recStatus) recStatus.style.display = 'none';
     if (micBtn) {
         micBtn.innerHTML = '<i class="fa fa-microphone"></i>';
         micBtn.classList.remove('recording-active');
         micBtn.title = "Record Voice Note";
     }
+    updateInputButtons();
 }
 
 async function uploadAudioMessage(blob) {
@@ -290,6 +318,44 @@ async function uploadAudioMessage(blob) {
     }
 }
 
+async function uploadChatImage(file) {
+    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
+    if (!file) return;
+
+    const chatBox = document.getElementById('chat-box');
+    if (chatBox) {
+        const tempRow = document.createElement('div');
+        tempRow.className = 'message-row msg-me temp-sending-image';
+        tempRow.innerHTML = `
+            <div class="message-bubble" style="opacity: 0.7;">
+                <div class="message-text"><i class="fa fa-spinner fa-spin"></i> Sending photo...</div>
+            </div>
+        `;
+        chatBox.appendChild(tempRow);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'send_image');
+    formData.append('receiver_id', otherId);
+    formData.append('product_id', productId);
+    formData.append('image_data', file);
+
+    try {
+        const response = await fetch('api_chat.php', { method: 'POST', body: formData });
+        const result = await response.json();
+        if (result.success) {
+            fetchMessages();
+        } else {
+            alert(result.error || "Failed to upload image.");
+            fetchMessages();
+        }
+    } catch (e) {
+        console.error("Image upload failed:", e);
+        fetchMessages();
+    }
+}
+
 function escapeHtml(unsafe) {
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
@@ -312,12 +378,29 @@ function deleteChat() {
     }
 }
 
+// Toggle send/mic buttons based on input text content
+function updateInputButtons() {
+    const messageInput = document.getElementById('message-input');
+    const micBtn = document.getElementById('micBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    if (!messageInput || !micBtn || !sendBtn) return;
+
+    if (messageInput.value.trim() === '') {
+        sendBtn.style.display = 'none';
+        micBtn.style.display = 'flex';
+    } else {
+        sendBtn.style.display = 'flex';
+        micBtn.style.display = 'none';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('message-input');
     if (messageInput) {
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
+        messageInput.addEventListener('input', updateInputButtons);
     }
 
     // Bind recording buttons
@@ -331,6 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelRecBtn.addEventListener('click', () => stopVoiceRecording(false));
     }
 
+    updateInputButtons();
     fetchMessages();
     setInterval(fetchMessages, 3000);
 });

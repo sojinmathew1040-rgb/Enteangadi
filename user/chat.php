@@ -26,7 +26,7 @@ $stmt->execute([$other_user_id]);
 $other_user = $stmt->fetch();
 
 $stmt2 = $pdo->prepare("
-    SELECT p.title, p.price, 
+    SELECT p.title, p.price, p.status, 
     (SELECT image_path FROM product_images WHERE product_id = p.id ORDER BY id ASC LIMIT 1) as thumbnail 
     FROM products p 
     WHERE p.id = ?
@@ -102,26 +102,38 @@ require_once '../includes/header.php';
 
             <!-- Input Area -->
             <div class="chat-input-area">
-                <div class="input-wrapper-premium">
-                    <div id="recording-status" class="recording-status-premium" style="display: none;">
-                        <span class="recording-dot animate-pulse"></span>
-                        <span class="recording-timer">00:00</span>
-                        <span class="recording-label">Recording Voice...</span>
-                        <button type="button" id="cancelRecBtn" class="btn-cancel-rec" title="Discard">
-                            <i class="fa fa-trash-alt"></i>
+                <?php if ($product['status'] === 'deleted'): ?>
+                    <div class="chat-disabled-banner" style="background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                        <i class="fa fa-exclamation-triangle" style="font-size: 18px;"></i>
+                        <span>This product has been deleted by the seller. Chat is disabled.</span>
+                    </div>
+                <?php else: ?>
+                    <div class="input-wrapper-premium">
+                        <div id="recording-status" class="recording-status-premium" style="display: none;">
+                            <span class="recording-dot animate-pulse"></span>
+                            <span class="recording-timer">00:00</span>
+                            <span class="recording-label">Recording Voice...</span>
+                            <button type="button" id="cancelRecBtn" class="btn-cancel-rec" title="Discard">
+                                <i class="fa fa-trash-alt"></i>
+                            </button>
+                        </div>
+                        
+                        <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                        
+                        <button type="button" id="micBtn" class="btn-mic-chat" title="Record Voice Note">
+                            <i class="fa fa-microphone"></i>
+                        </button>
+                        
+                        <button type="button" id="imgBtn" class="btn-img-chat" title="Send Image" onclick="document.getElementById('chat-image-input').click()" style="background: transparent; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; transition: all 0.3s;">
+                            <i class="fa fa-camera"></i>
+                        </button>
+                        <input type="file" id="chat-image-input" accept="image/*" multiple style="display: none;" onchange="(async () => { if (this.files.length) { for (let i = 0; i < this.files.length; i++) { await uploadChatImage(this.files[i]); } this.value = ''; } })()">
+                        
+                        <button onclick="sendMessage()" id="sendBtn" class="btn-send-chat">
+                            <i class="fa fa-paper-plane"></i>
                         </button>
                     </div>
-                    
-                    <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
-                    
-                    <button type="button" id="micBtn" class="btn-mic-chat" title="Record Voice Note">
-                        <i class="fa fa-microphone"></i>
-                    </button>
-                    
-                    <button onclick="sendMessage()" id="sendBtn" class="btn-send-chat">
-                        <i class="fa fa-paper-plane"></i>
-                    </button>
-                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

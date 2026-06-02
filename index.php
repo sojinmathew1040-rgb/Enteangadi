@@ -39,7 +39,7 @@ if ($max_price !== null && $max_price !== '') {
     $params[] = floatval($max_price);
 }
 
-if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
+if ($ad_type && in_array($ad_type, ['buy', 'sell', 'rent'])) {
     $where_clause .= " AND p.type = ?";
     $params[] = $ad_type;
 }
@@ -216,6 +216,9 @@ if (isset($_SESSION['user_id'])) {
                             <button type="button" class="type-btn <?= ($ad_type === 'sell') ? 'active' : '' ?>"
                                 onclick="setAdType('sell')"
                                 style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">Selling</button>
+                            <button type="button" class="type-btn <?= ($ad_type === 'rent') ? 'active' : '' ?>"
+                                onclick="setAdType('rent')"
+                                style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">Rent</button>
                             <button type="button" class="type-btn <?= ($ad_type === 'buy') ? 'active' : '' ?>"
                                 onclick="setAdType('buy')"
                                 style="flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; border-radius: 10px; margin: 2px;">Wanted</button>
@@ -341,6 +344,8 @@ if (isset($_SESSION['user_id'])) {
                 <a href="product.php?id=<?= $product['id'] ?>" class="product-card">
                     <?php if ($product['type'] == 'buy'): ?>
                         <div class="badge-wanted"><?= __('wanted') ?></div>
+                    <?php elseif ($product['type'] == 'rent'): ?>
+                        <div class="badge-rent" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: white; position: absolute; top: 12px; left: 12px; padding: 6px 12px; border-radius: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); z-index: 2;">For Rent</div>
                     <?php else: ?>
                         <div class="badge-selling"><?= __('for_sale') ?></div>
                         <?php if (!empty($product['expiry_date'])): ?>

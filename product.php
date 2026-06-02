@@ -53,6 +53,7 @@ try {
 
 require_once 'includes/header.php';
 ?>
+<link rel="stylesheet" href="assets/css/product.css?v=1.2">
 
 <div class="product-page-premium">
     <?php if ($product): ?>
@@ -87,7 +88,7 @@ require_once 'includes/header.php';
                     <div class="main-gallery-wrapper">
                         <?php if (!empty($images)): ?>
                             <div class="badge-type status-<?= $product['type'] ?>">
-                                <?= $product['type'] == 'buy' ? 'Wanted' : 'For Sale' ?>
+                                <?= $product['type'] == 'buy' ? 'Wanted' : ($product['type'] == 'rent' ? 'For Rent' : 'For Sale') ?>
                             </div>
                             <div class="image-carousel-premium" id="mainCarousel" onscroll="updateSliderCounter(this)">
                                 <?php foreach ($images as $img): ?>
@@ -132,7 +133,7 @@ require_once 'includes/header.php';
                     <div class="sticky-info-card">
                         <div class="price-header-premium">
                             <div class="price-box">
-                                <span class="price-label"><?= $product['type'] == 'buy' ? 'Budget' : 'Price' ?></span>
+                                <span class="price-label"><?= $product['type'] == 'buy' ? 'Budget' : ($product['type'] == 'rent' ? 'Rent Price' : 'Price') ?></span>
                                 <h2 class="price-value">₹ <?= number_format($product['price'], 0) ?></h2>
                             </div>
                             <div class="info-actions">

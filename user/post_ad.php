@@ -187,6 +187,7 @@ function compressImage($source, $destination, $max_width, $quality)
 
 require_once '../includes/header.php';
 ?>
+<link rel="stylesheet" href="../assets/css/post_ad.css?v=1.3">
 
 <div class="post-ad-page-premium">
     <div class="container">
@@ -253,6 +254,13 @@ require_once '../includes/header.php';
                                         <span class="btn-content">
                                             <i class="fa fa-tag"></i>
                                             I want to Sell
+                                        </span>
+                                    </label>
+                                    <label class="type-btn">
+                                        <input type="radio" name="type" value="rent" onchange="updateTypeUI(this.value)">
+                                        <span class="btn-content">
+                                            <i class="fa fa-key"></i>
+                                            I want to Rent
                                         </span>
                                     </label>
                                     <label class="type-btn">

@@ -11,7 +11,22 @@ $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
+    if (isset($_POST['action']) && $_POST['action'] === 'delete_picture') {
+        // Fetch old profile picture to delete it
+        $old_pic_stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ?");
+        $old_pic_stmt->execute([$user_id]);
+        $old_pic = $old_pic_stmt->fetchColumn();
+
+        $stmt = $pdo->prepare("UPDATE users SET profile_picture = NULL WHERE id = ?");
+        if ($stmt->execute([$user_id])) {
+            if ($old_pic && file_exists('../' . $old_pic)) {
+                unlink('../' . $old_pic);
+            }
+            $success = "Profile picture deleted successfully!";
+        } else {
+            $error = "Failed to delete profile picture.";
+        }
+    } else if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
         $upload_dir = '../uploads/profiles/';
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0777, true);
@@ -96,8 +111,13 @@ require_once '../includes/header.php';
                     <h1><?= htmlspecialchars($user['username']) ?></h1>
                     <p><i class="fa fa-phone"></i> <?= htmlspecialchars($user['phone_number']) ?></p>
                     <?php if (!empty($user['email'])): ?>
-                        <p style="margin-top: 4px;"><i class="fa fa-envelope"></i> <?= htmlspecialchars($user['email']) ?>
-                        </p>
+                        <p style="margin-top: 4px;"><i class="fa fa-envelope"></i> <?= htmlspecialchars($user['email']) ?></p>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($user['profile_picture'])): ?>
+                        <button type="button" onclick="deleteProfilePicture()" class="btn-delete-avatar-premium" style="margin-top: 10px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #EF4444; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                            <i class="fa fa-trash-alt"></i> Delete Profile Picture
+                        </button>
                     <?php endif; ?>
                 </div>
 
@@ -106,6 +126,18 @@ require_once '../includes/header.php';
                     <input type="file" id="profile_picture_input" name="profile_picture" accept="image/*"
                         onchange="document.getElementById('profile_pic_form').submit()">
                 </form>
+
+                <form id="delete_pic_form" action="profile.php" method="POST" style="display: none;">
+                    <input type="hidden" name="action" value="delete_picture">
+                </form>
+
+                <script>
+                function deleteProfilePicture() {
+                    if (confirm("Are you sure you want to delete your profile picture?")) {
+                        document.getElementById('delete_pic_form').submit();
+                    }
+                }
+                </script>
             </div>
         </div>
     </div>

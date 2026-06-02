@@ -28,12 +28,28 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 subprojects {
+    project.plugins.withId('com.android.library') {
+        def getDefProjFile = project.android.class.getMethod("getDefaultProguardFile", String.class)
+        project.android.metaClass.getDefaultProguardFile = { String name ->
+            return getDefProjFile.invoke(delegate, name == 'proguard-android.txt' ? 'proguard-android-optimize.txt' : name)
+        }
+    }
+    project.plugins.withId('com.android.application') {
+        def getDefProjFile = project.android.class.getMethod("getDefaultProguardFile", String.class)
+        project.android.metaClass.getDefaultProguardFile = { String name ->
+            return getDefProjFile.invoke(delegate, name == 'proguard-android.txt' ? 'proguard-android-optimize.txt' : name)
+        }
+    }
+
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             project.android.buildTypes.each { buildType ->
-                def files = buildType.proguardFiles
-                if (files.contains(project.getDefaultProguardFile('proguard-android.txt'))) {
-                    buildType.setProguardFiles([project.getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'])
+                def hasUnoptimized = buildType.proguardFiles.any { it.name == 'proguard-android.txt' }
+                if (hasUnoptimized) {
+                    def newFiles = buildType.proguardFiles.collect { 
+                        it.name == 'proguard-android.txt' ? project.android.getDefaultProguardFile('proguard-android-optimize.txt') : it
+                    }
+                    buildType.setProguardFiles(newFiles)
                 }
             }
         }

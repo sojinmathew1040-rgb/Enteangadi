@@ -105,7 +105,13 @@ function validateCurrentStep() {
 function updateTypeUI(type) {
     const priceLabel = document.getElementById('priceLabel');
     if (priceLabel) {
-        priceLabel.innerText = (type === 'sell') ? 'Price (₹) *' : 'Budget (₹) *';
+        if (type === 'sell') {
+            priceLabel.innerText = 'Price (₹) *';
+        } else if (type === 'rent') {
+            priceLabel.innerText = 'Rent Price (₹) *';
+        } else {
+            priceLabel.innerText = 'Budget (₹) *';
+        }
     }
 }
 

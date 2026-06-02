@@ -173,7 +173,7 @@ require_once '../includes/header.php';
                     $is_inactive = ($ad['status'] === 'inactive');
                     $is_deleted = ($ad['status'] === 'deleted');
                     ?>
-                    <div class="my-ad-card <?= !$is_active ? 'ad-card-dimmed' : '' ?>">
+                    <div class="my-ad-card <?= !$is_active ? 'ad-card-dimmed' : '' ?>" style="cursor: pointer;" onclick="if(!event.target.closest('.action-tools-grid') && !event.target.closest('.modal-overlay-premium') && !event.target.closest('#feedbackModal')) window.location.href='../product.php?id=<?= $ad['id'] ?>';">
                         <div class="ad-card-image-box">
                             <?php if ($ad['main_image']): ?>
                                 <img src="../<?= htmlspecialchars($ad['main_image']) ?>" alt="<?= htmlspecialchars($ad['title']) ?>"
@@ -199,11 +199,6 @@ require_once '../includes/header.php';
                             </div>
 
                             <div class="ad-card-actions-premium">
-                                <!-- Primary Action: View -->
-                                <a href="../product.php?id=<?= $ad['id'] ?>" class="btn-view-listing" title="View Listing">
-                                    <i class="fa fa-external-link-alt"></i> View Listing
-                                </a>
-
                                 <div class="action-tools-grid">
                                     <?php if ($is_active): ?>
                                         <a href="edit_ad.php?id=<?= $ad['id'] ?>" class="tool-btn edit" title="Edit Listing">

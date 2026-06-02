@@ -1,8 +1,6 @@
 // client/src/utils/apiClient.js
 
-// Replace this with your computer's local LAN IP (e.g., '192.168.1.15') 
-// when testing on a physical mobile device connected to the same Wi-Fi network.
-const HOST_IP = '192.168.1.3';
+const HOST_IP = '172.30.19.249';
 
 /**
  * Resolves the backend base URL dynamically depending on whether the app
@@ -50,6 +48,7 @@ export const apiFetch = async (endpoint, options = {}) => {
   }
 
   const response = await fetch(url, {
+    credentials: 'include',
     ...options,
     headers,
   });

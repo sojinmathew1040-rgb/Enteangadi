@@ -128,27 +128,44 @@
 .premium-textarea {
     width: 100%;
     background: #F8FAFC;
-    border: 2px solid #F1F5F9;
+    border: 2px solid #E2E8F0;
     border-radius: 16px;
     padding: 14px 20px;
     font-size: 15px;
     color: var(--text-dark);
-    transition: 0.3s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.01);
 }
 
-.premium-input:focus {
+.premium-input:focus,
+.premium-select:focus,
+.premium-textarea:focus {
     border-color: var(--primary-green);
-    background: white;
+    background: #FFFFFF;
     outline: none;
+    box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.12), 0 4px 12px rgba(46, 125, 50, 0.04);
 }
 
-/* Type Button Group */
+.premium-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 20px center;
+    background-size: 16px;
+    padding-right: 48px;
+    cursor: pointer;
+}
+
+/* Type Button Group Cards */
 .type-button-group {
     display: flex;
     background: #F1F5F9;
-    padding: 6px;
-    border-radius: 18px;
-    gap: 6px;
+    padding: 8px;
+    border-radius: 24px;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .type-btn {
@@ -162,25 +179,82 @@
 
 .type-btn .btn-content {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 12px 20px;
-    border-radius: 14px;
-    font-size: 14px;
+    gap: 8px;
+    padding: 16px 10px;
+    border-radius: 18px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--text-muted);
-    transition: all 0.3s;
+    border: 2px solid transparent;
+    background: transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: center;
 }
 
-.type-btn input:checked+.btn-content {
-    background: white;
-    color: var(--primary-green);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+.type-btn:hover .btn-content {
+    background: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
 }
 
-.type-btn .btn-content i {
+/* Sell selection styling */
+.type-btn input[value="sell"]:checked + .btn-content {
+    background: #FFFFFF !important;
+    border-color: #2E7D32 !important;
+    color: #1B5E20 !important;
+    box-shadow: 0 8px 24px rgba(46, 125, 50, 0.08) !important;
+}
+.type-btn input[value="sell"] + .btn-content i {
+    color: #2E7D32;
+    font-size: 20px;
+}
+
+/* Rent selection styling */
+.type-btn input[value="rent"]:checked + .btn-content {
+    background: #FFFFFF !important;
+    border-color: #1565C0 !important;
+    color: #0D47A1 !important;
+    box-shadow: 0 8px 24px rgba(21, 101, 192, 0.08) !important;
+}
+.type-btn input[value="rent"] + .btn-content i {
+    color: #1565C0;
+    font-size: 20px;
+}
+
+/* Wanted selection styling */
+.type-btn input[value="buy"]:checked + .btn-content {
+    background: #FFFFFF !important;
+    border-color: #7B1FA2 !important;
+    color: #4A148C !important;
+    box-shadow: 0 8px 24px rgba(123, 31, 162, 0.08) !important;
+}
+.type-btn input[value="buy"] + .btn-content i {
+    color: #7B1FA2;
+    font-size: 20px;
+}
+
+/* Price prefix layout */
+.price-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.price-input-wrapper .currency-symbol {
+    position: absolute;
+    left: 20px;
     font-size: 16px;
+    font-weight: 800;
+    color: var(--primary-green);
+    pointer-events: none;
+    transition: color 0.3s;
+}
+
+.premium-input.with-prefix {
+    padding-left: 42px !important;
 }
 
 .form-actions-premium {
@@ -636,4 +710,130 @@
 .btn-view-ad-premium:hover {
     transform: translateY(-3px);
     box-shadow: 0 15px 30px rgba(46, 125, 50, 0.3);
+}
+
+/* Premium Mobile View & Web View Redesign */
+@media (max-width: 768px) {
+    .form-grid-premium {
+        grid-template-columns: 1fr !important;
+        gap: 16px;
+    }
+    
+    .full-width {
+        grid-column: span 1 !important;
+    }
+
+    .form-section-premium {
+        padding: 24px 16px !important;
+        border-radius: 24px !important;
+        margin-bottom: 16px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+    }
+
+    .section-header {
+        margin-bottom: 24px !important;
+        gap: 12px !important;
+    }
+
+    .stepper-wrapper-premium {
+        gap: 6px !important;
+        margin-bottom: 30px !important;
+    }
+
+    .stepper-wrapper-premium .step-line {
+        flex: 0 0 20px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .type-button-group {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1fr !important;
+        background: transparent !important;
+        padding: 0 !important;
+        gap: 8px !important;
+    }
+
+    .type-btn .btn-content {
+        background: #F8FAFC !important;
+        border-radius: 18px !important;
+        border: 2px solid transparent !important;
+        padding: 12px 6px !important;
+        font-size: 11px !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+    }
+
+    .type-btn input[value="sell"]:checked+.btn-content {
+        background: white !important;
+        border-color: #2E7D32 !important;
+        color: #1B5E20 !important;
+        box-shadow: 0 8px 16px rgba(46, 125, 50, 0.08) !important;
+    }
+
+    .type-btn input[value="rent"]:checked+.btn-content {
+        background: white !important;
+        border-color: #1565C0 !important;
+        color: #0D47A1 !important;
+        box-shadow: 0 8px 16px rgba(21, 101, 192, 0.08) !important;
+    }
+
+    .type-btn input[value="buy"]:checked+.btn-content {
+        background: white !important;
+        border-color: #7B1FA2 !important;
+        color: #4A148C !important;
+        box-shadow: 0 8px 16px rgba(123, 31, 162, 0.08) !important;
+    }
+
+    .premium-contact-toggles {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .premium-location-wrapper {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .btn-detect-premium {
+        padding: 14px 20px !important;
+        width: 100% !important;
+        border-radius: 16px !important;
+        height: 50px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .photo-management-side-wise {
+        padding: 12px !important;
+        border-radius: 20px !important;
+        gap: 12px !important;
+    }
+
+    .add-photo-btn-card, .preview-item {
+        width: 90px !important;
+        height: 90px !important;
+        min-width: 90px !important;
+    }
+
+    .post-success-card {
+        padding: 40px 20px !important;
+        border-radius: 24px !important;
+        margin: 20px 10px !important;
+    }
+
+    .form-actions-premium {
+        flex-direction: column-reverse !important;
+        gap: 12px !important;
+        margin-top: 20px !important;
+    }
+
+    .btn-next-premium, .btn-post-premium, .btn-back-premium {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 16px 20px !important;
+    }
 }

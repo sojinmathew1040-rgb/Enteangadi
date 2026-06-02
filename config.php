@@ -6,8 +6,10 @@ define('SIGHTENGINE_USER', ''); // Enter your Sightengine User ID here
 define('SIGHTENGINE_SECRET', ''); // Enter your Sightengine Secret Key here
 define('MODERATION_STRICTNESS', 0.70); // Probability threshold (70%)
 
-// Allow Cross-Origin Resource Sharing (CORS) for Decoupled Clients (Vite, Capacitor)
-header("Access-Control-Allow-Origin: *");
+// Allow Cross-Origin Resource Sharing (CORS) with Session Credentials (cookies) for Decoupled Clients (Vite, Capacitor)
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+header("Access-Control-Allow-Origin: " . ($origin !== '*' ? $origin : '*'));
+header("Access-Control-Allow-Credentials: true");
 header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 
@@ -177,11 +179,12 @@ try {
         $pdo->exec("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL");
     }
 
-    // Auto-add type column to products if missing (for Sell vs Buy)
+    // Auto-add type column to products if missing (for Sell vs Buy) and support 'rent'
     try {
         $pdo->query("SELECT type FROM products LIMIT 1");
+        $pdo->exec("ALTER TABLE products MODIFY COLUMN type ENUM('sell', 'buy', 'rent') DEFAULT 'sell'");
     } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN type ENUM('sell', 'buy') DEFAULT 'sell' AFTER category_id");
+        $pdo->exec("ALTER TABLE products ADD COLUMN type ENUM('sell', 'buy', 'rent') DEFAULT 'sell' AFTER category_id");
     }
 
     // Auto-add is_perishable column to categories if missing
