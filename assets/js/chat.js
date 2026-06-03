@@ -8,12 +8,214 @@ let lastMessageCount = 0;
 let currentPlayingAudio = null;
 let currentPlayingBtn = null;
 
+// Lightbox states for web chat
+let lightboxOpen = false;
+let lightboxImages = [];
+let lightboxIndex = 0;
+
 // MediaRecorder state variables
 let mediaRecorder = null;
 let audioChunks = [];
 let recordingTimerInterval = null;
 let recordingSeconds = 0;
 let isRecording = false;
+
+// Group consecutive images from the same sender sent within 60 seconds of each other
+function groupMessages(msgs) {
+    const grouped = [];
+    for (let i = 0; i < msgs.length; i++) {
+        const msg = msgs[i];
+        const isImage = msg.message_text && msg.message_text.startsWith('[IMAGE]:');
+
+        if (isImage) {
+            const imageUrl = msg.message_text.replace('[IMAGE]:', '');
+            const isMe = typeof myId !== 'undefined' && msg.sender_id == myId;
+            const lastGroup = grouped[grouped.length - 1];
+
+            if (
+                lastGroup &&
+                lastGroup.type === 'image_group' &&
+                lastGroup.sender_id === msg.sender_id
+            ) {
+                const firstMsgTime = new Date(lastGroup.created_at).getTime();
+                const currentMsgTime = new Date(msg.created_at).getTime();
+
+                if (Math.abs(currentMsgTime - firstMsgTime) < 60000) {
+                    lastGroup.images.push({
+                        id: msg.id,
+                        url: imageUrl,
+                        msg: msg
+                    });
+                    continue;
+                }
+            }
+
+            grouped.push({
+                type: 'image_group',
+                id: `img_group_${msg.id}`,
+                sender_id: msg.sender_id,
+                isMe: isMe,
+                created_at: msg.created_at,
+                images: [{
+                    id: msg.id,
+                    url: imageUrl,
+                    msg: msg
+                }]
+            });
+        } else {
+            grouped.push({
+                type: 'normal',
+                msg: msg
+            });
+        }
+    }
+    return grouped;
+}
+
+// Open fullscreen Lightbox slideshow
+function openLightbox(imagesUrls, index) {
+    lightboxImages = imagesUrls;
+    lightboxIndex = index;
+    lightboxOpen = true;
+
+    let overlay = document.getElementById('lightbox-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'lightbox-overlay';
+        overlay.className = 'lightbox-overlay';
+        overlay.innerHTML = `
+            <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+            <div class="lightbox-content" onclick="event.stopPropagation()">
+                <button class="lightbox-nav-btn prev" onclick="navigateLightbox(-1)">&lsaquo;</button>
+                <div class="lightbox-image-container">
+                    <img id="lightbox-image" class="lightbox-main-image" src="" alt="Lightbox View">
+                </div>
+                <button class="lightbox-nav-btn next" onclick="navigateLightbox(1)">&rsaquo;</button>
+                <div id="lightbox-counter" class="lightbox-counter"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', closeLightbox);
+    }
+
+    updateLightboxContent();
+    overlay.style.display = 'flex';
+}
+
+function closeLightbox() {
+    lightboxOpen = false;
+    const overlay = document.getElementById('lightbox-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+function navigateLightbox(dir) {
+    if (!lightboxImages.length) return;
+    lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
+    updateLightboxContent();
+}
+
+function updateLightboxContent() {
+    const img = document.getElementById('lightbox-image');
+    const counter = document.getElementById('lightbox-counter');
+    const prevBtn = document.querySelector('.lightbox-overlay .lightbox-nav-btn.prev');
+    const nextBtn = document.querySelector('.lightbox-overlay .lightbox-nav-btn.next');
+
+    if (img) {
+        img.src = lightboxImages[lightboxIndex];
+    }
+    if (counter) {
+        counter.innerText = `${lightboxIndex + 1} / ${lightboxImages.length}`;
+    }
+    if (prevBtn && nextBtn) {
+        const displayStyle = lightboxImages.length > 1 ? 'flex' : 'none';
+        prevBtn.style.display = displayStyle;
+        nextBtn.style.display = displayStyle;
+    }
+}
+
+// Keydown handler for keyboard navigation
+document.addEventListener('keydown', (e) => {
+    if (!lightboxOpen) return;
+    if (e.key === 'ArrowLeft') {
+        navigateLightbox(-1);
+    } else if (e.key === 'ArrowRight') {
+        navigateLightbox(1);
+    } else if (e.key === 'Escape') {
+        closeLightbox();
+    }
+});
+
+// Build WhatsApp-style HTML layout for the image group
+function renderImageGroupHTML(group) {
+    const count = group.images.length;
+    const imgUrls = group.images.map(img => `${EnteangadiConfig.baseUrl}/${img.url}`);
+    const imgUrlsJSON = JSON.stringify(imgUrls).replace(/"/g, '&quot;');
+
+    if (count === 1) {
+        const img = group.images[0];
+        const imgUrl = `${EnteangadiConfig.baseUrl}/${img.url}`;
+        return `
+            <div class="chat-image-single" onclick="openLightbox(${imgUrlsJSON}, 0)">
+                <img src="${imgUrl}" class="message-chat-image" alt="Shared Photo">
+            </div>
+        `;
+    }
+
+    if (count === 2) {
+        return `
+            <div class="chat-image-grid grid-2">
+                <div class="grid-item" onclick="openLightbox(${imgUrlsJSON}, 0)">
+                    <img src="${EnteangadiConfig.baseUrl}/${group.images[0].url}" alt="Shared Photo 1">
+                </div>
+                <div class="grid-item" onclick="openLightbox(${imgUrlsJSON}, 1)">
+                    <img src="${EnteangadiConfig.baseUrl}/${group.images[1].url}" alt="Shared Photo 2">
+                </div>
+            </div>
+        `;
+    }
+
+    if (count === 3) {
+        return `
+            <div class="chat-image-grid grid-3">
+                <div class="grid-left" onclick="openLightbox(${imgUrlsJSON}, 0)">
+                    <img src="${EnteangadiConfig.baseUrl}/${group.images[0].url}" alt="Shared Photo 1">
+                </div>
+                <div class="grid-right">
+                    <div class="grid-sub-item" onclick="openLightbox(${imgUrlsJSON}, 1)">
+                        <img src="${EnteangadiConfig.baseUrl}/${group.images[1].url}" alt="Shared Photo 2">
+                    </div>
+                    <div class="grid-sub-item" onclick="openLightbox(${imgUrlsJSON}, 2)">
+                        <img src="${EnteangadiConfig.baseUrl}/${group.images[2].url}" alt="Shared Photo 3">
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 4 or more photos
+    const displayImages = group.images.slice(0, 4);
+    const remaining = count - 3;
+
+    let gridHtml = '<div class="chat-image-grid grid-4">';
+    displayImages.forEach((img, idx) => {
+        const isLast = idx === 3;
+        const imgUrl = `${EnteangadiConfig.baseUrl}/${img.url}`;
+        gridHtml += `
+            <div class="grid-item" onclick="openLightbox(${imgUrlsJSON}, ${idx})">
+                <img src="${imgUrl}" alt="Shared Photo ${idx + 1}">
+                ${isLast && remaining > 1 ? `
+                    <div class="grid-overlay">
+                        <span>+${remaining}</span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    gridHtml += '</div>';
+    return gridHtml;
+}
 
 function fetchMessages() {
     if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
@@ -57,49 +259,61 @@ function renderMessages(messages) {
     lastMessageCount = messages.length;
 
     let html = '';
-    messages.forEach((msg) => {
-        const isMe = typeof myId !== 'undefined' && msg.sender_id == myId;
-        const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const groups = groupMessages(messages);
+    groups.forEach((group) => {
+        if (group.type === 'image_group') {
+            const isMe = group.isMe;
+            const lastImageMsg = group.images[group.images.length - 1].msg;
+            const time = new Date(lastImageMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        let messageContent = '';
-        if (msg.message_text.startsWith('[AUDIO]:')) {
-            const audioPath = msg.message_text.replace('[AUDIO]:', '');
-            const audioFullUrl = `${EnteangadiConfig.baseUrl}/${audioPath}`;
-            messageContent = `
-                <div class="message-audio-player">
-                    <button type="button" class="audio-play-btn" onclick="toggleAudioPlayback(this, '${audioFullUrl}')">
-                        <i class="fa fa-play"></i>
-                    </button>
-                    <div class="audio-waveform-wrapper">
-                        <div class="audio-track-wave"></div>
-                        <div class="audio-progress-wave"></div>
+            html += `
+                <div class="message-row ${isMe ? 'msg-me' : 'msg-other'}">
+                    <div class="message-bubble message-bubble-images">
+                        ${renderImageGroupHTML(group)}
+                        <div class="message-meta">
+                            <span class="msg-time">${time}</span>
+                            ${isMe ? '<i class="fa fa-check-double msg-status"></i>' : ''}
+                        </div>
                     </div>
-                    <span class="audio-duration-tag">Voice note</span>
-                </div>
-            `;
-        } else if (msg.message_text.startsWith('[IMAGE]:')) {
-            const imgPath = msg.message_text.replace('[IMAGE]:', '');
-            const imgFullUrl = `${EnteangadiConfig.baseUrl}/${imgPath}`;
-            messageContent = `
-                <div class="message-image-wrapper">
-                    <img src="${imgFullUrl}" class="message-chat-image" onclick="window.open('${imgFullUrl}', '_blank')" alt="Shared Photo">
                 </div>
             `;
         } else {
-            messageContent = `<div class="message-text">${escapeHtml(msg.message_text)}</div>`;
-        }
+            const msg = group.msg;
+            const isMe = typeof myId !== 'undefined' && msg.sender_id == myId;
+            const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        html += `
-            <div class="message-row ${isMe ? 'msg-me' : 'msg-other'}">
-                <div class="message-bubble">
-                    ${messageContent}
-                    <div class="message-meta">
-                        <span class="msg-time">${time}</span>
-                        ${isMe ? '<i class="fa fa-check-double msg-status"></i>' : ''}
+            let messageContent = '';
+            if (msg.message_text.startsWith('[AUDIO]:')) {
+                const audioPath = msg.message_text.replace('[AUDIO]:', '');
+                const audioFullUrl = `${EnteangadiConfig.baseUrl}/${audioPath}`;
+                messageContent = `
+                    <div class="message-audio-player">
+                        <button type="button" class="audio-play-btn" onclick="toggleAudioPlayback(this, '${audioFullUrl}')">
+                            <i class="fa fa-play"></i>
+                        </button>
+                        <div class="audio-waveform-wrapper">
+                            <div class="audio-track-wave"></div>
+                            <div class="audio-progress-wave"></div>
+                        </div>
+                        <span class="audio-duration-tag">Voice note</span>
+                    </div>
+                `;
+            } else {
+                messageContent = `<div class="message-text">${escapeHtml(msg.message_text)}</div>`;
+            }
+
+            html += `
+                <div class="message-row ${isMe ? 'msg-me' : 'msg-other'}">
+                    <div class="message-bubble">
+                        ${messageContent}
+                        <div class="message-meta">
+                            <span class="msg-time">${time}</span>
+                            ${isMe ? '<i class="fa fa-check-double msg-status"></i>' : ''}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     });
 
     const isAtBottom = chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 150;

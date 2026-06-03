@@ -916,9 +916,23 @@ footer {
 }
 
 @keyframes locationPulse {
-    0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.4); }
-    50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 0 6px rgba(46, 125, 50, 0); }
-    100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(46, 125, 50, 0); }
+    0% {
+        transform: scale(0.8);
+        opacity: 0.5;
+        box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.4);
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+        box-shadow: 0 0 0 6px rgba(46, 125, 50, 0);
+    }
+
+    100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+        box-shadow: 0 0 0 0 rgba(46, 125, 50, 0);
+    }
 }
 
 /* Loader Page */
@@ -4196,6 +4210,7 @@ input[type="checkbox"]:checked+.toggle-btn {
     display: block;
     margin: 6px 0;
 }
+
 .message-chat-image {
     max-width: 220px;
     max-height: 160px;
@@ -4206,21 +4221,356 @@ input[type="checkbox"]:checked+.toggle-btn {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .message-chat-image:hover {
     transform: scale(1.03);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
+
 .msg-other .message-chat-image {
     border-color: rgba(0, 0, 0, 0.05);
 }
+
 .chat-disabled-banner i {
     animation: alertPulse 2.5s infinite ease-in-out;
 }
+
 @keyframes alertPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: scale(1);
     }
+
     50% {
         transform: scale(1.15);
+    }
+}
+
+/* WhatsApp-style Image Grid & Collage in Web Chat */
+.message-bubble-images.message-bubble {
+    padding: 3px;
+    background: transparent !important;
+    box-shadow: none;
+    border: none;
+}
+
+.msg-me .message-bubble-images.message-bubble {
+    background: var(--primary-green) !important;
+    border-radius: 20px;
+    border-bottom-right-radius: 4px;
+}
+
+.msg-other .message-bubble-images.message-bubble {
+    background: var(--background) !important;
+    border-radius: 20px;
+    border-bottom-left-radius: 4px;
+    border: 1px solid var(--border-color) !important;
+}
+
+.message-bubble-images .message-meta {
+    padding-right: 8px;
+    padding-bottom: 4px;
+    padding-top: 2px;
+}
+
+.chat-image-single {
+    cursor: pointer;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.chat-image-single .message-chat-image {
+    max-width: 280px;
+    max-height: 200px;
+    width: 100%;
+    object-fit: cover;
+    border-radius: 14px;
+    display: block;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.chat-image-grid {
+    display: grid;
+    gap: 4px;
+    border-radius: 14px;
+    overflow: hidden;
+    width: 280px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* 2 columns layout */
+.chat-image-grid.grid-2 {
+    grid-template-columns: 1fr 1fr;
+    height: 140px;
+}
+
+.chat-image-grid.grid-2 .grid-item {
+    width: 100%;
+    height: 100%;
+}
+
+.chat-image-grid.grid-2 .grid-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+
+/* 3 images: 1 large left, 2 stacked right */
+.chat-image-grid.grid-3 {
+    display: flex;
+    height: 180px;
+    gap: 4px;
+}
+
+.chat-image-grid.grid-3 .grid-left {
+    flex: 1.2;
+    height: 100%;
+    overflow: hidden;
+}
+
+.chat-image-grid.grid-3 .grid-left img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+
+.chat-image-grid.grid-3 .grid-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    height: 100%;
+}
+
+.chat-image-grid.grid-3 .grid-right .grid-sub-item {
+    flex: 1;
+    height: 50%;
+    overflow: hidden;
+}
+
+.chat-image-grid.grid-3 .grid-right .grid-sub-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+
+/* 4 or more images: 2x2 grid */
+.chat-image-grid.grid-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 200px;
+}
+
+.chat-image-grid.grid-4 .grid-item {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.chat-image-grid.grid-4 .grid-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+}
+
+/* Overlay for the 4th item when > 4 images */
+.chat-image-grid .grid-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 750;
+    backdrop-filter: blur(2px);
+}
+
+/* Fullscreen Lightbox Styles */
+.lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeInWeb 0.25s ease-out;
+}
+
+@keyframes fadeInWeb {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.lightbox-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
+    height: 85%;
+}
+
+.lightbox-image-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.lightbox-main-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    animation: zoomInWeb 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes zoomInWeb {
+    from {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 40px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1010;
+    opacity: 0.8;
+}
+
+.lightbox-close:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.lightbox-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #fff;
+    font-size: 40px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.2s;
+    z-index: 1010;
+    user-select: none;
+}
+
+.lightbox-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-50%) scale(1.05);
+}
+
+.lightbox-nav-btn.prev {
+    left: 20px;
+}
+
+.lightbox-nav-btn.next {
+    right: 20px;
+}
+
+.lightbox-counter {
+    position: absolute;
+    bottom: -40px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 4px 16px;
+    border-radius: 20px;
+}
+
+@media (max-width: 768px) {
+    .lightbox-nav-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 28px;
+    }
+
+    .lightbox-nav-btn.prev {
+        left: 10px;
+    }
+
+    .lightbox-nav-btn.next {
+        right: 10px;
+    }
+
+    .chat-image-grid {
+        width: 220px;
+    }
+
+    .chat-image-grid.grid-2 {
+        height: 110px;
+    }
+
+    .chat-image-grid.grid-3 {
+        height: 140px;
+    }
+
+    .chat-image-grid.grid-4 {
+        height: 160px;
     }
 }

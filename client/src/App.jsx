@@ -35,16 +35,21 @@ function App() {
   const [locationCoords, setLocationCoords] = useState(null);
   const [loaderVisible, setLoaderVisible] = useState(true);
   const [loaderClass, setLoaderClass] = useState('react-loader-wrapper');
-  
+
   // Voice Recording States
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordingInterval, setRecordingInterval] = useState(null);
   const [audioStream, setAudioStream] = useState(null);
-  
+
   // Audio playback state
   const [activeAudio, setActiveAudio] = useState(null);
+
+  // Lightbox States for chat image gallery
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Fetch session info
   const fetchSession = async () => {
@@ -75,10 +80,10 @@ function App() {
   useEffect(() => {
     if (!window.EnteangadiMobile) {
       window.EnteangadiMobile = {
-        isRunningInMobile: function() {
+        isRunningInMobile: function () {
           return !!(window.Capacitor && window.Capacitor.Plugins);
         },
-        requestNotificationPermission: async function() {
+        requestNotificationPermission: async function () {
           if (this.isRunningInMobile() && window.Capacitor.Plugins.LocalNotifications) {
             try {
               const result = await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
@@ -100,7 +105,7 @@ function App() {
           }
           return false;
         },
-        showLocalNotification: function(senderName, messageText) {
+        showLocalNotification: function (senderName, messageText) {
           let logoUrl = '/Enteangadi/uploads/logo/logo_1778137117.jpg';
           let bodyText = messageText || '';
           if (bodyText.startsWith('[AUDIO]:')) {
@@ -151,7 +156,7 @@ function App() {
     const autoDetectReactLocation = async () => {
       try {
         setLocationStatus('Detecting location...');
-        
+
         let lat = null;
         let lng = null;
 
@@ -279,7 +284,7 @@ function App() {
         setLocationActive('Kochi');
         setLocationCoords({ lat: 9.94, lng: 76.27 });
         fetchProducts();
-        
+
         setTimeout(() => {
           setLoaderClass('react-loader-wrapper loader-hide');
           setTimeout(() => {
@@ -304,18 +309,18 @@ function App() {
   // Fetch Messages
   const fetchChatMessages = async (currentUserId = myId) => {
     if (!selectedProduct) return;
-    
+
     // Resolve dynamic sender (to avoid chatting with yourself during testing)
     const effectiveMyId = currentUserId || myId;
-    const buyerId = (effectiveMyId === selectedProduct.user_id) 
-      ? (selectedProduct.user_id == 1 ? 2 : 1) 
+    const buyerId = (effectiveMyId === selectedProduct.user_id)
+      ? (selectedProduct.user_id == 1 ? 2 : 1)
       : effectiveMyId;
-      
+
     try {
       const response = await apiFetch(`/user/api_chat.php?action=fetch&other_id=${selectedProduct.user_id}&product_id=${selectedProduct.id}&current_user_id=${buyerId}`);
       if (response.success) {
         const newMsgs = response.messages || [];
-        
+
         // Use functional state updates to compare safely against current messages and trigger notifications
         setMessages(prevMessages => {
           if (prevMessages.length > 0 && newMsgs.length > prevMessages.length) {
@@ -358,6 +363,154 @@ function App() {
     }
   }, [messages, chatOpen]);
 
+  // Keyboard navigation for Lightbox
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!lightboxOpen || lightboxImages.length === 0) return;
+      if (e.key === 'ArrowLeft') {
+        setLightboxIndex((prev) => (prev - 1 + lightboxImages.length) % lightboxImages.length);
+      } else if (e.key === 'ArrowRight') {
+        setLightboxIndex((prev) => (prev + 1) % lightboxImages.length);
+      } else if (e.key === 'Escape') {
+        setLightboxOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, lightboxImages]);
+
+  // Group consecutive images from the same sender sent within 60 seconds of each other
+  const groupMessages = (msgs) => {
+    const grouped = [];
+    for (let i = 0; i < msgs.length; i++) {
+      const msg = msgs[i];
+      const isImage = msg.message_text && msg.message_text.startsWith('[IMAGE]:');
+
+      if (isImage) {
+        const imageUrl = msg.message_text.replace('[IMAGE]:', '');
+        const isMe = msg.sender_id == myId;
+        const lastGroup = grouped[grouped.length - 1];
+
+        if (
+          lastGroup &&
+          lastGroup.type === 'image_group' &&
+          lastGroup.sender_id === msg.sender_id
+        ) {
+          const firstMsgTime = new Date(lastGroup.created_at).getTime();
+          const currentMsgTime = new Date(msg.created_at).getTime();
+
+          if (Math.abs(currentMsgTime - firstMsgTime) < 60000) {
+            lastGroup.images.push({
+              id: msg.id,
+              url: imageUrl,
+              msg: msg
+            });
+            continue;
+          }
+        }
+
+        grouped.push({
+          type: 'image_group',
+          id: `img_group_${msg.id}`,
+          sender_id: msg.sender_id,
+          isMe: isMe,
+          created_at: msg.created_at,
+          images: [{
+            id: msg.id,
+            url: imageUrl,
+            msg: msg
+          }]
+        });
+      } else {
+        grouped.push({
+          type: 'normal',
+          msg: msg
+        });
+      }
+    }
+    return grouped;
+  };
+
+  // WhatsApp-style Image Collage/Grid Renderer
+  const renderImageGroup = (group) => {
+    const count = group.images.length;
+
+    const handleImageClick = (clickedIndex) => {
+      setLightboxImages(group.images.map(img => `${backendUrl}/${img.url}`));
+      setLightboxIndex(clickedIndex);
+      setLightboxOpen(true);
+    };
+
+    if (count === 1) {
+      const img = group.images[0];
+      return (
+        <div className="chat-image-single" onClick={() => handleImageClick(0)}>
+          <img
+            src={`${backendUrl}/${img.url}`}
+            className="message-chat-image"
+            alt="Shared Photo"
+          />
+        </div>
+      );
+    }
+
+    if (count === 2) {
+      return (
+        <div className="chat-image-grid grid-2">
+          {group.images.map((img, idx) => (
+            <div key={img.id} className="grid-item" onClick={() => handleImageClick(idx)}>
+              <img src={`${backendUrl}/${img.url}`} alt={`Shared Photo ${idx + 1}`} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (count === 3) {
+      return (
+        <div className="chat-image-grid grid-3">
+          <div className="grid-left" onClick={() => handleImageClick(0)}>
+            <img src={`${backendUrl}/${group.images[0].url}`} alt="Shared Photo 1" />
+          </div>
+          <div className="grid-right">
+            <div className="grid-sub-item" onClick={() => handleImageClick(1)}>
+              <img src={`${backendUrl}/${group.images[1].url}`} alt="Shared Photo 2" />
+            </div>
+            <div className="grid-sub-item" onClick={() => handleImageClick(2)}>
+              <img src={`${backendUrl}/${group.images[2].url}`} alt="Shared Photo 3" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 4 or more photos
+    const displayImages = group.images.slice(0, 4);
+    const remaining = count - 3; // WhatsApp standard count shows +2 if there are 5 images (count=5 => 5-3 = 2)
+
+    return (
+      <div className="chat-image-grid grid-4">
+        {displayImages.map((img, idx) => {
+          const isLast = idx === 3;
+          return (
+            <div
+              key={img.id}
+              className="grid-item"
+              onClick={() => handleImageClick(idx)}
+            >
+              <img src={`${backendUrl}/${img.url}`} alt={`Shared Photo ${idx + 1}`} />
+              {isLast && remaining > 1 && (
+                <div className="grid-overlay">
+                  <span>+{remaining}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Send Text Message
   const sendTextMessage = async () => {
     if (!newMessage.trim() || !selectedProduct) return;
@@ -365,8 +518,8 @@ function App() {
     setNewMessage('');
 
     const effectiveMyId = myId;
-    const buyerId = (effectiveMyId === selectedProduct.user_id) 
-      ? (selectedProduct.user_id == 1 ? 2 : 1) 
+    const buyerId = (effectiveMyId === selectedProduct.user_id)
+      ? (selectedProduct.user_id == 1 ? 2 : 1)
       : effectiveMyId;
 
     const formData = new FormData();
@@ -409,16 +562,16 @@ function App() {
         }
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setAudioStream(stream);
-        
+
         const recorder = new MediaRecorder(stream);
         const chunks = [];
-        
+
         recorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
             chunks.push(e.data);
           }
         };
-        
+
         recorder.onstop = async () => {
           const audioBlob = new Blob(chunks, { type: 'audio/wav' });
           if (chunks.length > 0) {
@@ -431,7 +584,7 @@ function App() {
         setMediaRecorder(recorder);
         setIsRecording(true);
         setRecordingSeconds(0);
-        
+
         const interval = setInterval(() => {
           setRecordingSeconds(prev => prev + 1);
         }, 1000);
@@ -453,10 +606,10 @@ function App() {
   // Stop Recording
   const stopRecording = (shouldSend) => {
     if (!isRecording) return;
-    
+
     clearInterval(recordingInterval);
     setIsRecording(false);
-    
+
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       if (!shouldSend) {
         mediaRecorder.onstop = () => {
@@ -476,7 +629,7 @@ function App() {
   // Upload Audio note
   const uploadVoiceNote = async (audioBlob) => {
     if (!selectedProduct) return;
-    
+
     const formData = new FormData();
     formData.append('action', 'send_audio');
     formData.append('receiver_id', selectedProduct.user_id);
@@ -501,7 +654,7 @@ function App() {
   // Upload Chat Image
   const uploadChatImage = async (imageFile) => {
     if (!selectedProduct) return;
-    
+
     const formData = new FormData();
     formData.append('action', 'send_image');
     formData.append('receiver_id', selectedProduct.user_id);
@@ -913,36 +1066,40 @@ function App() {
                     ) : messages.length === 0 ? (
                       <div className="chat-empty">Start the conversation about {selectedProduct.title}</div>
                     ) : (
-                      messages.map(msg => {
-                        const isMe = msg.sender_id == myId;
-                        const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        return (
-                          <div key={msg.id} className={`chat-bubble-row ${isMe ? 'msg-me' : 'msg-other'}`}>
-                            <div className="chat-bubble">
-                              {msg.message_text.startsWith('[AUDIO]:') ? (
-                                <div className="message-audio-player">
-                                  <button type="button" className="react-audio-btn" onClick={() => playVoiceNote(`${backendUrl}/${msg.message_text.replace('[AUDIO]:', '')}`)}>
-                                    ▶️
-                                  </button>
-                                  <span className="audio-duration-tag">Voice note</span>
-                                </div>
-                              ) : msg.message_text.startsWith('[IMAGE]:') ? (
-                                <div className="message-image-wrapper" style={{ margin: '6px 0', display: 'block' }}>
-                                  <img 
-                                    src={`${backendUrl}/${msg.message_text.replace('[IMAGE]:', '')}`} 
-                                    className="message-chat-image" 
-                                    alt="Shared Photo" 
-                                    style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '12px', cursor: 'pointer', objectFit: 'cover', display: 'block', border: '1px solid rgba(0,0,0,0.05)' }}
-                                    onClick={() => window.open(`${backendUrl}/${msg.message_text.replace('[IMAGE]:', '')}`, '_blank')}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="message-text">{msg.message_text}</div>
-                              )}
-                              <span className="msg-time">{time}</span>
+                      groupMessages(messages).map(group => {
+                        if (group.type === 'image_group') {
+                          const lastImageMsg = group.images[group.images.length - 1].msg;
+                          const time = new Date(lastImageMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          return (
+                            <div key={group.id} className={`chat-bubble-row ${group.isMe ? 'msg-me' : 'msg-other'}`}>
+                              <div className="chat-bubble chat-bubble-images">
+                                {renderImageGroup(group)}
+                                <span className="msg-time">{time}</span>
+                              </div>
                             </div>
-                          </div>
-                        );
+                          );
+                        } else {
+                          const msg = group.msg;
+                          const isMe = msg.sender_id == myId;
+                          const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          return (
+                            <div key={msg.id} className={`chat-bubble-row ${isMe ? 'msg-me' : 'msg-other'}`}>
+                              <div className="chat-bubble">
+                                {msg.message_text.startsWith('[AUDIO]:') ? (
+                                  <div className="message-audio-player">
+                                    <button type="button" className="react-audio-btn" onClick={() => playVoiceNote(`${backendUrl}/${msg.message_text.replace('[AUDIO]:', '')}`)}>
+                                      ▶️
+                                    </button>
+                                    <span className="audio-duration-tag">Voice note</span>
+                                  </div>
+                                ) : (
+                                  <div className="message-text">{msg.message_text}</div>
+                                )}
+                                <span className="msg-time">{time}</span>
+                              </div>
+                            </div>
+                          );
+                        }
                       })
                     )}
                   </div>
@@ -962,29 +1119,29 @@ function App() {
                         </div>
                       ) : (
                         <>
-                          <input 
-                            type="text" 
-                            placeholder="Type a message..." 
+                          <input
+                            type="text"
+                            placeholder="Type a message..."
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && sendTextMessage()}
                             className="chat-text-input"
                           />
-                          <button 
-                            type="button" 
-                            className="btn-image-react" 
+                          <button
+                            type="button"
+                            className="btn-image-react"
                             onClick={() => document.getElementById('react-chat-image-input').click()}
                             style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.25rem', padding: '0 8px', display: 'flex', alignItems: 'center' }}
                             title="Send Image"
                           >
                             📷
                           </button>
-                          <input 
-                            type="file" 
-                            id="react-chat-image-input" 
-                            accept="image/*" 
+                          <input
+                            type="file"
+                            id="react-chat-image-input"
+                            accept="image/*"
                             multiple
-                            style={{ display: 'none' }} 
+                            style={{ display: 'none' }}
                             onChange={async (e) => {
                               if (e.target.files && e.target.files.length > 0) {
                                 const files = Array.from(e.target.files);
@@ -998,14 +1155,14 @@ function App() {
                         </>
                       )}
 
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className={`btn-mic-react ${isRecording ? 'recording-active' : ''}`}
                         onClick={toggleRecording}
                       >
                         {isRecording ? '⏹️' : '🎙️'}
                       </button>
-                      
+
                       {!isRecording && (
                         <button className="btn-send-react" onClick={sendTextMessage}>
                           ✈️
@@ -1015,6 +1172,45 @@ function App() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Chat Image Lightbox / Slideshow */}
+      {lightboxOpen && (
+        <div className="lightbox-overlay" onClick={() => setLightboxOpen(false)}>
+          <button className="lightbox-close" onClick={() => setLightboxOpen(false)}>×</button>
+
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+            {lightboxImages.length > 1 && (
+              <button
+                className="lightbox-nav-btn prev"
+                onClick={() => setLightboxIndex((prev) => (prev - 1 + lightboxImages.length) % lightboxImages.length)}
+              >
+                ‹
+              </button>
+            )}
+
+            <div className="lightbox-image-container">
+              <img
+                src={lightboxImages[lightboxIndex]}
+                alt={`Full Screen View ${lightboxIndex + 1}`}
+                className="lightbox-main-image"
+              />
+            </div>
+
+            {lightboxImages.length > 1 && (
+              <button
+                className="lightbox-nav-btn next"
+                onClick={() => setLightboxIndex((prev) => (prev + 1) % lightboxImages.length)}
+              >
+                ›
+              </button>
+            )}
+
+            <div className="lightbox-counter">
+              {lightboxIndex + 1} / {lightboxImages.length}
             </div>
           </div>
         </div>
