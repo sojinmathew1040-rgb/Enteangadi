@@ -1,6 +1,6 @@
 // client/src/utils/apiClient.js
 
-const HOST_IP = '172.30.19.249';
+const HOST_IP = 'enteangadi.com';
 
 /**
  * Resolves the backend base URL dynamically depending on whether the app
@@ -10,12 +10,12 @@ export const getBaseUrl = () => {
   const isCapacitor = window.Capacitor !== undefined || window.hasOwnProperty('Capacitor');
 
   if (isCapacitor) {
-    // Use the provided local IP for both physical devices and emulators
-    return `http://${HOST_IP}/Enteangadi`;
+    // Use the live production domain with HTTPS for mobile apps
+    return `https://${HOST_IP}/Enteangadi`;
   }
 
-  // Web browser development (usually localhost)
-  return `http://${window.location.hostname}/Enteangadi`;
+  // Web browser production or development (resolves protocol and hostname dynamically)
+  return `${window.location.protocol}//${window.location.hostname}/Enteangadi`;
 };
 
 /**
