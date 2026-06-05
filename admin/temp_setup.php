@@ -13,10 +13,11 @@ try {
         $stmt->execute(['admin', 'admin@enteangadi.com', '9876543210', $hashed, 1, 'admin', '*']);
         echo "SUCCESS: Admin user 'admin' with password 'admin123' created successfully.\n";
     } else {
-        // Ensure role is admin
-        $stmt = $pdo->prepare("UPDATE users SET role = 'admin', is_admin = 1, permissions = '*' WHERE username = ?");
-        $stmt->execute(['admin']);
-        echo "SUCCESS: Admin user already exists. Permissions and role verified.\n";
+        // Ensure role is admin and reset/update password to admin123
+        $hashed = password_hash('admin123', PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ?, role = 'admin', is_admin = 1, permissions = '*' WHERE username = ?");
+        $stmt->execute([$hashed, 'admin']);
+        echo "SUCCESS: Admin user verified and password reset to 'admin123'.\n";
     }
 } catch (PDOException $e) {
     echo "ERROR: " . $e->getMessage() . "\n";

@@ -60,8 +60,83 @@ try {
             baseUrl: '<?= $base_url ?>',
             appLogo: '<?= !empty($app_settings['app_logo']) ? htmlspecialchars($app_settings['app_logo']) : 'uploads/logo/logo_1778137117.jpg' ?>',
             hasLocation: <?= isset($_SESSION['user_location']) ? 'true' : 'false' ?>,
-            location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>
+            location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>,
+            isLoggedIn: <?= isset($_SESSION['user_id']) ? 'true' : 'false' ?>
         };
+
+        // Intercept global fetch to ensure session credentials (cookies) are always included for local/same-site calls.
+        // This solves both the geolocation infinite reload loop and the repeating tutorial welcome screen on mobile.
+        (function() {
+            const originalFetch = window.fetch;
+            window.fetch = function(resource, init) {
+                init = init || {};
+                let isLocal = false;
+                if (typeof resource === 'string') {
+                    if (resource.startsWith('/') || !resource.startsWith('http') || resource.includes(window.location.host)) {
+                        isLocal = true;
+                    }
+                }
+                if (isLocal) {
+                    init.credentials = 'include';
+                }
+                return originalFetch(resource, init);
+            };
+        })();
+
+        // Session Persistence Management (Auto-Login & Logout cleanups)
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('logged_out')) {
+                // Clear persistent session storage on manual logout
+                localStorage.removeItem('enteangadi_user_id');
+                localStorage.removeItem('enteangadi_session_token');
+                
+                // Clean the query parameters from the URL
+                const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+                return;
+            }
+
+            if (EnteangadiConfig.isLoggedIn) {
+                // Store active credentials dynamically
+                localStorage.setItem('enteangadi_user_id', '<?= $_SESSION['user_id'] ?? '' ?>');
+                localStorage.setItem('enteangadi_session_token', '<?= $_SESSION['session_token'] ?? '' ?>');
+            } else {
+                // Auto-login from saved persistent state if PHP session is guest
+                const savedUserId = localStorage.getItem('enteangadi_user_id');
+                const savedToken = localStorage.getItem('enteangadi_session_token');
+                if (savedUserId && savedToken) {
+                    // Temporarily hide body content until auto-login redirects/completes
+                    const style = document.createElement('style');
+                    style.id = 'autologin-hide-body';
+                    style.innerHTML = 'body { display: none !important; }';
+                    document.head.appendChild(style);
+                    
+                    fetch(EnteangadiConfig.baseUrl + '/api/auto_login.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'user_id=' + encodeURIComponent(savedUserId) + '&session_token=' + encodeURIComponent(savedToken)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            // Token is invalid/expired
+                            localStorage.removeItem('enteangadi_user_id');
+                            localStorage.removeItem('enteangadi_session_token');
+                            const hStyle = document.getElementById('autologin-hide-body');
+                            if (hStyle) hStyle.remove();
+                        }
+                    })
+                    .catch(e => {
+                        console.error("Auto-login failed:", e);
+                        const hStyle = document.getElementById('autologin-hide-body');
+                        if (hStyle) hStyle.remove();
+                    });
+                }
+            }
+        })();
 
         // Theme initialization
         (function () {

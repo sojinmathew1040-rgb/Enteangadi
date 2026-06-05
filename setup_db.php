@@ -1,4 +1,18 @@
 <?php
+// Safety Check: Prevent running this database-wiping script on a live production server.
+$allowed_hosts = ['localhost', '127.0.0.1', '[::1]'];
+$current_host = $_SERVER['HTTP_HOST'] ?? '';
+$is_local = false;
+foreach ($allowed_hosts as $host_pattern) {
+    if (stripos($current_host, $host_pattern) !== false) {
+        $is_local = true;
+        break;
+    }
+}
+if (!$is_local && PHP_SAPI !== 'cli') {
+    die("ERROR: setup_db.php can only be executed in a local development environment (localhost). Running this on a live hosted server is blocked for safety because it drops the database.");
+}
+
 $host = 'localhost';
 $username = 'root';
 $password = '';

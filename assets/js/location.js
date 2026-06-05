@@ -286,6 +286,13 @@ const EnteangadiLocation = {
             return;
         }
 
+        // If we already have a location set in the session, do not auto-detect on every single page navigation.
+        // This prevents constant reload loops, saves battery, and speeds up page loading.
+        if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.hasLocation && EnteangadiConfig.location) {
+            if (window.hideLoader) window.hideLoader();
+            return;
+        }
+
         const headerTextEl = document.getElementById('current-location-text');
         // Capture original content of header text to restore if we fail
         const originalHTML = headerTextEl ? headerTextEl.innerHTML : 'Set Location';

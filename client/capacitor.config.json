@@ -1,5 +1,11 @@
 {
   "appId": "com.enteangadi.app",
   "appName": "Enteangadi",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "url": "https://enteangadi.com/",
+    "allowNavigation": [
+      "enteangadi.com"
+    ]
+  }
 }
