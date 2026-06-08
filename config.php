@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $host = 'localhost';
 $username = 'root';
-$password = '';
+$password = 'root';
 $dbname = 'enteangadi';
 
 try {
