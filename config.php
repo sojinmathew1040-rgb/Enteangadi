@@ -96,8 +96,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $host = 'localhost';
 $username = 'root';
-$password = '';
+$password = 'root';
 $dbname = 'enteangadi';
+
+
 
 try {
     // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
