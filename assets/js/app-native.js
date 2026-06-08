@@ -140,9 +140,9 @@ window.EnteangadiMobile = {
     showLocalNotification: function (senderName, messageText) {
         // App logo resolution (fallback to logo_1778137117.jpg if app_logo setting not specified)
         let logoUrl = '/Enteangadi/uploads/logo/logo_1778137117.jpg';
-        if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.baseUrl) {
+        if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.baseUrl !== undefined) {
             const logoPath = EnteangadiConfig.appLogo || 'uploads/logo/logo_1778137117.jpg';
-            logoUrl = `${EnteangadiConfig.baseUrl}/${logoPath}`;
+            logoUrl = (EnteangadiConfig.baseUrl ? EnteangadiConfig.baseUrl + '/' : '/') + logoPath;
         }
 
         // Clean up text if it is voice note or shared photo

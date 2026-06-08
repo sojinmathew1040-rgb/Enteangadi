@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_role'] = $user['role'];
             $_SESSION['admin_username'] = $user['username'];
             $_SESSION['admin_permissions'] = $user['permissions'] ?? '';
+            $_SESSION['is_admin_session'] = true;
 
             header("Location: index.php");
             exit;

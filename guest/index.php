@@ -1,5 +1,17 @@
 <?php
 require_once '../config.php';
+
+// Redirect if logged in
+if (isset($_SESSION['user_id'])) {
+    $query_string = $_SERVER['QUERY_STRING'] ?? '';
+    $redirect_url = '../user/index.php';
+    if (!empty($query_string)) {
+        $redirect_url .= '?' . $query_string;
+    }
+    header("Location: " . $redirect_url);
+    exit;
+}
+
 require_once '../includes/header.php';
 
 $category_filter = $_GET['category_id'] ?? null;

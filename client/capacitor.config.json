@@ -3,7 +3,9 @@
   "appName": "Enteangadi",
   "webDir": "dist",
   "server": {
-    "url": "http://172.30.19.249/Enteangadi",
-    "cleartext": true
+    "url": "http://enteangadi.com/",
+    "allowNavigation": [
+      "enteangadi.com"
+    ]
   }
 }

@@ -18,7 +18,6 @@ try {
     $support = [];
 }
 
-$base_url = "http://" . $_SERVER['HTTP_HOST'] . "/Enteangadi";
 require_once '../includes/header.php';
 ?>
 

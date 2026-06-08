@@ -1,6 +1,16 @@
 <?php
 require_once '../config.php';
 
+// Redirect if already logged in
+if (isset($_SESSION['user_id'])) {
+    if ($_SESSION['user_role'] === 'admin') {
+        header("Location: ../admin/index.php");
+    } else {
+        header("Location: ../user/index.php");
+    }
+    exit;
+}
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -16,6 +26,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_role'] = $user['role'];
             $_SESSION['username'] = $user['username'];
+
+            // Handle session token for multi-device security & persistence
+            $token = $user['session_token'];
+            if (empty($token)) {
+                $token = bin2hex(random_bytes(32));
+                $upd = $pdo->prepare("UPDATE users SET session_token = ?, last_activity = NOW() WHERE id = ?");
+                $upd->execute([$token, $user['id']]);
+            } else {
+                $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
+                $upd->execute([$user['id']]);
+            }
+            $_SESSION['session_token'] = $token;
+
+            // Set 30-day persistent cookies
+            enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 24 * 60 * 60);
+            enteangadi_set_cookie('enteangadi_remember_token', $token, time() + 30 * 24 * 60 * 60);
 
             if ($user['role'] === 'admin') {
                 header("Location: ../admin/index.php");

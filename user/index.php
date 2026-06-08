@@ -2,7 +2,12 @@
 require_once '../config.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../guest/login.php");
+    $query_string = $_SERVER['QUERY_STRING'] ?? '';
+    $redirect_url = '../guest/index.php';
+    if (!empty($query_string)) {
+        $redirect_url .= '?' . $query_string;
+    }
+    header("Location: " . $redirect_url);
     exit;
 }
 

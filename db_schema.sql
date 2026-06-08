@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS reports (
 
 -- Insert default admin user (password: admin123)
 INSERT IGNORE INTO users (username, phone_number, email, password, role, is_admin, permissions) VALUES 
-('admin', '1234567890', 'admin@enteangadi.com', '$2y$10$tZ20k9kEw9SgO/O.7kY9o.rM3Sj7oHk7cO7kQ/jZ9/P4T/Q7i7k/S', 'admin', 1, '*');
+('admin', '1234567890', 'admin@enteangadi.com', '$2y$10$OWyw9HIV10p07vkWgiRrh.aWK83dyOhUPH8cxvlxOTR6PeJjkn2QG', 'admin', 1, '*');
 
 -- Messages Table
 CREATE TABLE IF NOT EXISTS messages (

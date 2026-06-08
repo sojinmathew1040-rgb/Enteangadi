@@ -106,7 +106,7 @@ function App() {
           return false;
         },
         showLocalNotification: function (senderName, messageText) {
-          let logoUrl = '/Enteangadi/uploads/logo/logo_1778137117.jpg';
+          let logoUrl = `${backendUrl}/uploads/logo/logo_1778137117.jpg`;
           let bodyText = messageText || '';
           if (bodyText.startsWith('[AUDIO]:')) {
             bodyText = '🎙️ Voice note';
@@ -156,6 +156,50 @@ function App() {
     const autoDetectReactLocation = async () => {
       try {
         setLocationStatus('Detecting location...');
+
+        // Restore location from localStorage if saved previously
+        let savedLoc = null;
+        try {
+          savedLoc = localStorage.getItem('enteangadi_user_location');
+        } catch (e) {
+          console.warn('localStorage is not accessible:', e);
+        }
+
+        if (savedLoc) {
+          try {
+            const parsed = JSON.parse(savedLoc);
+            if (parsed && parsed.name && parsed.lat && parsed.lng) {
+              setLocationStatus(`📍 ${parsed.name.split(',')[0]} active!`);
+              setLocationCoords({ lat: parseFloat(parsed.lat), lng: parseFloat(parsed.lng) });
+              setLocationActive(parsed.name);
+              fetchProducts();
+
+              // Sync with server session silently in the background
+              const formData = new FormData();
+              formData.append('action', 'set_location');
+              formData.append('location_name', parsed.name);
+              formData.append('latitude', parsed.lat);
+              formData.append('longitude', parsed.lng);
+              fetch(`${backendUrl}/api/location.php`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+              }).catch(err => console.warn("Background session sync failed:", err));
+
+              // Fade out and hide splash loader
+              setTimeout(() => {
+                setLoaderClass('react-loader-wrapper loader-hide');
+                setTimeout(() => {
+                  setLoaderVisible(false);
+                }, 800);
+              }, 1200);
+
+              return;
+            }
+          } catch (e) {
+            console.warn("Failed parsing saved location:", e);
+          }
+        }
 
         let lat = null;
         let lng = null;
@@ -238,11 +282,23 @@ function App() {
         }
 
         // 4. Reverse geocode via OpenStreetMap server if coordinates found
-        if (lat && lng && resolvedCity === 'Kochi') {
+        if (lat && lng) {
           try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`);
             const data = await res.json();
-            resolvedCity = data.address.city || data.address.town || data.address.village || data.address.state_district || 'Kochi';
+            resolvedCity = data.address.village ||
+              data.address.hamlet ||
+              data.address.local_authority ||
+              data.address.municipality ||
+              data.address.village_panchayat ||
+              data.address.town ||
+              data.address.suburb ||
+              data.address.neighbourhood ||
+              data.address.city_district ||
+              data.address.city ||
+              data.address.state_district ||
+              resolvedCity ||
+              'Kochi';
           } catch (e) {
             console.warn("React reverse geocode failed:", e);
           }
@@ -252,6 +308,17 @@ function App() {
         setLocationCoords({ lat: lat || 9.94, lng: lng || 76.27 });
         setLocationActive(resolvedCity);
         fetchProducts();
+
+        // Cache coordinates and name in localStorage
+        try {
+          localStorage.setItem('enteangadi_user_location', JSON.stringify({
+            name: resolvedCity,
+            lat: lat || 9.94,
+            lng: lng || 76.27
+          }));
+        } catch (e) {
+          console.warn("Failed to write to localStorage:", e);
+        }
 
         // Synchronize with PHP session variables asynchronously
         const formData = new FormData();
