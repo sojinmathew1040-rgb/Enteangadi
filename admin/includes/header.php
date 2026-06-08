@@ -2,7 +2,15 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-$base_url = '/Enteangadi';
+// Set base URL dynamically to support both local subfolder and production root hosting
+$current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+$base_url = ($current_dir == '/' || $current_dir == '.') ? '' : $current_dir;
+if (basename($base_url) == 'user' || basename($base_url) == 'admin' || basename($base_url) == 'guest') {
+    $base_url = dirname($base_url);
+}
+if ($base_url == '/') {
+    $base_url = '';
+}
 $current_page = basename($_SERVER['SCRIPT_NAME']);
 ?>
 <!DOCTYPE html>
@@ -14,111 +22,7 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
     <title>Enteangadi - Admin Dashboard</title>
     <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--background);
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .admin-sidebar {
-            width: 260px;
-            background: var(--white);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            left: 0;
-            top: 0;
-            box-shadow: var(--shadow-sm);
-            z-index: 100;
-        }
-
-        .admin-brand {
-            padding: 24px;
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--primary-green-dark);
-            letter-spacing: -0.5px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .admin-nav {
-            flex: 1;
-            padding: 24px 0;
-            overflow-y: auto;
-        }
-
-        .admin-nav a {
-            display: flex;
-            align-items: center;
-            padding: 12px 24px;
-            color: var(--text-muted);
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 15px;
-            transition: all 0.2s;
-            border-left: 4px solid transparent;
-        }
-
-        .admin-nav a:hover {
-            background: var(--background);
-            color: var(--primary-green);
-        }
-
-        .admin-nav a.active {
-            background: #e8f5e9;
-            color: var(--primary-green-dark);
-            border-left-color: var(--primary-green);
-        }
-
-        .admin-nav i {
-            width: 24px;
-            font-size: 18px;
-            margin-right: 12px;
-        }
-
-        .admin-footer {
-            padding: 24px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .admin-main {
-            flex: 1;
-            margin-left: 260px;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-
-        .admin-header {
-            background: var(--white);
-            padding: 16px 32px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 99;
-        }
-
-        .admin-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--text-dark);
-            margin: 0;
-        }
-
-        .admin-content {
-            padding: 32px;
-            flex: 1;
-            overflow-y: auto;
-        }
-    </style>
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/admin.css">
 </head>
 
 <body>
