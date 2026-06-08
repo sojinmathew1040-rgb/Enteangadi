@@ -99,6 +99,8 @@ $username = 'root';
 $password = 'root';
 $dbname = 'enteangadi';
 
+
+
 try {
     // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
     $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
