@@ -1,5 +1,80 @@
 <?php
+// Configure secure session cookie params before starting session
+if (session_status() === PHP_SESSION_NONE) {
+    $secure = false;
+    if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) {
+        $secure = true;
+    } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+        $secure = true;
+    }
+
+    // Default secure to true on production hosts
+    if (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) {
+        // Localhost: keep secure as detected
+    } else {
+        $secure = true;
+    }
+
+    if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
+        session_set_cookie_params([
+            'lifetime' => 0, // Session cookie (until browser closes)
+            'path' => '/',
+            'domain' => '',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    } else {
+        session_set_cookie_params(0, '/; SameSite=Lax', '', $secure, true);
+    }
+}
 session_start();
+
+// Unified Cookie Helper Function
+if (!function_exists('enteangadi_set_cookie')) {
+    function enteangadi_set_cookie($name, $value, $expiry)
+    {
+        $secure = false;
+        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) {
+            $secure = true;
+        } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+            $secure = true;
+        }
+
+        // Detect localhost to avoid enforcing secure flags on HTTP dev envs
+        if (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) {
+            // Local development: keep secure as detected (usually false)
+        } else {
+            // Live server (production): default secure to true since it uses HTTPS
+            $secure = true;
+        }
+
+        if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
+            setcookie($name, $value, [
+                'expires' => $expiry,
+                'path' => '/',
+                'domain' => '', // Default to current host
+                'secure' => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+        } else {
+            setcookie($name, $value, $expiry, '/; SameSite=Lax', '', $secure, true);
+        }
+    }
+}
+
+// Restore user location from cookie if session is missing
+if (!isset($_SESSION['user_location']) && isset($_COOKIE['user_location'])) {
+    $cookie_loc = json_decode($_COOKIE['user_location'], true);
+    if ($cookie_loc && isset($cookie_loc['name']) && isset($cookie_loc['lat']) && isset($cookie_loc['lng'])) {
+        $_SESSION['user_location'] = [
+            'name' => $cookie_loc['name'],
+            'lat' => $cookie_loc['lat'],
+            'lng' => $cookie_loc['lng']
+        ];
+    }
+}
 
 // --- CONTENT MODERATION SETTINGS ---
 define('SIGHTENGINE_USER', ''); // Enter your Sightengine User ID here
@@ -25,10 +100,29 @@ $password = '';
 $dbname = 'enteangadi';
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    // Set the PDO error mode to exception
+    // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
+    $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    // 2. Create database if it doesn't exist
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+    $pdo->exec("USE `$dbname`;");
+    
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    // 3. Check if core tables exist (e.g. check if 'users' table exists)
+    $table_check = $pdo->query("SHOW TABLES LIKE 'users'");
+    if (!$table_check->fetch()) {
+        // If users table is missing, import the entire schema from db_schema.sql
+        $schema_file = dirname(__FILE__) . '/db_schema.sql';
+        if (file_exists($schema_file)) {
+            $sql = file_get_contents($schema_file);
+            // Remove database creation statements from the schema if they exist to avoid conflicts
+            $sql = str_replace("CREATE DATABASE IF NOT EXISTS enteangadi;", "", $sql);
+            $sql = str_replace("USE enteangadi;", "", $sql);
+            $pdo->exec($sql);
+        }
+    }
 
     // --- HELPER FUNCTIONS ---
 
@@ -142,6 +236,33 @@ try {
         if (!$check_is_admin->fetch())
             $after_clause = "";
         $pdo->exec("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL $after_clause");
+    }
+
+    // Ensure default admin user exists and has a valid password
+    $stmt_check_admin = $pdo->prepare("SELECT * FROM users WHERE username = 'admin'");
+    $stmt_check_admin->execute();
+    $admin_user = $stmt_check_admin->fetch();
+
+    $default_admin_hash = '$2y$10$OWyw9HIV10p07vkWgiRrh.aWK83dyOhUPH8cxvlxOTR6PeJjkn2QG'; // hash of admin123
+    $old_broken_hash = '$2y$10$K8pe9htFbLrJD/EjOE3In.RPOFpPz2WZ44lwQVt8RJRmUgXNnfnSC'; // old broken hash in schema
+
+    if (!$admin_user) {
+        // Insert admin user if missing
+        $stmt_insert_admin = $pdo->prepare("
+            INSERT IGNORE INTO users (username, phone_number, email, password, role, is_admin, permissions) 
+            VALUES ('admin', '1234567890', 'admin@enteangadi.com', ?, 'admin', 1, '*')
+        ");
+        $stmt_insert_admin->execute([$default_admin_hash]);
+    } else {
+        // If the admin user exists but has the old broken hash, update it to the default working hash
+        if ($admin_user['password'] === $old_broken_hash) {
+            $stmt_update_admin = $pdo->prepare("
+                UPDATE users 
+                SET password = ? 
+                WHERE username = 'admin'
+            ");
+            $stmt_update_admin->execute([$default_admin_hash]);
+        }
     }
 
     // Auto-fix: Ensure the currently logged-in main admin has all permissions
@@ -301,6 +422,13 @@ try {
     )");
     $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['ad_approval_mode', 'auto']);
 
+    // [SESSION TIMEOUT] Auto-add last_activity to users
+    try {
+        $pdo->query("SELECT last_activity FROM users LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP NULL DEFAULT NULL AFTER session_token");
+    }
+
     // Include shared helper functions
     require_once dirname(__FILE__) . '/includes/helpers.php';
 
@@ -359,25 +487,162 @@ try {
         }
     }
 
-    // Global session token check for remote logout & deleted users
+    // Cookie-Based Server-Side Auto-Login
+    if (!isset($_SESSION['user_id']) && isset($_COOKIE['enteangadi_remember_user']) && isset($_COOKIE['enteangadi_remember_token'])) {
+        $cookie_user = $_COOKIE['enteangadi_remember_user'];
+        $cookie_token = $_COOKIE['enteangadi_remember_token'];
+
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND session_token = ?");
+        $stmt->execute([$cookie_user, $cookie_token]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            // Check if user is active (has activity in the last 30 days)
+            $last_act = $user['last_activity'] ? strtotime($user['last_activity']) : strtotime($user['created_at']);
+            if ((time() - $last_act) <= (30 * 24 * 60 * 60)) {
+                // Log the user in
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['session_token'] = $user['session_token'];
+
+                // Update last activity
+                $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
+                $upd->execute([$user['id']]);
+
+                // Renew cookies for 30 days
+                enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 24 * 60 * 60);
+                enteangadi_set_cookie('enteangadi_remember_token', $user['session_token'], time() + 30 * 24 * 60 * 60);
+            } else {
+                // Inactivity > 30 days. Clear cookies.
+                enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
+                enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
+            }
+        } else {
+            // Invalid token/user. Clear cookies.
+            enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
+            enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
+        }
+    }
+
+    // Global session token & inactivity check for remote logout, deleted users, and 30-day inactivity
     if (isset($_SESSION['user_id']) && !isset($_SESSION['is_admin_session'])) {
-        $stmt = $pdo->prepare("SELECT session_token FROM users WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT session_token, last_activity, created_at FROM users WHERE id = ?");
         $stmt->execute([$_SESSION['user_id']]);
         $user_record = $stmt->fetch();
 
-        // If user is deleted or token doesn't match
+        // 1. If user is deleted or token doesn't match
         if (!$user_record || (isset($user_record['session_token']) && (!isset($_SESSION['session_token']) || $_SESSION['session_token'] !== $user_record['session_token']))) {
             session_destroy();
-            // Redirect to login if not already there
+            enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
+            enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
+
             $current_page = basename($_SERVER['PHP_SELF']);
             if ($current_page != 'login.php' && $current_page != 'index.php') {
                 header("Location: login.php?msg=account_inactive");
                 exit;
+            }
+        } else {
+            // 2. Inactivity Check (30 days)
+            $last_act = $user_record['last_activity'] ? strtotime($user_record['last_activity']) : strtotime($user_record['created_at']);
+            if ((time() - $last_act) > (30 * 24 * 60 * 60)) {
+                // Exceeded 30 days inactivity. Log out.
+                $upd = $pdo->prepare("UPDATE users SET session_token = NULL WHERE id = ?");
+                $upd->execute([$_SESSION['user_id']]);
+
+                session_destroy();
+                enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
+                enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
+
+                // Determine redirect path depending on current location
+                $current_dir = basename(dirname($_SERVER['PHP_SELF']));
+                $redirect_prefix = ($current_dir == 'user' || $current_dir == 'admin' || $current_dir == 'guest') ? '../' : '';
+                header("Location: " . $redirect_prefix . "login.php?msg=session_expired");
+                exit;
+            } else {
+                // 3. Update activity and renew cookies
+                // To avoid writing to DB on every request, write only if last update was > 15 minutes (900 seconds) ago
+                if (!$user_record['last_activity'] || (time() - strtotime($user_record['last_activity'])) > 900) {
+                    $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
+                    $upd->execute([$_SESSION['user_id']]);
+                }
+
+                // Renew cookies
+                enteangadi_set_cookie('enteangadi_remember_user', $_SESSION['user_id'], time() + 30 * 24 * 60 * 60);
+                enteangadi_set_cookie('enteangadi_remember_token', $_SESSION['session_token'], time() + 30 * 24 * 60 * 60);
             }
         }
     }
 
 } catch (PDOException $e) {
     die("Connection failed: " . $e->getMessage());
+}
+
+// Intercept unauthenticated visits to protected user pages to perform client-side auto-login
+if (!isset($_SESSION['user_id'])) {
+    $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+    $current_page = basename($_SERVER['PHP_SELF']);
+
+    $is_user_page = (strpos($request_uri, '/user/') !== false);
+    $is_api_call = (strpos($current_page, 'api_') === 0 || $current_page === 'toggle_wishlist.php' || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false));
+
+    if ($is_user_page && !$is_api_call) {
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+
+        <head>
+            <meta charset="UTF-8">
+            <title>Authenticating...</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <link rel="stylesheet" href="../assets/css/style.css?v=1.2">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <script>
+                (function () {
+                    const uid = localStorage.getItem('enteangadi_user_id');
+                    const token = localStorage.getItem('enteangadi_session_token');
+                    if (uid && token) {
+                        fetch('../api/auto_login.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'user_id=' + encodeURIComponent(uid) + '&session_token=' + encodeURIComponent(token)
+                        })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    setTimeout(() => {
+                                        location.reload();
+                                    }, 100);
+                                } else {
+                                    localStorage.removeItem('enteangadi_user_id');
+                                    localStorage.removeItem('enteangadi_session_token');
+                                    window.location.href = '../login.php';
+                                }
+                            })
+                            .catch(() => {
+                                window.location.href = '../login.php';
+                            });
+                    } else {
+                        window.location.href = '../login.php';
+                    }
+                })();
+            </script>
+        </head>
+
+        <body>
+            <div id="loader-wrapper" class="loader-active" style="background: var(--background);">
+                <div class="loader-logo">
+                    <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?>
+                </div>
+                <div class="loader-location-status" style="color: var(--text-dark);">
+                    <i class="fa fa-spinner fa-spin" style="color: var(--primary-green);"></i> Restoring session...
+                </div>
+            </div>
+        </body>
+
+        </html>
+        <?php
+        exit;
+    }
 }
 ?>

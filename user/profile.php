@@ -83,7 +83,6 @@ $count_wish = $pdo->prepare("SELECT COUNT(*) FROM wishlist WHERE user_id = ?");
 $count_wish->execute([$user_id]);
 $wishlist_count = $count_wish->fetchColumn();
 
-$base_url = "http://" . $_SERVER['HTTP_HOST'] . "/Enteangadi";
 require_once '../includes/header.php';
 ?>
 

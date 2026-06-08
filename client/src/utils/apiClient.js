@@ -1,6 +1,4 @@
-// client/src/utils/apiClient.js
-
-const HOST_IP = 'enteangadi.com';
+const HOST_IP = 'enteangadi.com'; // Set to 'enteangadi.com' for production
 
 /**
  * Resolves the backend base URL dynamically depending on whether the app
@@ -10,12 +8,16 @@ export const getBaseUrl = () => {
   const isCapacitor = window.Capacitor !== undefined || window.hasOwnProperty('Capacitor');
 
   if (isCapacitor) {
-    // Use the live production domain with HTTPS for mobile apps
-    return `https://${HOST_IP}/Enteangadi`;
+    const isLocal = (HOST_IP.includes('192.168.') || HOST_IP.includes('10.0.2.2') || HOST_IP === 'localhost');
+    const protocol = isLocal ? 'http' : 'https';
+    const pathSuffix = isLocal ? '/Enteangadi' : '';
+    return `${protocol}://${HOST_IP}${pathSuffix}`;
   }
 
   // Web browser production or development (resolves protocol and hostname dynamically)
-  return `${window.location.protocol}//${window.location.hostname}/Enteangadi`;
+  const isLocal = (window.location.hostname.includes('192.168.') || window.location.hostname.includes('10.0.2.2') || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const pathSuffix = isLocal ? '/Enteangadi' : '';
+  return `${window.location.protocol}//${window.location.hostname}${pathSuffix}`;
 };
 
 /**

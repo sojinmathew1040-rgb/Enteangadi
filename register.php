@@ -1,6 +1,16 @@
 <?php
 require_once 'config.php';
 
+// Redirect if already logged in
+if (isset($_SESSION['user_id'])) {
+    if ($_SESSION['user_role'] === 'admin') {
+        header("Location: admin/index.php");
+    } else {
+        header("Location: user/index.php");
+    }
+    exit;
+}
+
 $error = '';
 $success = '';
 
@@ -39,7 +49,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     try {
                         $stmt->execute([$username, $phone_number, $email, $hashed_password]);
-                        $success = "Account created successfully! You can now <a href='login.php'>Login</a>.";
+                        $new_user_id = $pdo->lastInsertId();
+
+                        // Auto-login logic
+                        $token = bin2hex(random_bytes(32));
+                        $upd = $pdo->prepare("UPDATE users SET session_token = ?, last_activity = NOW() WHERE id = ?");
+                        $upd->execute([$token, $new_user_id]);
+
+                        $_SESSION['user_id'] = $new_user_id;
+                        $_SESSION['user_role'] = 'user';
+                        $_SESSION['username'] = $username;
+                        $_SESSION['session_token'] = $token;
+
+                        // Set 30-day persistent cookies
+                        enteangadi_set_cookie('enteangadi_remember_user', $new_user_id, time() + 30 * 24 * 60 * 60);
+                        enteangadi_set_cookie('enteangadi_remember_token', $token, time() + 30 * 24 * 60 * 60);
+
+                        header("Location: user/index.php");
+                        exit;
                     } catch (PDOException $e) {
                         $error = "Error creating account. Please try again.";
                     }

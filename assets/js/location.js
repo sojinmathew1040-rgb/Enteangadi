@@ -1,10 +1,27 @@
 /**
  * Location management for Enteangadi
- */
+*/
 
 const EnteangadiLocation = {
     init() {
         this.bindEvents();
+    },
+
+    extractLocality(address, defaultVal = 'Current Location') {
+        if (!address) return defaultVal;
+        return address.village || 
+               address.hamlet || 
+               address.local_authority || 
+               address.municipality || 
+               address.village_panchayat || 
+               address.town || 
+               address.suburb || 
+               address.neighbourhood || 
+               address.city_district || 
+               address.city || 
+               address.county || 
+               address.state_district || 
+               defaultVal;
     },
 
     bindEvents() {
@@ -35,8 +52,8 @@ const EnteangadiLocation = {
                     }
                 }
                 const coordinates = await window.Capacitor.Plugins.Geolocation.getCurrentPosition({
-                    enableHighAccuracy: true,
-                    timeout: 5000
+                    enableHighAccuracy: false, // Triangulation first for battery/speed
+                    timeout: 10000
                 });
                 return {
                     lat: coordinates.coords.latitude,
@@ -49,6 +66,7 @@ const EnteangadiLocation = {
 
         // Web Geolocation fallback
         if (navigator.geolocation) {
+            // Stage 1: Try low-accuracy/fast geolocation first (Wi-Fi/Cellular) - highly reliable and works indoors/PCs
             try {
                 const coords = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(
@@ -61,12 +79,33 @@ const EnteangadiLocation = {
                         (error) => {
                             reject(error);
                         },
-                        { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
+                        { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
                     );
                 });
                 return coords;
             } catch (error) {
-                console.warn('Browser GPS Geolocation failed or blocked. Falling back to IP Geolocation:', error.message);
+                console.warn('Browser fast geolocation failed, trying high accuracy:', error.message);
+                
+                // Stage 2: Try high-accuracy GPS if low accuracy failed
+                try {
+                    const coords = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                resolve({
+                                    lat: position.coords.latitude,
+                                    lng: position.coords.longitude
+                                });
+                            },
+                            (error) => {
+                                reject(error);
+                            },
+                            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                        );
+                    });
+                    return coords;
+                } catch (gpsError) {
+                    console.warn('Browser GPS Geolocation failed. Falling back to IP Geolocation:', gpsError.message);
+                }
             }
         }
 
@@ -145,10 +184,10 @@ const EnteangadiLocation = {
     async reverseGeocode(lat, lng, btn, originalContent) {
         try {
             // Using Nominatim (OpenStreetMap)
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`);
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`);
             const data = await response.json();
 
-            const city = data.address.city || data.address.town || data.address.village || data.address.state_district || 'Unknown Location';
+            const city = this.extractLocality(data.address, 'Unknown Location');
 
             await this.setLocation(city, lat, lng);
             if (btn) btn.innerHTML = originalContent;
@@ -207,6 +246,21 @@ const EnteangadiLocation = {
     },
 
     async setLocation(name, lat, lng) {
+        // Save to localStorage
+        try {
+            localStorage.setItem('enteangadi_user_location', JSON.stringify({ name, lat, lng }));
+        } catch (e) {
+            console.warn('localStorage is not accessible:', e);
+        }
+
+        // Save to cookie (valid for 1 year)
+        document.cookie = "user_location=" + encodeURIComponent(JSON.stringify({ name, lat, lng })) + "; path=/; max-age=31536000; SameSite=Lax";
+
+        // Mark as auto-location attempted in this tab session
+        try {
+            sessionStorage.setItem('auto_location_attempted', 'true');
+        } catch (e) { }
+
         const statusEl = document.getElementById('loader-location-status');
         if (statusEl) {
             statusEl.innerHTML = `<i class="fa fa-check-circle" style="color: #4CAF50;"></i> 📍 ${name.split(',')[0]} detected!`;
@@ -216,9 +270,7 @@ const EnteangadiLocation = {
         const headerTextEl = document.getElementById('current-location-text');
         if (headerTextEl) {
             const displayCity = name.split(',')[0];
-            const displayLat = parseFloat(lat).toFixed(2);
-            const displayLng = parseFloat(lng).toFixed(2);
-            headerTextEl.innerHTML = `${displayCity} <small style="font-size: 10px; opacity: 0.7; margin-left: 5px;">(${displayLat}, ${displayLng})</small>`;
+            headerTextEl.innerHTML = `${displayCity}`;
         }
 
         try {
@@ -235,24 +287,37 @@ const EnteangadiLocation = {
 
             const result = await response.json();
             if (result.success) {
-                if (statusEl) {
+                const currentUrl = window.location.href;
+                const separator = currentUrl.includes('?') ? '&' : '?';
+                const reloadUrl = currentUrl.includes('loc_set=1') ? currentUrl : (currentUrl + separator + 'loc_set=1');
+
+                const loaderWrapper = document.getElementById('loader-wrapper');
+                const isLoaderVisible = loaderWrapper && loaderWrapper.style.display !== 'none' && !loaderWrapper.classList.contains('loader-hide');
+
+                if (isLoaderVisible) {
                     // Brief delay to let the user see the detected city in the splash pill
                     setTimeout(() => {
-                        location.reload();
+                        window.location.href = reloadUrl;
                     }, 1200);
                 } else {
-                    location.reload();
+                    window.location.href = reloadUrl;
                 }
             }
         } catch (error) {
             console.error('Error setting location:', error);
-            if (window.hideLoader) window.hideLoader();
         }
     },
 
     async clearLocation() {
         try {
-            sessionStorage.setItem('manualLocationClear', 'true');
+            try {
+                sessionStorage.setItem('manualLocationClear', 'true');
+            } catch (e) { }
+            try {
+                localStorage.removeItem('enteangadi_user_location');
+            } catch (e) { }
+            document.cookie = "user_location=; path=/; max-age=0; SameSite=Lax";
+
             const formData = new FormData();
             formData.append('action', 'clear_location');
 
@@ -279,20 +344,105 @@ const EnteangadiLocation = {
             }
         };
 
+        // Prevent auto-detection loops if already attempted in this tab session
+        try {
+            if (sessionStorage.getItem('auto_location_attempted') === 'true') {
+                return;
+            }
+        } catch (e) {
+            console.warn('sessionStorage is not accessible:', e);
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('loc_set')) {
+            return;
+        }
+
         // If manually cleared in this session, do not auto-detect
-        if (sessionStorage.getItem('manualLocationClear') === 'true') {
+        let manualCleared = false;
+        try {
+            manualCleared = sessionStorage.getItem('manualLocationClear') === 'true';
+        } catch (e) { }
+
+        if (manualCleared) {
             if (statusEl) statusEl.style.display = 'none';
-            if (window.hideLoader) window.hideLoader();
             return;
         }
 
-        // If we already have a location set in the session, do not auto-detect on every single page navigation.
+        // Check if Geolocation permission is already granted so we can query GPS coordinates in the background.
+        let gpsGranted = false;
+        try {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+                const permissionStatus = await window.Capacitor.Plugins.Geolocation.checkPermissions();
+                gpsGranted = (permissionStatus.location === 'granted');
+            } else if (navigator.permissions && navigator.permissions.query) {
+                const status = await navigator.permissions.query({ name: 'geolocation' });
+                gpsGranted = (status.state === 'granted');
+            }
+        } catch (e) { }
+
+        // 1. Prioritize restoring from localStorage (persistent client-side preference)
+        let localLoc = null;
+        try {
+            localLoc = localStorage.getItem('enteangadi_user_location');
+        } catch (e) { }
+
+        if (localLoc) {
+            try {
+                const parsed = JSON.parse(localLoc);
+                if (parsed && parsed.name && parsed.lat && parsed.lng) {
+                    EnteangadiConfig.hasLocation = true;
+                    EnteangadiConfig.location = parsed;
+
+                    // Sync the cookie as well
+                    document.cookie = "user_location=" + encodeURIComponent(JSON.stringify(parsed)) + "; path=/; max-age=31536000; SameSite=Lax";
+
+                    // Update header text in DOM
+                    const headerTextEl = document.getElementById('current-location-text');
+                    if (headerTextEl) {
+                        const displayCity = parsed.name.split(',')[0];
+                        headerTextEl.innerHTML = `${displayCity}`;
+                    }
+
+                    // Sync to server session in background (without page reload)
+                    const formData = new FormData();
+                    formData.append('action', 'set_location');
+                    formData.append('location_name', parsed.name);
+                    formData.append('latitude', parsed.lat);
+                    formData.append('longitude', parsed.lng);
+
+                    fetch(`${EnteangadiConfig.baseUrl}/api/location.php`, {
+                        method: 'POST',
+                        body: formData
+                    }).catch(err => console.warn('Background location sync failed:', err));
+
+                    return;
+                }
+            } catch (e) {
+                console.error('Error parsing localStorage location:', e);
+            }
+        }
+
+        // 2. If no localStorage exists, check if session already has a location
         // This prevents constant reload loops, saves battery, and speeds up page loading.
-        if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.hasLocation && EnteangadiConfig.location) {
-            if (window.hideLoader) window.hideLoader();
+        // BUT if GPS permission is already granted, we bypass this return to verify precise coordinates in the background.
+        if (!gpsGranted && typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.hasLocation && EnteangadiConfig.location) {
+            const locObj = EnteangadiConfig.location;
+            if (locObj && locObj.name && locObj.lat && locObj.lng) {
+                try {
+                    localStorage.setItem('enteangadi_user_location', JSON.stringify({ name: locObj.name, lat: locObj.lat, lng: locObj.lng }));
+                } catch (e) { }
+                document.cookie = "user_location=" + encodeURIComponent(JSON.stringify({ name: locObj.name, lat: locObj.lat, lng: locObj.lng })) + "; path=/; max-age=31536000; SameSite=Lax";
+            }
             return;
         }
 
+        // Mark as auto-location attempted in this tab session before starting Geolocation
+        try {
+            sessionStorage.setItem('auto_location_attempted', 'true');
+        } catch (e) { }
+
+        // Detect location in the background
         const headerTextEl = document.getElementById('current-location-text');
         // Capture original content of header text to restore if we fail
         const originalHTML = headerTextEl ? headerTextEl.innerHTML : 'Set Location';
@@ -322,23 +472,27 @@ const EnteangadiLocation = {
                         // Overwrite blank Set Location headers instantly
                         if (headerTextEl) {
                             const displayCity = locName.split(',')[0];
-                            headerTextEl.innerHTML = `${displayCity} <small style="font-size: 10px; opacity: 0.7; margin-left: 5px;">(${storedLat.toFixed(2)}, ${storedLng.toFixed(2)})</small>`;
+                            headerTextEl.innerHTML = `${displayCity}`;
                         }
-
-                        if (window.hideLoader) window.hideLoader();
                         return;
                     }
                 }
             }
 
-            if (coords.city) {
+            // Always reverse-geocode coordinates if we have them, to get the precise village/locality
+            if (lat && lng) {
+                await this.reverseGeocodeAuto(lat, lng, originalHTML);
+            } else if (coords.city) {
                 updateStatus(`📍 ${coords.city} detected!`, true);
                 await this.setLocation(coords.city, lat, lng);
             } else {
-                await this.reverseGeocodeAuto(lat, lng, originalHTML);
+                throw new Error('No coordinates or city name detected');
             }
         } catch (error) {
             console.warn('Auto-location detection failed:', error.message);
+            try {
+                sessionStorage.setItem('auto_location_attempted', 'true');
+            } catch (e) { }
             if (statusEl) {
                 statusEl.innerHTML = '<i class="fa fa-exclamation-triangle" style="color: #FFB300;"></i> Selection fallback active';
             }
@@ -346,7 +500,6 @@ const EnteangadiLocation = {
             if (headerTextEl) {
                 headerTextEl.innerHTML = originalHTML;
             }
-            if (window.hideLoader) window.hideLoader();
         }
     },
 
@@ -354,10 +507,10 @@ const EnteangadiLocation = {
         const statusEl = document.getElementById('loader-location-status');
         const headerTextEl = document.getElementById('current-location-text');
         try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`);
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`);
             const data = await response.json();
-            const city = data.address.city || data.address.town || data.address.village || data.address.state_district || 'Current Location';
-            
+            const city = this.extractLocality(data.address, 'Current Location');
+
             if (statusEl) {
                 statusEl.innerHTML = `<i class="fa fa-check-circle" style="color: #4CAF50;"></i> 📍 ${city.split(',')[0]} detected!`;
             }

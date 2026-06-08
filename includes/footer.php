@@ -661,6 +661,84 @@ if ($ad_active && !empty($interstitial_ads)):
     </script>
 <?php endif; ?>
 
+<?php if (isset($_SESSION['user_id']) && !empty($app_settings['announcement_poster']) && basename($_SERVER['PHP_SELF']) === 'index.php' && strpos($_SERVER['PHP_SELF'], '/user/') !== false): ?>
+    <!-- Announcement Poster Modal -->
+    <div id="announcement-poster-overlay" class="announcement-overlay"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px); z-index: 99999; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.4s ease;">
+        <div class="announcement-container"
+            style="position: relative; max-width: 90%; max-height: 85%; width: 440px; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.1); transform: scale(0.9); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); display: flex; flex-direction: column;">
+
+            <!-- Header -->
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #f1f5f9; background: white;">
+                <h3
+                    style="margin: 0; font-size: 18px; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa fa-bullhorn" style="color: var(--primary-green);"></i> Announcement
+                </h3>
+                <button onclick="closeAnnouncementPoster()"
+                    style="background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; font-size: 16px; font-weight: bold; transition: all 0.2s;"
+                    onmouseover="this.style.background='#e2e8f0'; this.style.color='#1e293b';"
+                    onmouseout="this.style.background='#f1f5f9'; this.style.color='#64748b';">&times;</button>
+            </div>
+
+            <!-- Body (Image) -->
+            <div
+                style="overflow-y: auto; flex: 1; padding: 16px; display: flex; align-items: center; justify-content: center; background: #f8fafc;">
+                <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['announcement_poster']) ?>" alt="Announcement"
+                    style="max-width: 100%; max-height: 100%; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+            </div>
+
+            <!-- Footer -->
+            <div
+                style="padding: 16px 24px; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; background: white;">
+                <button onclick="closeAnnouncementPoster()" class="btn-primary"
+                    style="padding: 10px 24px; border-radius: 12px; font-size: 14px; font-weight: 700; width: 100%;">Got
+                    it</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAnnouncementPoster() {
+            const overlay = document.getElementById('announcement-poster-overlay');
+            const container = overlay.querySelector('.announcement-container');
+
+            overlay.style.display = 'flex';
+            overlay.offsetWidth; // Force reflow
+
+            overlay.style.opacity = '1';
+            container.style.transform = 'scale(1)';
+            document.body.style.overflow = 'hidden'; // Lock background scroll
+        }
+
+        function closeAnnouncementPoster() {
+            const overlay = document.getElementById('announcement-poster-overlay');
+            const container = overlay.querySelector('.announcement-container');
+
+            overlay.style.opacity = '0';
+            container.style.transform = 'scale(0.9)';
+
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.body.style.overflow = ''; // Restore scroll
+            }, 400);
+
+            // Save states to prevent showing again
+            try {
+                sessionStorage.setItem('announcement_shown', 'true');
+                localStorage.setItem('announcement_last_shown_date', new Date().toDateString());
+            } catch (e) { }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Always display announcement poster shortly after the loader/splash screen is removed
+            setTimeout(() => {
+                showAnnouncementPoster();
+            }, 1600);
+        });
+    </script>
+<?php endif; ?>
+
 <script src="<?= $base_url ?? '/Enteangadi' ?>/assets/js/main.js"></script>
 </body>
 
