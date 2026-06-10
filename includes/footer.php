@@ -731,6 +731,10 @@ if ($ad_active && !empty($interstitial_ads)):
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Only show if not already shown in this session
+            if (sessionStorage.getItem('announcement_shown') === 'true') {
+                return;
+            }
             // Always display announcement poster shortly after the loader/splash screen is removed
             setTimeout(() => {
                 showAnnouncementPoster();

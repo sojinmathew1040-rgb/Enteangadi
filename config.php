@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $host = 'localhost';
 $username = 'root';
-$password = 'root';
+$password = '';
 $dbname = 'enteangadi';
 
 
