@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $file_name = 'logo_' . time() . '.' . $file_ext;
                 $target_path = $upload_dir . $file_name;
 
-                if (move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path)) {
+                if (compressAndResizeImage($_FILES['app_logo']['tmp_name'], $target_path, 400, 80) || move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path)) {
                     $db_path = 'uploads/logo/' . $file_name;
                     $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'app_logo'");
                     $stmt->execute([$db_path]);
@@ -216,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $file_name = 'poster_' . time() . '.' . $file_ext;
                     $target_path = $upload_dir . $file_name;
 
-                    if (move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
+                    if (compressAndResizeImage($_FILES['announcement_poster']['tmp_name'], $target_path, 1200, 80) || move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
                         $db_path = 'uploads/posters/' . $file_name;
                         $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('announcement_poster', ?) 
                                              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -317,9 +317,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $file_name = 'ad_' . time() . '_' . rand(1000, 9999) . '.' . $file_ext;
                     $target_path = $upload_dir . $file_name;
 
-                    if (move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
+                    $is_compressed = false;
+                    $ad_type = in_array($file_ext, $allowed_vids) ? 'video' : 'image';
+                    if ($ad_type === 'image') {
+                        $is_compressed = compressAndResizeImage($_FILES['interstitial_ad_file']['tmp_name'], $target_path, 1080, 80);
+                    }
+                    
+                    if ($is_compressed || move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
                         $db_path = 'uploads/interstitial_ads/' . $file_name;
-                        $ad_type = in_array($file_ext, $allowed_vids) ? 'video' : 'image';
                         $ad_link = $_POST['interstitial_ad_link'] ?? '';
                         $ad_duration = (int) ($_POST['interstitial_ad_duration'] ?? 5);
 

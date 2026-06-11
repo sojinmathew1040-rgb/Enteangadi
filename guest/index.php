@@ -26,10 +26,15 @@ if ($category_filter) {
 
 // Fetch products
 try {
-    $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, 
-        (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as main_image 
+    $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
         FROM products p 
         LEFT JOIN categories c ON p.category_id = c.id
+        LEFT JOIN (
+            SELECT product_id, MIN(id) as min_img_id 
+            FROM product_images 
+            GROUP BY product_id
+        ) pim ON p.id = pim.product_id
+        LEFT JOIN product_images pi ON pim.min_img_id = pi.id
         $where_clause 
         ORDER BY p.created_at DESC");
     $stmt->execute($params);
@@ -80,7 +85,7 @@ if ($category_filter) {
                 <a href="index.php?category_id=<?= $cat['id'] ?>"
                     style="text-decoration: none; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; width: 100px;">
                     <?php if ($cat['photo_path']): ?>
-                        <img src="../<?= htmlspecialchars($cat['photo_path']) ?>"
+                        <img src="../<?= htmlspecialchars($cat['photo_path']) ?>" loading="lazy"
                             style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; border: 2px solid <?= ($parent_id == $cat['id'] || $category_filter == $cat['id']) ? 'var(--primary-green)' : 'transparent' ?>; padding: 2px;">
                     <?php else: ?>
                         <div
@@ -143,7 +148,7 @@ if ($category_filter) {
                         <div class="badge-selling">For Sale</div>
                     <?php endif; ?>
                     <?php if ($product['main_image']): ?>
-                        <img src="../<?= htmlspecialchars($product['main_image']) ?>"
+                        <img src="../<?= htmlspecialchars($product['main_image']) ?>" loading="lazy"
                             alt="<?= htmlspecialchars($product['title']) ?>" class="product-card-image">
                     <?php else: ?>
                         <!-- Fallback image block -->

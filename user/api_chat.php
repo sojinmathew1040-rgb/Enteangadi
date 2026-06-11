@@ -84,7 +84,7 @@ if ($action === 'send') {
             $file_name = 'img_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
             $target_file = $upload_dir . $file_name;
 
-            if (move_uploaded_file($_FILES['image_data']['tmp_name'], $target_file)) {
+            if (compressAndResizeImage($_FILES['image_data']['tmp_name'], $target_file, 800, 75) || move_uploaded_file($_FILES['image_data']['tmp_name'], $target_file)) {
                 $db_path = '[IMAGE]:uploads/chat_images/' . $file_name;
 
                 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");

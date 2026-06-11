@@ -298,15 +298,44 @@ window.EnteangadiMobile = {
                 // Secure camera/photos permissions first
                 await window.Capacitor.Plugins.Camera.requestPermissions();
 
-                const photo = await window.Capacitor.Plugins.Camera.getPhoto({
-                    quality: 80,
-                    allowEditing: false,
-                    resultType: 'dataUrl', // return base64 dataUrl string
-                    source: sourceType     // 'CAMERA' or 'PHOTOS'
-                });
+                if (sourceType === 'PHOTOS' && typeof window.Capacitor.Plugins.Camera.pickImages === 'function') {
+                    const result = await window.Capacitor.Plugins.Camera.pickImages({
+                        quality: 80
+                    });
 
-                if (photo && photo.dataUrl) {
-                    onSuccess(photo.dataUrl);
+                    if (result && result.photos && result.photos.length > 0) {
+                        const dataUrls = [];
+                        for (let i = 0; i < result.photos.length; i++) {
+                            const photo = result.photos[i];
+                            try {
+                                const response = await fetch(photo.webPath);
+                                const blob = await response.blob();
+                                const dataUrl = await new Promise((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result);
+                                    reader.onerror = reject;
+                                    reader.readAsDataURL(blob);
+                                });
+                                dataUrls.push(dataUrl);
+                            } catch (fetchErr) {
+                                console.error("Error converting webPath to dataURL:", fetchErr);
+                            }
+                        }
+                        if (dataUrls.length > 0) {
+                            onSuccess(dataUrls);
+                        }
+                    }
+                } else {
+                    const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+                        quality: 80,
+                        allowEditing: false,
+                        resultType: 'dataUrl', // return base64 dataUrl string
+                        source: sourceType     // 'CAMERA'
+                    });
+
+                    if (photo && photo.dataUrl) {
+                        onSuccess(photo.dataUrl);
+                    }
                 }
             } else {
                 console.warn("Capacitor native Camera plugin is not linked. Falling back to default browser input picker.");
@@ -376,8 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
             avatarWrapper.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
-                    const file = dataURLtoFile(dataUrl, 'profile_picture.jpg');
+                window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+                    const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
+                    if (urls.length === 0) return;
+                    const file = dataURLtoFile(urls[0], 'profile_picture.jpg');
                     const input = document.getElementById('profile_picture_input');
                     const form = document.getElementById('profile_pic_form');
                     if (input && form) {
@@ -397,8 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
             addPhotoCard.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
-                    const file = dataURLtoFile(dataUrl, `photo_${Date.now()}.jpg`);
+                window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+                    const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
                     const input = document.getElementById('images');
                     if (input) {
                         const dt = new DataTransfer();
@@ -407,7 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 dt.items.add(input.files[i]);
                             }
                         }
-                        dt.items.add(file);
+                        urls.forEach((dataUrl, idx) => {
+                            const file = dataURLtoFile(dataUrl, `photo_${Date.now()}_${idx}.jpg`);
+                            dt.items.add(file);
+                        });
                         input.files = dt.files;
                         if (typeof previewImages === 'function') {
                             previewImages();
@@ -431,8 +465,10 @@ document.addEventListener('click', (e) => {
         avatarWrapper.removeAttribute('onclick'); // prevent repeating
         avatarWrapper.onclick = null; // clear
 
-        window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
-            const file = dataURLtoFile(dataUrl, 'profile_picture.jpg');
+        window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+            const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
+            if (urls.length === 0) return;
+            const file = dataURLtoFile(urls[0], 'profile_picture.jpg');
             const input = document.getElementById('profile_picture_input');
             const form = document.getElementById('profile_pic_form');
             if (input && form) {
@@ -453,8 +489,8 @@ document.addEventListener('click', (e) => {
         addPhotoCard.removeAttribute('onclick'); // prevent repeating
         addPhotoCard.onclick = null; // clear
 
-        window.EnteangadiMobile.showPhotoSourceSelection((dataUrl) => {
-            const file = dataURLtoFile(dataUrl, `photo_${Date.now()}.jpg`);
+        window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+            const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
             const input = document.getElementById('images');
             if (input) {
                 const dt = new DataTransfer();
@@ -463,7 +499,10 @@ document.addEventListener('click', (e) => {
                         dt.items.add(input.files[i]);
                     }
                 }
-                dt.items.add(file);
+                urls.forEach((dataUrl, idx) => {
+                    const file = dataURLtoFile(dataUrl, `photo_${Date.now()}_${idx}.jpg`);
+                    dt.items.add(file);
+                });
                 input.files = dt.files;
                 if (typeof previewImages === 'function') {
                     previewImages();

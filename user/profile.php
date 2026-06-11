@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $new_name = uniqid() . '.' . $ext;
             $dest = $upload_dir . $new_name;
 
-            if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $dest)) {
+            if (compressAndResizeImage($_FILES['profile_picture']['tmp_name'], $dest, 400, 80) || move_uploaded_file($_FILES['profile_picture']['tmp_name'], $dest)) {
                 $db_path = 'uploads/profiles/' . $new_name;
 
                 // Fetch old profile picture to delete it
