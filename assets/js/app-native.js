@@ -292,6 +292,30 @@ window.EnteangadiMobile = {
         };
     },
 
+    /**
+     * Helper to read native photo details (via path conversion) and convert to dataURL
+     * This is crucial when the app is hosted on a remote server/origin, as standard
+     * file/content paths fail CORS validation in Capacitor.
+     */
+    readPhotoAsDataURL: async function (photo) {
+        const path = photo.path || photo.webPath;
+        if (!path) {
+            throw new Error("No valid path found for photo");
+        }
+        const convertedUrl = window.Capacitor.convertFileSrc(path);
+        const response = await fetch(convertedUrl);
+        const blob = await response.blob();
+        if (blob.size === 0) {
+            throw new Error("Opaque or 0-byte blob returned from path fetch");
+        }
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    },
+
     capturePhotoNatively: async function (sourceType, onSuccess) {
         try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
@@ -308,14 +332,7 @@ window.EnteangadiMobile = {
                         for (let i = 0; i < result.photos.length; i++) {
                             const photo = result.photos[i];
                             try {
-                                const response = await fetch(photo.webPath);
-                                const blob = await response.blob();
-                                const dataUrl = await new Promise((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => resolve(reader.result);
-                                    reader.onerror = reject;
-                                    reader.readAsDataURL(blob);
-                                });
+                                const dataUrl = await window.EnteangadiMobile.readPhotoAsDataURL(photo);
                                 dataUrls.push(dataUrl);
                             } catch (fetchErr) {
                                 console.error("Error converting webPath to dataURL:", fetchErr);
@@ -329,12 +346,17 @@ window.EnteangadiMobile = {
                     const photo = await window.Capacitor.Plugins.Camera.getPhoto({
                         quality: 80,
                         allowEditing: false,
-                        resultType: 'dataUrl', // return base64 dataUrl string
-                        source: sourceType     // 'CAMERA'
+                        resultType: 'uri', // return local URI for consistent conversion
+                        source: sourceType // 'CAMERA'
                     });
 
-                    if (photo && photo.dataUrl) {
-                        onSuccess(photo.dataUrl);
+                    if (photo) {
+                        try {
+                            const dataUrl = await window.EnteangadiMobile.readPhotoAsDataURL(photo);
+                            onSuccess(dataUrl);
+                        } catch (err) {
+                            console.error("Error converting camera photo to dataURL:", err);
+                        }
                     }
                 }
             } else {
@@ -361,9 +383,17 @@ window.EnteangadiMobile = {
 
 // Convert base64 dataURL to standard HTML5 File object
 function dataURLtoFile(dataurl, filename) {
-    const arr = dataurl.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
+    if (!dataurl) return null;
+    let arr, mime, bstr;
+    if (dataurl.includes(',')) {
+        arr = dataurl.split(',');
+        const match = arr[0].match(/:(.*?);/);
+        mime = match ? match[1] : 'image/jpeg';
+        bstr = atob(arr[1]);
+    } else {
+        mime = 'image/jpeg';
+        bstr = atob(dataurl);
+    }
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
     while (n--) {
