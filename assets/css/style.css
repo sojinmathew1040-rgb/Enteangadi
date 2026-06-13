@@ -2797,8 +2797,8 @@ input[type="checkbox"]:checked+.toggle-btn {
 .premium-select,
 .premium-textarea {
     width: 100%;
-    background: #F8FAFC;
-    border: 2px solid #F1F5F9;
+    background: var(--background);
+    border: 2px solid var(--border-color);
     border-radius: 16px;
     padding: 14px 20px;
     font-size: 15px;
@@ -2806,10 +2806,17 @@ input[type="checkbox"]:checked+.toggle-btn {
     transition: 0.3s;
 }
 
-.premium-input:focus {
+.premium-input:focus,
+.premium-select:focus,
+.premium-textarea:focus {
     border-color: var(--primary-green);
     background: var(--white);
     outline: none;
+}
+
+.premium-select option {
+    background-color: var(--white);
+    color: var(--text-dark);
 }
 
 .type-button-group {

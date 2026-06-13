@@ -720,3 +720,292 @@
         transform: translateY(0);
     }
 }
+
+/* Fallback Premium Custom Share Modal */
+.custom-share-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-share-backdrop.active {
+    display: flex;
+    opacity: 1;
+}
+
+.custom-share-card {
+    width: 90%;
+    max-width: 480px;
+    background: var(--white);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    transform: translateY(20px);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-share-backdrop.active .custom-share-card {
+    transform: translateY(0);
+}
+
+.custom-share-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+}
+
+.custom-share-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.custom-share-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.custom-share-close:hover {
+    color: var(--text-dark);
+}
+
+/* Product Mini Card Preview */
+.custom-share-preview-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    margin-bottom: 20px;
+}
+
+.custom-share-preview-card img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.custom-share-preview-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.custom-share-preview-title {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.custom-share-preview-price {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--primary-green);
+}
+
+.custom-share-section-title {
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.custom-share-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.custom-share-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--text-dark);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    background: none;
+    border: none;
+    outline: none;
+    transition: transform 0.2s;
+}
+
+.custom-share-item:hover {
+    transform: translateY(-4px);
+}
+
+.custom-share-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    margin-bottom: 6px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s;
+}
+
+/* Share Brand Colors */
+.custom-share-item.whatsapp .custom-share-icon { background: #25D366; }
+.custom-share-item.telegram .custom-share-icon { background: #0088cc; }
+.custom-share-item.facebook .custom-share-icon { background: #1877F2; }
+.custom-share-item.twitter .custom-share-icon { background: #000000; }
+.custom-share-item.linkedin .custom-share-icon { background: #0077b5; }
+.custom-share-item.email .custom-share-icon { background: #EA4335; }
+.custom-share-item.copy-link .custom-share-icon { background: #64748B; }
+
+/* Android App Redirect Modal */
+.app-redirect-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 20000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.app-redirect-backdrop.active {
+    display: flex;
+    opacity: 1;
+}
+
+.app-redirect-card {
+    width: 90%;
+    max-width: 400px;
+    background: var(--white);
+    border-radius: 28px;
+    padding: 32px 24px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.app-redirect-backdrop.active .app-redirect-card {
+    transform: scale(1);
+}
+
+.app-redirect-logo {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    background: var(--primary-green);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: white;
+    box-shadow: 0 8px 16px rgba(46, 125, 50, 0.2);
+    overflow: hidden;
+}
+
+.app-redirect-card h3 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-dark);
+}
+
+.app-redirect-card p {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.app-redirect-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.btn-app-install {
+    background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+    color: white !important;
+    padding: 14px;
+    border-radius: 16px;
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-app-install:active {
+    transform: scale(0.98);
+}
+
+.btn-app-continue {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color 0.2s;
+    outline: none;
+}
+
+.btn-app-continue:hover {
+    color: var(--text-dark);
+}
+
+@media (max-width: 576px) {
+    .custom-share-backdrop {
+        align-items: flex-end;
+    }
+    .custom-share-card {
+        width: 100%;
+        border-radius: 24px 24px 0 0;
+        transform: translateY(100%);
+        padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+    .custom-share-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+}

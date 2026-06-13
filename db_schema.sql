@@ -115,3 +115,5 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('ad_approval_mode', 'auto');
+INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('play_store_url', 'https://play.google.com/store/apps/details?id=com.enteangadi.app');
+INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES ('app_store_url', 'https://apps.apple.com/app/enteangadi');

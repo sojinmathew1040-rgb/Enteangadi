@@ -118,7 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'whatsapp_number',
             'facebook_url',
             'instagram_url',
-            'twitter_url'
+            'twitter_url',
+            'play_store_url',
+            'app_store_url'
         ];
 
         foreach ($fields as $field) {
@@ -2692,6 +2694,31 @@ require_once 'includes/header.php';
                 <input type="url" id="twitter_url" name="twitter_url" class="form-control"
                     value="<?= htmlspecialchars($app_settings['twitter_url'] ?? '') ?>"
                     placeholder="https://twitter.com/yourpage">
+            </div>
+
+            <div class="form-divider"><span>MOBILE APP DOWNLOAD LINKS</span></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div class="form-group">
+                    <div class="form-group-header">
+                        <label><i class="fab fa-google-play" style="color: #34A853;"></i> Google Play Store URL</label>
+                        <span class="clear-field" onclick="clearField('play_store_url')"><i
+                                class="fa fa-times-circle"></i> Clear</span>
+                    </div>
+                    <input type="url" id="play_store_url" name="play_store_url" class="form-control"
+                        value="<?= htmlspecialchars($app_settings['play_store_url'] ?? '') ?>"
+                        placeholder="https://play.google.com/store/apps/details?id=...">
+                </div>
+                <div class="form-group">
+                    <div class="form-group-header">
+                        <label><i class="fab fa-apple" style="color: #000000;"></i> Apple App Store URL</label>
+                        <span class="clear-field" onclick="clearField('app_store_url')"><i
+                                class="fa fa-times-circle"></i> Clear</span>
+                    </div>
+                    <input type="url" id="app_store_url" name="app_store_url" class="form-control"
+                        value="<?= htmlspecialchars($app_settings['app_store_url'] ?? '') ?>"
+                        placeholder="https://apps.apple.com/app/...">
+                </div>
             </div>
 
             <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save

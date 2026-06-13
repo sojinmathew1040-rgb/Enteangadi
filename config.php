@@ -423,6 +423,8 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )");
     $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['ad_approval_mode', 'auto']);
+    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['play_store_url', 'https://play.google.com/store/apps/details?id=com.enteangadi.app']);
+    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['app_store_url', 'https://apps.apple.com/app/enteangadi']);
 
     // [SESSION TIMEOUT] Auto-add last_activity to users
     try {

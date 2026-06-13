@@ -141,7 +141,7 @@ require_once 'includes/header.php';
                                     onclick="toggleWishlist(event, <?= $product['id'] ?>)">
                                     <i class="fa<?= $is_wishlisted ? 's' : 'r' ?> fa-heart"></i>
                                 </button>
-                                <button class="action-circle-btn share" onclick="shareProduct()">
+                                <button class="action-circle-btn share" onclick="shareProduct(<?= $product['id'] ?>, '<?= htmlspecialchars($product['title'], ENT_QUOTES) ?>')">
                                     <i class="fa fa-share-alt"></i>
                                 </button>
                             </div>
@@ -284,9 +284,85 @@ require_once 'includes/header.php';
 // End of file logic
 ?>
 
+<!-- Fallback Premium Custom Share Modal -->
+<div id="customShareModal" class="custom-share-backdrop" onclick="closeCustomShare()">
+    <div class="custom-share-card" onclick="event.stopPropagation()">
+        <div class="custom-share-header">
+            <h3>Share link</h3>
+            <button class="custom-share-close" onclick="closeCustomShare()">&times;</button>
+        </div>
+        
+        <!-- Product Mini Card Preview -->
+        <div class="custom-share-preview-card">
+            <img src="<?= !empty($images) ? htmlspecialchars($images[0], ENT_QUOTES) : 'assets/images/placeholder.jpg' ?>" alt="Product Image">
+            <div class="custom-share-preview-info">
+                <h4 class="custom-share-preview-title"><?= htmlspecialchars($product['title'], ENT_QUOTES) ?></h4>
+                <p class="custom-share-preview-price">₹ <?= number_format($product['price'], 0) ?></p>
+            </div>
+        </div>
+
+        <div class="custom-share-section-title">Share using</div>
+        <div class="custom-share-grid">
+            <a href="#" id="share-whatsapp" target="_blank" class="custom-share-item whatsapp">
+                <div class="custom-share-icon"><i class="fab fa-whatsapp"></i></div>
+                <span>WhatsApp</span>
+            </a>
+            <a href="#" id="share-telegram" target="_blank" class="custom-share-item telegram">
+                <div class="custom-share-icon"><i class="fab fa-telegram-plane"></i></div>
+                <span>Telegram</span>
+            </a>
+            <a href="#" id="share-facebook" target="_blank" class="custom-share-item facebook">
+                <div class="custom-share-icon"><i class="fab fa-facebook-f"></i></div>
+                <span>Facebook</span>
+            </a>
+            <a href="#" id="share-twitter" target="_blank" class="custom-share-item twitter">
+                <div class="custom-share-icon"><i class="fab fa-x-twitter"></i></div>
+                <span>Twitter</span>
+            </a>
+            <a href="#" id="share-linkedin" target="_blank" class="custom-share-item linkedin">
+                <div class="custom-share-icon"><i class="fab fa-linkedin-in"></i></div>
+                <span>LinkedIn</span>
+            </a>
+            <a href="#" id="share-email" target="_blank" class="custom-share-item email">
+                <div class="custom-share-icon"><i class="fas fa-envelope"></i></div>
+                <span>Email</span>
+            </a>
+            <button onclick="copyShareLink()" class="custom-share-item copy-link">
+                <div class="custom-share-icon"><i class="fas fa-link"></i></div>
+                <span>Copy Link</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- App Redirect Modal for Android users landing from Mobile App Shares -->
+<div id="appRedirectModal" class="app-redirect-backdrop">
+    <div class="app-redirect-card">
+        <div class="app-redirect-logo">
+            <?php if (!empty($app_settings['app_logo'])): ?>
+                <img src="<?= htmlspecialchars($app_settings['app_logo'], ENT_QUOTES) ?>" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 16px;">
+            <?php else: ?>
+                <i class="fa fa-shopping-bag"></i>
+            <?php endif; ?>
+        </div>
+        <h3>Open in <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?></h3>
+        <p>View this product inside the <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?> mobile application for a better experience!</p>
+        <div class="app-redirect-btns">
+            <a href="#" id="btn-redirect-install" class="btn-app-install" target="_blank">
+                <i class="fab fa-google-play"></i> Install App
+            </a>
+            <button class="btn-app-continue" onclick="closeRedirectModal()">
+                Continue on website
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     const imgCount = <?= count($images) ?>;
     const sessionUserId = <?= isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null' ?>;
+    const playStoreUrl = '<?= !empty($app_settings['play_store_url']) ? htmlspecialchars($app_settings['play_store_url'], ENT_QUOTES) : 'https://play.google.com/store/apps/details?id=com.enteangadi.app' ?>';
+    const appStoreUrl = '<?= !empty($app_settings['app_store_url']) ? htmlspecialchars($app_settings['app_store_url'], ENT_QUOTES) : 'https://apps.apple.com/app/enteangadi' ?>';
 </script>
 <script src="assets/js/product.js"></script>
 

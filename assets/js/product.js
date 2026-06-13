@@ -115,19 +115,125 @@ async function toggleWishlist(event, productId) {
     } catch (e) { console.error(e); }
 }
 
-function shareProduct() {
-    if (navigator.share) {
+let currentShareUrl = '';
+
+function shareProduct(productId, productTitle) {
+    // 1. Build the share URL
+    let shareUrl = window.location.origin + window.location.pathname + '?id=' + productId;
+    
+    // 2. If running inside the mobile app wrapper, append &shared_from=app
+    if (window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile()) {
+        shareUrl += '&shared_from=app';
+    }
+
+    currentShareUrl = shareUrl;
+
+    // 3. Check if standard navigator.share is available AND not inside Capacitor/Mobile app
+    if (navigator.share && !(window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile())) {
         navigator.share({
-            title: document.title,
-            url: window.location.href
+            title: productTitle || document.title,
+            url: shareUrl
+        }).catch(err => {
+            console.log("Native share failed or dismissed", err);
         });
     } else {
-        const dummy = document.createElement('input');
-        document.body.appendChild(dummy);
-        dummy.value = window.location.href;
-        dummy.select();
-        document.execCommand('copy');
-        document.body.removeChild(dummy);
-        alert('Link copied to clipboard!');
+        // Show fallback custom share modal
+        openCustomShare(shareUrl, productTitle || document.title);
     }
 }
+
+function openCustomShare(url, title) {
+    const modal = document.getElementById('customShareModal');
+    if (!modal) return;
+
+    // Configure share links
+    const textMsg = encodeURIComponent("Check out this product on Enteangadi: " + title + "\n" + url);
+    const whatsapp = document.getElementById('share-whatsapp');
+    const telegram = document.getElementById('share-telegram');
+    const facebook = document.getElementById('share-facebook');
+    const twitter = document.getElementById('share-twitter');
+    const linkedin = document.getElementById('share-linkedin');
+    const email = document.getElementById('share-email');
+
+    if (whatsapp) whatsapp.href = "https://api.whatsapp.com/send?text=" + textMsg;
+    if (telegram) telegram.href = "https://telegram.me/share/url?url=" + encodeURIComponent(url) + "&text=" + encodeURIComponent(title);
+    if (facebook) facebook.href = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
+    if (twitter) twitter.href = "https://twitter.com/intent/tweet?url=" + encodeURIComponent(url) + "&text=" + encodeURIComponent(title);
+    if (linkedin) linkedin.href = "https://www.linkedin.com/sharing/share-offsite/?url=" + encodeURIComponent(url);
+    if (email) email.href = "mailto:?subject=" + encodeURIComponent(title) + "&body=" + textMsg;
+
+    modal.style.display = 'flex';
+    setTimeout(() => {
+        modal.classList.add('active');
+    }, 10);
+}
+
+function closeCustomShare() {
+    const modal = document.getElementById('customShareModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 300);
+}
+
+function copyShareLink() {
+    if (!currentShareUrl) return;
+    const dummy = document.createElement('input');
+    document.body.appendChild(dummy);
+    dummy.value = currentShareUrl;
+    dummy.select();
+    try {
+        document.execCommand('copy');
+        const copyBtn = document.querySelector('.custom-share-item.copy-link span');
+        const origText = copyBtn ? copyBtn.innerText : 'Copy Link';
+        if (copyBtn) {
+            copyBtn.innerText = 'Copied!';
+            copyBtn.style.color = 'var(--primary-green)';
+            setTimeout(() => {
+                copyBtn.innerText = origText;
+                copyBtn.style.color = '';
+            }, 2000);
+        } else {
+            alert('Link copied to clipboard!');
+        }
+    } catch (e) {
+        console.error('Failed to copy to clipboard', e);
+    } finally {
+        document.body.removeChild(dummy);
+    }
+}
+
+// Redirect overlay logic for Android user opening a mobile-app shared link
+function checkAppRedirect() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('shared_from') === 'app') {
+        const isAndroid = /android/i.test(navigator.userAgent);
+        if (isAndroid) {
+            const redirectModal = document.getElementById('appRedirectModal');
+            const installBtn = document.getElementById('btn-redirect-install');
+            
+            if (redirectModal) {
+                if (installBtn && typeof playStoreUrl !== 'undefined') {
+                    installBtn.href = playStoreUrl;
+                }
+                redirectModal.style.display = 'flex';
+                setTimeout(() => {
+                    redirectModal.classList.add('active');
+                }, 10);
+            }
+        }
+    }
+}
+
+function closeRedirectModal() {
+    const redirectModal = document.getElementById('appRedirectModal');
+    if (!redirectModal) return;
+    redirectModal.classList.remove('active');
+    setTimeout(() => {
+        redirectModal.style.display = 'none';
+    }, 300);
+}
+
+// Register redirect check on page load
+document.addEventListener('DOMContentLoaded', checkAppRedirect);

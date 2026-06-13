@@ -79,12 +79,12 @@
 }
 
 .form-section-premium {
-    background: white;
+    background: var(--white);
     border-radius: 32px;
     padding: 40px;
     margin-bottom: 24px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color);
 }
 
 .section-header {
@@ -127,8 +127,8 @@
 .premium-select,
 .premium-textarea {
     width: 100%;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
+    background: var(--background);
+    border: 2px solid var(--border-color);
     border-radius: 16px;
     padding: 14px 20px;
     font-size: 15px;
@@ -141,7 +141,7 @@
 .premium-select:focus,
 .premium-textarea:focus {
     border-color: var(--primary-green);
-    background: #FFFFFF;
+    background: var(--white);
     outline: none;
     box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.12), 0 4px 12px rgba(46, 125, 50, 0.04);
 }
@@ -156,6 +156,15 @@
     background-size: 16px;
     padding-right: 48px;
     cursor: pointer;
+}
+
+[data-theme="dark"] .premium-select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238B949E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+}
+
+.premium-select option {
+    background-color: var(--white);
+    color: var(--text-dark);
 }
 
 /* Type Button Group Cards */
