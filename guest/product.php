@@ -22,6 +22,21 @@ try {
         exit;
     }
 
+    // Track recently viewed products in cookies
+    $recently_viewed = [];
+    if (isset($_COOKIE['recently_viewed'])) {
+        $recently_viewed = json_decode($_COOKIE['recently_viewed'], true);
+        if (!is_array($recently_viewed)) {
+            $recently_viewed = [];
+        }
+    }
+    if (($key = array_search($product_id, $recently_viewed)) !== false) {
+        unset($recently_viewed[$key]);
+    }
+    array_unshift($recently_viewed, $product_id);
+    $recently_viewed = array_slice($recently_viewed, 0, 15);
+    enteangadi_set_cookie('recently_viewed', json_encode($recently_viewed), time() + (86400 * 30));
+
     $img_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ?");
     $img_stmt->execute([$product_id]);
     $images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);

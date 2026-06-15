@@ -52,7 +52,7 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title><?= __('app_name') ?> - <?= __('tagline') ?></title>
     <meta name="description" content="Buy and sell anything locally with <?= __('app_name') ?>.">
-    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=1.2">
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=1.3">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -152,10 +152,21 @@ try {
             const savedTheme = localStorage.getItem('enteangadi-theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
         })();
+
+        // Service Worker registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('<?= $base_url ?>/service-worker.js')
+                    .then(reg => console.log('Service Worker registered:', reg.scope))
+                    .catch(err => console.warn('Service Worker registration failed:', err));
+            });
+        }
     </script>
     <script src="<?= $base_url ?>/capacitor.js"></script>
     <script src="<?= $base_url ?>/assets/js/location.js" defer></script>
     <script src="<?= $base_url ?>/assets/js/app-native.js" defer></script>
+    <!-- Instant.page for instant preloading of pages on hover/touchstart -->
+    <script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.js" type="module"></script>
 
 </head>
 

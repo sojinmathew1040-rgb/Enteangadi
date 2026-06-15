@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dest = $upload_dir . $new_name;
 
             if (compressAndResizeImage($_FILES['profile_picture']['tmp_name'], $dest, 400, 80) || move_uploaded_file($_FILES['profile_picture']['tmp_name'], $dest)) {
+                @chmod($dest, 0644);
                 $db_path = 'uploads/profiles/' . $new_name;
 
                 // Fetch old profile picture to delete it

@@ -69,11 +69,13 @@ CREATE TABLE IF NOT EXISTS product_images (
 CREATE TABLE IF NOT EXISTS reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
+    reported_user_id INT DEFAULT NULL,
     reported_by_user_id INT NOT NULL,
     reason TEXT NOT NULL,
     status ENUM('pending', 'resolved') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (reported_user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (reported_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -104,6 +106,17 @@ CREATE TABLE IF NOT EXISTS wishlist (
     UNIQUE KEY unique_wishlist (user_id, product_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- Blocked Users Table
+CREATE TABLE IF NOT EXISTS blocked_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    blocker_id INT NOT NULL,
+    blocked_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_block (blocker_id, blocked_id),
+    FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- App Settings Table

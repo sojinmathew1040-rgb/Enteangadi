@@ -9,15 +9,26 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $my_id = $_SESSION['user_id'];
 
-// Security check: Check if product is deleted
+// Security check: Check if product is deleted or user is blocked
 if (in_array($action, ['send', 'send_audio', 'send_image'])) {
     $product_id = $_POST['product_id'] ?? 0;
+    $receiver_id = $_POST['receiver_id'] ?? 0;
+
     if ($product_id) {
         $prod_stmt = $pdo->prepare("SELECT status FROM products WHERE id = ?");
         $prod_stmt->execute([$product_id]);
         $prod_status = $prod_stmt->fetchColumn();
         if ($prod_status === 'deleted') {
             echo json_encode(['success' => false, 'error' => 'Product deleted by the seller']);
+            exit;
+        }
+    }
+
+    if ($receiver_id) {
+        $check_block = $pdo->prepare("SELECT COUNT(*) FROM blocked_users WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)");
+        $check_block->execute([$my_id, $receiver_id, $receiver_id, $my_id]);
+        if ($check_block->fetchColumn() > 0) {
+            echo json_encode(['success' => false, 'error' => 'Messaging is blocked between these users.']);
             exit;
         }
     }
@@ -54,6 +65,7 @@ if ($action === 'send') {
             $target_file = $upload_dir . $file_name;
 
             if (move_uploaded_file($_FILES['audio_data']['tmp_name'], $target_file)) {
+                @chmod($target_file, 0644);
                 $db_path = '[AUDIO]:uploads/voice_chats/' . $file_name;
 
                 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
@@ -85,6 +97,7 @@ if ($action === 'send') {
             $target_file = $upload_dir . $file_name;
 
             if (compressAndResizeImage($_FILES['image_data']['tmp_name'], $target_file, 800, 75) || move_uploaded_file($_FILES['image_data']['tmp_name'], $target_file)) {
+                @chmod($target_file, 0644);
                 $db_path = '[IMAGE]:uploads/chat_images/' . $file_name;
 
                 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");

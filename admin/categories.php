@@ -23,8 +23,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target_file = $upload_dir . $file_name;
 
                 if (compressAndResizeImage($_FILES['photo']['tmp_name'], $target_file, 300, 75)) {
+                    @chmod($target_file, 0644);
                     $photo_path = 'uploads/categories/' . $file_name;
                 } elseif (move_uploaded_file($_FILES['photo']['tmp_name'], $target_file)) {
+                    @chmod($target_file, 0644);
                     $photo_path = 'uploads/categories/' . $file_name;
                 }
             }
@@ -52,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target_file = $upload_dir . $file_name;
 
                 if (compressAndResizeImage($_FILES['photo']['tmp_name'], $target_file, 300, 75) || move_uploaded_file($_FILES['photo']['tmp_name'], $target_file)) {
+                    @chmod($target_file, 0644);
                     // Delete old photo
                     $old_stmt = $pdo->prepare("SELECT photo_path FROM categories WHERE id = ?");
                     $old_stmt->execute([$category_id]);

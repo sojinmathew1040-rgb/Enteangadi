@@ -295,6 +295,26 @@ try {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )");
 
+    // Auto-create blocked_users table if it doesn't exist
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blocked_users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        blocker_id INT NOT NULL,
+        blocked_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_block (blocker_id, blocked_id),
+        FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
+    )");
+
+    // Auto-add reported_user_id column to reports if missing
+    try {
+        $pdo->query("SELECT reported_user_id FROM reports LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE reports ADD COLUMN reported_user_id INT DEFAULT NULL AFTER product_id");
+        $pdo->exec("ALTER TABLE reports ADD FOREIGN KEY (reported_user_id) REFERENCES users(id) ON DELETE CASCADE");
+    }
+
+
     // Auto-add session_token column to users if missing
     try {
         $pdo->query("SELECT session_token FROM users LIMIT 1");

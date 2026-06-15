@@ -99,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $target_path = $upload_dir . $file_name;
 
                 if (compressAndResizeImage($_FILES['app_logo']['tmp_name'], $target_path, 400, 80) || move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path)) {
+                    @chmod($target_path, 0644);
                     $db_path = 'uploads/logo/' . $file_name;
                     $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'app_logo'");
                     $stmt->execute([$db_path]);
@@ -219,6 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $target_path = $upload_dir . $file_name;
 
                     if (compressAndResizeImage($_FILES['announcement_poster']['tmp_name'], $target_path, 1200, 80) || move_uploaded_file($_FILES['announcement_poster']['tmp_name'], $target_path)) {
+                        @chmod($target_path, 0644);
                         $db_path = 'uploads/posters/' . $file_name;
                         $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('announcement_poster', ?) 
                                              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
@@ -326,6 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     if ($is_compressed || move_uploaded_file($_FILES['interstitial_ad_file']['tmp_name'], $target_path)) {
+                        @chmod($target_path, 0644);
                         $db_path = 'uploads/interstitial_ads/' . $file_name;
                         $ad_link = $_POST['interstitial_ad_link'] ?? '';
                         $ad_duration = (int) ($_POST['interstitial_ad_duration'] ?? 5);

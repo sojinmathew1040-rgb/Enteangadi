@@ -3,7 +3,7 @@
   "appName": "Enteangadi",
   "webDir": "dist",
   "server": {
-    "url": "http://enteangadi.com/",
+    "url": "https://enteangadi.com/",
     "allowNavigation": [
       "enteangadi.com"
     ]

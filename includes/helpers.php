@@ -48,7 +48,11 @@ if (!function_exists('compressAndResizeImage')) {
     {
         if (!function_exists('imagecreatefromjpeg')) {
             // Fallback: Just copy file without compression if GD is missing
-            return copy($source, $destination);
+            $copied = copy($source, $destination);
+            if ($copied) {
+                @chmod($destination, 0644);
+            }
+            return $copied;
         }
 
         $info = getimagesize($source);
@@ -89,6 +93,9 @@ if (!function_exists('compressAndResizeImage')) {
 
         imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
         $result = imagejpeg($new_image, $destination, $quality);
+        if ($result) {
+            @chmod($destination, 0644);
+        }
 
         return $result;
     }
@@ -211,7 +218,6 @@ if (!function_exists('isImageNSFW')) {
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($response === false || $http_code !== 200) {
             error_log('Sightengine API call failed or timed out.');

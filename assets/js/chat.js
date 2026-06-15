@@ -608,6 +608,353 @@ function updateInputButtons() {
     }
 }
 
+// Toggle actions dropdown menu in chat header
+function toggleChatMenu(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const dropdown = document.getElementById('chatMenuDropdown');
+    if (!dropdown) return;
+    const isShowing = dropdown.style.display === 'block';
+    dropdown.style.display = isShowing ? 'none' : 'block';
+
+    if (!isShowing) {
+        // Close menu on outside click
+        const closeMenuHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== document.getElementById('chatMenuBtn')) {
+                dropdown.style.display = 'none';
+                document.removeEventListener('click', closeMenuHandler);
+            }
+        };
+        document.addEventListener('click', closeMenuHandler);
+    }
+}
+
+// Reusable Custom Themed Dialog Helpers
+function showCustomConfirm({ title, message, isDanger, iconClass }, onConfirm) {
+    const modal = document.getElementById('customConfirmModal');
+    const titleEl = document.getElementById('customConfirmTitle');
+    const msgEl = document.getElementById('customConfirmMessage');
+    const cancelBtn = document.getElementById('customConfirmCancelBtn');
+    const proceedBtn = document.getElementById('customConfirmProceedBtn');
+    const iconWrapper = document.getElementById('customConfirmIconWrapper');
+    const iconEl = document.getElementById('customConfirmIcon');
+
+    if (!modal || !titleEl || !msgEl || !cancelBtn || !proceedBtn) return;
+
+    titleEl.textContent = title || "Confirm Action";
+    msgEl.textContent = message || "Are you sure you want to proceed?";
+    
+    if (iconEl) {
+        iconEl.className = iconClass || "fa fa-info-circle";
+    }
+
+    if (isDanger) {
+        proceedBtn.style.background = '#ef4444';
+        proceedBtn.style.borderColor = '#ef4444';
+        if (iconWrapper) {
+            iconWrapper.style.background = 'rgba(239, 68, 68, 0.1)';
+            iconWrapper.style.color = '#ef4444';
+        }
+    } else {
+        proceedBtn.style.background = 'var(--primary-green, #1B5E20)';
+        proceedBtn.style.borderColor = 'var(--primary-green, #1B5E20)';
+        if (iconWrapper) {
+            iconWrapper.style.background = 'rgba(27, 94, 32, 0.1)';
+            iconWrapper.style.color = 'var(--primary-green, #1B5E20)';
+        }
+    }
+
+    cancelBtn.style.display = 'block';
+    proceedBtn.textContent = "Proceed";
+    modal.style.display = 'flex';
+
+    const cleanUp = () => {
+        modal.style.display = 'none';
+        proceedBtn.onclick = null;
+        cancelBtn.onclick = null;
+    };
+
+    proceedBtn.onclick = () => {
+        cleanUp();
+        if (onConfirm) onConfirm();
+    };
+
+    cancelBtn.onclick = () => {
+        cleanUp();
+    };
+}
+
+function showCustomAlert({ title, message, isDanger, iconClass }, onOk) {
+    const modal = document.getElementById('customConfirmModal');
+    const titleEl = document.getElementById('customConfirmTitle');
+    const msgEl = document.getElementById('customConfirmMessage');
+    const cancelBtn = document.getElementById('customConfirmCancelBtn');
+    const proceedBtn = document.getElementById('customConfirmProceedBtn');
+    const iconWrapper = document.getElementById('customConfirmIconWrapper');
+    const iconEl = document.getElementById('customConfirmIcon');
+
+    if (!modal || !titleEl || !msgEl || !cancelBtn || !proceedBtn) return;
+
+    titleEl.textContent = title || "Notice";
+    msgEl.textContent = message || "";
+    
+    if (iconEl) {
+        iconEl.className = iconClass || "fa fa-exclamation-circle";
+    }
+
+    if (isDanger) {
+        proceedBtn.style.background = '#ef4444';
+        proceedBtn.style.borderColor = '#ef4444';
+        if (iconWrapper) {
+            iconWrapper.style.background = 'rgba(239, 68, 68, 0.1)';
+            iconWrapper.style.color = '#ef4444';
+        }
+    } else {
+        proceedBtn.style.background = 'var(--primary-green, #1B5E20)';
+        proceedBtn.style.borderColor = 'var(--primary-green, #1B5E20)';
+        if (iconWrapper) {
+            iconWrapper.style.background = 'rgba(27, 94, 32, 0.1)';
+            iconWrapper.style.color = 'var(--primary-green, #1B5E20)';
+        }
+    }
+
+    cancelBtn.style.display = 'none';
+    proceedBtn.textContent = "OK";
+    modal.style.display = 'flex';
+
+    const cleanUp = () => {
+        modal.style.display = 'none';
+        proceedBtn.textContent = "Proceed"; // Restore default
+        proceedBtn.onclick = null;
+    };
+
+    proceedBtn.onclick = () => {
+        cleanUp();
+        if (onOk) onOk();
+    };
+}
+
+// Clear chat messages (removes messages from view and DB, keeps page open)
+function clearChatMessages() {
+    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
+    
+    // Hide menu dropdown first
+    const dropdown = document.getElementById('chatMenuDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+
+    showCustomConfirm({
+        title: "Clear Conversation",
+        message: "Are you sure you want to clear all messages in this conversation? This cannot be undone.",
+        isDanger: true,
+        iconClass: "fa fa-broom"
+    }, () => {
+        const formData = new FormData();
+        formData.append('action', 'delete_chat');
+        formData.append('other_id', otherId);
+        formData.append('product_id', productId);
+        
+        fetch('api_chat.php', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Force refresh of the chat-box with an empty list
+                    const chatBox = document.getElementById('chat-box');
+                    if (chatBox) {
+                        chatBox.innerHTML = `
+                            <div class="empty-chat-state">
+                                <div class="empty-chat-icon"><i class="fa fa-comments"></i></div>
+                                <h3>Start the conversation</h3>
+                                <p>Be the first to send a message about this listing.</p>
+                            </div>
+                        `;
+                    }
+                    lastMessageCount = 0;
+                    fetchMessages();
+                } else {
+                    showCustomAlert({
+                        title: "Action Failed",
+                        message: data.error || "Failed to clear chat.",
+                        isDanger: true,
+                        iconClass: "fa fa-exclamation-triangle"
+                    });
+                }
+            })
+            .catch(err => {
+                console.error("Clear chat error:", err);
+                showCustomAlert({
+                    title: "Connection Error",
+                    message: "Failed to clear chat messages due to a connection error.",
+                    isDanger: true,
+                    iconClass: "fa fa-wifi"
+                });
+            });
+    });
+}
+
+// Open report modal
+function openReportModal() {
+    const dropdown = document.getElementById('chatMenuDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    
+    const modal = document.getElementById('reportChatModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Set up "other" change listener
+        const select = document.getElementById('reportReasonSelect');
+        const text = document.getElementById('reportReasonText');
+        if (select && text) {
+            select.value = 'spam';
+            text.value = '';
+            text.style.display = 'none';
+            select.onchange = function() {
+                text.style.display = this.value === 'other' ? 'block' : 'none';
+            };
+        }
+    }
+}
+
+// Close report modal
+function closeReportModal() {
+    const modal = document.getElementById('reportChatModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Submit report
+function submitChatReport(event) {
+    if (event) event.preventDefault();
+    if (typeof productId === 'undefined' || typeof otherId === 'undefined') return;
+
+    const select = document.getElementById('reportReasonSelect');
+    const text = document.getElementById('reportReasonText');
+    if (!select) return;
+
+    let reason = select.value;
+    if (reason === 'other' && text) {
+        reason = text.value.trim();
+        if (!reason) {
+            showCustomAlert({
+                title: "Incomplete Field",
+                message: "Please provide details for the report.",
+                isDanger: true,
+                iconClass: "fa fa-info-circle"
+            });
+            return;
+        }
+    }
+
+    showCustomConfirm({
+        title: "Submit Report",
+        message: "Are you sure you want to report this user / listing to our moderation team?",
+        isDanger: false,
+        iconClass: "fa fa-flag"
+    }, () => {
+        const formData = new FormData();
+        formData.append('product_id', productId);
+        formData.append('reported_user_id', otherId);
+        formData.append('reason', reason);
+
+        fetch('api_report.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                closeReportModal();
+                showCustomAlert({
+                    title: "Report Submitted",
+                    message: "Thank you. The report has been submitted successfully and our team will review it.",
+                    isDanger: false,
+                    iconClass: "fa fa-check-circle"
+                });
+            } else {
+                showCustomAlert({
+                    title: "Submission Failed",
+                    message: data.error || "Failed to submit report.",
+                    isDanger: true,
+                    iconClass: "fa fa-exclamation-triangle"
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Report error:", err);
+            showCustomAlert({
+                title: "Connection Error",
+                message: "Failed to submit report due to connection error.",
+                isDanger: true,
+                iconClass: "fa fa-wifi"
+            });
+        });
+    });
+}
+
+// Toggle Block/Unblock status of the user
+function toggleBlockUser() {
+    if (typeof otherId === 'undefined') return;
+    
+    const dropdown = document.getElementById('chatMenuDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+
+    // If currently blocked, we should check if blocked by me
+    if (isBlocked && !blockedByMe) {
+        showCustomAlert({
+            title: "Action Blocked",
+            message: "You cannot unblock this user because they have blocked you.",
+            isDanger: true,
+            iconClass: "fa fa-ban"
+        });
+        return;
+    }
+
+    const action = isBlocked ? 'unblock' : 'block';
+    const confirmTitle = isBlocked ? "Unblock User" : "Block User";
+    const confirmIcon = isBlocked ? "fa fa-unlock-alt" : "fa fa-ban";
+    const confirmMsg = isBlocked 
+        ? "Are you sure you want to unblock this user?" 
+        : "Are you sure you want to block this user? You will no longer be able to send or receive messages.";
+
+    showCustomConfirm({
+        title: confirmTitle,
+        message: confirmMsg,
+        isDanger: !isBlocked,
+        iconClass: confirmIcon
+    }, () => {
+        const formData = new FormData();
+        formData.append('action', action);
+        formData.append('blocked_id', otherId);
+
+        fetch('api_block.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Reload page to refresh block status and lock inputs
+                window.location.reload();
+            } else {
+                showCustomAlert({
+                    title: "Action Failed",
+                    message: data.error || "Action failed.",
+                    isDanger: true,
+                    iconClass: "fa fa-exclamation-triangle"
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Block/Unblock error:", err);
+            showCustomAlert({
+                title: "Connection Error",
+                message: "Failed to complete action due to network error.",
+                isDanger: true,
+                iconClass: "fa fa-wifi"
+            });
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('message-input');
     if (messageInput) {

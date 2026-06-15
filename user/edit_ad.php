@@ -138,12 +138,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $target_file = $upload_dir . $file_name;
 
                         if (function_exists('imagecreatefromjpeg') && compressProductImageLocal($tmp_name, $target_file, 800, 60)) {
+                            @chmod($target_file, 0644);
                             $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
                             $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
                         } else {
                             $file_name = time() . '_' . $key . '_' . basename($_FILES['images']['name'][$key]);
                             $target_file = $upload_dir . $file_name;
                             if (move_uploaded_file($tmp_name, $target_file)) {
+                                @chmod($target_file, 0644);
                                 $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
                                 $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
                             }
@@ -199,8 +201,6 @@ function compressProductImageLocal($source, $destination, $max_width, $quality)
 
     imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
     $result = imagejpeg($new_image, $destination, $quality);
-    imagedestroy($image);
-    imagedestroy($new_image);
     return $result;
 }
 

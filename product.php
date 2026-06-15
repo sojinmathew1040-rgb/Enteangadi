@@ -26,6 +26,21 @@ try {
     $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
     $update_views->execute([$product_id]);
 
+    // Track recently viewed products in cookies
+    $recently_viewed = [];
+    if (isset($_COOKIE['recently_viewed'])) {
+        $recently_viewed = json_decode($_COOKIE['recently_viewed'], true);
+        if (!is_array($recently_viewed)) {
+            $recently_viewed = [];
+        }
+    }
+    if (($key = array_search($product_id, $recently_viewed)) !== false) {
+        unset($recently_viewed[$key]);
+    }
+    array_unshift($recently_viewed, $product_id);
+    $recently_viewed = array_slice($recently_viewed, 0, 15);
+    enteangadi_set_cookie('recently_viewed', json_encode($recently_viewed), time() + (86400 * 30));
+
     // Security: Only allow active ads OR let owner/admin view pending/sold/expired
     $is_owner = (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $product['user_id']);
     $is_admin = (isset($_SESSION['admin_id']));
