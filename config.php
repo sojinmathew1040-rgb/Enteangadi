@@ -41,8 +41,22 @@ if (!function_exists('enteangadi_set_cookie')) {
             $secure = true;
         }
 
-        // Detect localhost to avoid enforcing secure flags on HTTP dev envs
-        if (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) {
+        // Detect localhost and local private network IPs to avoid enforcing secure flags on HTTP dev envs
+        $is_local = false;
+        if (isset($_SERVER['HTTP_HOST'])) {
+            $host = $_SERVER['HTTP_HOST'];
+            if (
+                strpos($host, 'localhost') !== false ||
+                strpos($host, '127.0.0.1') !== false ||
+                strpos($host, '10.') === 0 ||
+                strpos($host, '192.168.') !== false ||
+                preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $host)
+            ) {
+                $is_local = true;
+            }
+        }
+
+        if ($is_local) {
             // Local development: keep secure as detected (usually false)
         } else {
             // Live server (production): default secure to true since it uses HTTPS
@@ -103,13 +117,23 @@ $dbname = 'enteangadi';
 
 try {
     // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
-    $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
+    try {
+        $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
+    } catch (PDOException $e) {
+        // Fallback to 127.0.0.1 if localhost socket connection fails (common on live Unix/Linux servers)
+        if ($host === 'localhost') {
+            $host = '127.0.0.1';
+            $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
+        } else {
+            throw $e;
+        }
+    }
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
+
     // 2. Create database if it doesn't exist
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
     $pdo->exec("USE `$dbname`;");
-    
+
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
     // 3. Check if core tables exist (e.g. check if 'users' table exists)

@@ -246,9 +246,18 @@ window.EnteangadiMobile = {
     /**
      * Helper to render Action Sheet slide-up menu on mobile viewports
      */
-    showPhotoSourceSelection: function (onSuccess) {
+    showPhotoSourceSelection: function (onSuccess, showDelete = false, onDelete = null) {
         const backdrop = document.createElement('div');
         backdrop.className = 'mobile-action-sheet-backdrop';
+
+        let deleteBtnHtml = '';
+        if (showDelete) {
+            deleteBtnHtml = `
+                <button class="mobile-action-sheet-btn cancel" id="btn-delete-photo" style="background: #fee2e2; color: #ef4444; margin-bottom: 12px;">
+                    <i class="fa fa-trash-alt"></i> Delete Profile Picture
+                </button>
+            `;
+        }
 
         backdrop.innerHTML = `
             <div class="mobile-action-sheet">
@@ -259,6 +268,7 @@ window.EnteangadiMobile = {
                 <button class="mobile-action-sheet-btn secondary" id="btn-choose-gallery">
                     <i class="fa fa-images"></i> Choose from Gallery
                 </button>
+                ${deleteBtnHtml}
                 <button class="mobile-action-sheet-btn cancel" id="btn-cancel-sheet">
                     Cancel
                 </button>
@@ -287,6 +297,16 @@ window.EnteangadiMobile = {
             await this.capturePhotoNatively('PHOTOS', onSuccess);
         };
 
+        if (showDelete && onDelete) {
+            const delBtn = backdrop.querySelector('#btn-delete-photo');
+            if (delBtn) {
+                delBtn.onclick = () => {
+                    closeSheet();
+                    onDelete();
+                };
+            }
+        }
+
         backdrop.onclick = (e) => {
             if (e.target === backdrop) closeSheet();
         };
@@ -302,7 +322,23 @@ window.EnteangadiMobile = {
         if (!path) {
             throw new Error("No valid path found for photo");
         }
-        const convertedUrl = window.Capacitor.convertFileSrc(path);
+        let convertedUrl = window.Capacitor.convertFileSrc(path);
+        
+        // Remove sub-directory prefixes (like /enteangadi/) before _capacitor_file_
+        // This is crucial because Capacitor's native interceptor only matches paths starting with /_capacitor_file_
+        if (convertedUrl.includes('/_capacitor_file_')) {
+            try {
+                const urlObj = new URL(convertedUrl);
+                const idx = urlObj.pathname.indexOf('/_capacitor_file_');
+                if (idx !== -1 && idx > 0) {
+                    urlObj.pathname = urlObj.pathname.substring(idx);
+                    convertedUrl = urlObj.toString();
+                }
+            } catch (e) {
+                console.error("Url parsing error in converter:", e);
+            }
+        }
+
         const response = await fetch(convertedUrl);
         const blob = await response.blob();
         if (blob.size === 0) {
@@ -346,7 +382,7 @@ window.EnteangadiMobile = {
                     const photo = await window.Capacitor.Plugins.Camera.getPhoto({
                         quality: 80,
                         allowEditing: false,
-                        resultType: 'uri', // return local URI for consistent conversion
+                        resultType: 'uri', // use local URI for consistent conversion via patched path resolver
                         source: sourceType // 'CAMERA'
                     });
 
@@ -428,29 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 2500); // 2.5s delay to prevent UI splash stuttering
         }
 
-        // Hijack inline clicks for Profile Picture Avatar Wrapper
-        const avatarWrapper = document.querySelector('.profile-avatar-wrapper');
-        if (avatarWrapper) {
-            avatarWrapper.removeAttribute('onclick');
-            avatarWrapper.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
-                    const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
-                    if (urls.length === 0) return;
-                    const file = dataURLtoFile(urls[0], 'profile_picture.jpg');
-                    const input = document.getElementById('profile_picture_input');
-                    const form = document.getElementById('profile_pic_form');
-                    if (input && form) {
-                        const dt = new DataTransfer();
-                        dt.items.add(file);
-                        input.files = dt.files;
-                        form.submit();
-                    }
-                });
-            };
-        }
-
         // Hijack inline clicks for Ad Media uploading card
         const addPhotoCard = document.querySelector('.add-photo-btn-card');
         if (addPhotoCard) {
@@ -469,7 +482,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                         urls.forEach((dataUrl, idx) => {
-                            const file = dataURLtoFile(dataUrl, `photo_${Date.now()}_${idx}.jpg`);
+                            const filename = `photo_${Date.now()}_${idx}.jpg`;
+                            const file = dataURLtoFile(dataUrl, filename);
+                            file.dataURL = dataUrl;
+                            window.EnteangadiImageCache = window.EnteangadiImageCache || {};
+                            window.EnteangadiImageCache[filename] = dataUrl;
                             dt.items.add(file);
                         });
                         input.files = dt.files;
@@ -480,6 +497,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             };
         }
+    }
+
+    // Hijack inline clicks for Profile Picture Avatar Wrapper on both desktop and mobile
+    const avatarWrapper = document.querySelector('.profile-avatar-wrapper');
+    if (avatarWrapper) {
+        avatarWrapper.removeAttribute('onclick');
+        avatarWrapper.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const hasPhoto = !!document.getElementById('profile-avatar-img');
+            window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+                const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
+                if (urls.length === 0) return;
+                if (typeof window.startProfileCropper === 'function') {
+                    window.startProfileCropper(urls[0]);
+                    return;
+                }
+                const file = dataURLtoFile(urls[0], 'profile_picture.jpg');
+                const input = document.getElementById('profile_picture_input');
+                const form = document.getElementById('profile_pic_form');
+                if (input && form) {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    form.submit();
+                }
+            }, hasPhoto, () => {
+                if (typeof deleteProfilePicture === 'function') {
+                    deleteProfilePicture();
+                }
+            });
+        };
     }
 });
 
@@ -495,9 +544,14 @@ document.addEventListener('click', (e) => {
         avatarWrapper.removeAttribute('onclick'); // prevent repeating
         avatarWrapper.onclick = null; // clear
 
+        const hasPhoto = !!document.getElementById('profile-avatar-img');
         window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
             const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
             if (urls.length === 0) return;
+            if (typeof window.startProfileCropper === 'function') {
+                window.startProfileCropper(urls[0]);
+                return;
+            }
             const file = dataURLtoFile(urls[0], 'profile_picture.jpg');
             const input = document.getElementById('profile_picture_input');
             const form = document.getElementById('profile_pic_form');
@@ -506,6 +560,10 @@ document.addEventListener('click', (e) => {
                 dt.items.add(file);
                 input.files = dt.files;
                 form.submit();
+            }
+        }, hasPhoto, () => {
+            if (typeof deleteProfilePicture === 'function') {
+                deleteProfilePicture();
             }
         });
         return;
@@ -530,7 +588,11 @@ document.addEventListener('click', (e) => {
                     }
                 }
                 urls.forEach((dataUrl, idx) => {
-                    const file = dataURLtoFile(dataUrl, `photo_${Date.now()}_${idx}.jpg`);
+                    const filename = `photo_${Date.now()}_${idx}.jpg`;
+                    const file = dataURLtoFile(dataUrl, filename);
+                    file.dataURL = dataUrl;
+                    window.EnteangadiImageCache = window.EnteangadiImageCache || {};
+                    window.EnteangadiImageCache[filename] = dataUrl;
                     dt.items.add(file);
                 });
                 input.files = dt.files;

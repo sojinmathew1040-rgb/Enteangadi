@@ -212,11 +212,15 @@ function loadScript(src) {
 function checkImageNSFWWithModel(model, file) {
     return new Promise((resolve) => {
         const img = new Image();
-        img.src = URL.createObjectURL(file);
+        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        const isDataURL = !!dataURL;
+        img.src = dataURL || URL.createObjectURL(file);
         img.onload = async () => {
             try {
                 const predictions = await model.classify(img);
-                URL.revokeObjectURL(img.src);
+                if (!isDataURL) {
+                    URL.revokeObjectURL(img.src);
+                }
 
                 let nsfwScore = 0;
                 for (const p of predictions) {
@@ -232,6 +236,9 @@ function checkImageNSFWWithModel(model, file) {
             }
         };
         img.onerror = () => {
+            if (!isDataURL) {
+                try { URL.revokeObjectURL(img.src); } catch(e) {}
+            }
             resolve(false);
         };
     });
@@ -309,14 +316,23 @@ async function previewImages() {
     filesInput.files = dt.files;
 
     for (let i = 0; i < validFiles.length; i++) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        const file = validFiles[i];
+        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        if (dataURL) {
             const div = document.createElement('div');
             div.className = 'preview-item new-upload';
-            div.innerHTML = `<img src="${e.target.result}"><div class="new-badge">NEW</div>`;
+            div.innerHTML = `<img src="${dataURL}"><div class="new-badge">NEW</div>`;
             container.appendChild(div);
-        };
-        reader.readAsDataURL(validFiles[i]);
+        } else {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'preview-item new-upload';
+                div.innerHTML = `<img src="${e.target.result}"><div class="new-badge">NEW</div>`;
+                container.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        }
     }
 }
 

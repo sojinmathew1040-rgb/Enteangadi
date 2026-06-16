@@ -265,11 +265,15 @@ function loadScript(src) {
 function checkImageNSFWWithModel(model, file) {
     return new Promise((resolve) => {
         const img = new Image();
-        img.src = URL.createObjectURL(file);
+        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        const isDataURL = !!dataURL;
+        img.src = dataURL || URL.createObjectURL(file);
         img.onload = async () => {
             try {
                 const predictions = await model.classify(img);
-                URL.revokeObjectURL(img.src);
+                if (!isDataURL) {
+                    URL.revokeObjectURL(img.src);
+                }
 
                 let nsfwScore = 0;
                 for (const p of predictions) {
@@ -285,6 +289,9 @@ function checkImageNSFWWithModel(model, file) {
             }
         };
         img.onerror = () => {
+            if (!isDataURL) {
+                try { URL.revokeObjectURL(img.src); } catch(e) {}
+            }
             resolve(false);
         };
     });
@@ -361,8 +368,8 @@ async function previewImages() {
     // Render preview cards
     for (let i = 0; i < validFiles.length; i++) {
         const file = validFiles[i];
-        const r = new FileReader();
-        r.onload = (e) => {
+        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        if (dataURL) {
             const d = document.createElement('div');
             d.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
             d.onclick = () => {
@@ -372,13 +379,31 @@ async function previewImages() {
                 if (coverIdx) coverIdx.value = i;
             };
             d.innerHTML = `
-                <img src="${e.target.result}">
+                <img src="${dataURL}">
                 <div class="cover-badge">COVER</div>
                 <div class="selection-overlay">Set as Main</div>
             `;
             c.appendChild(d);
+        } else {
+            const r = new FileReader();
+            r.onload = (e) => {
+                const d = document.createElement('div');
+                d.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
+                d.onclick = () => {
+                    document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
+                    d.classList.add('is-cover');
+                    const coverIdx = document.getElementById('cover_index');
+                    if (coverIdx) coverIdx.value = i;
+                };
+                d.innerHTML = `
+                    <img src="${e.target.result}">
+                    <div class="cover-badge">COVER</div>
+                    <div class="selection-overlay">Set as Main</div>
+                `;
+                c.appendChild(d);
+            }
+            r.readAsDataURL(file);
         }
-        r.readAsDataURL(file);
     }
 }
 
