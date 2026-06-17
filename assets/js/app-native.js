@@ -222,7 +222,16 @@ window.EnteangadiMobile = {
             }
         }
 
-        // 3. Microphone native mapping via browser interface
+        // 3. Microphone native mapping via custom plugin if in mobile wrapper
+        if (this.isRunningInMobile() && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MicrophonePermission) {
+            try {
+                await window.Capacitor.Plugins.MicrophonePermission.checkPermission();
+            } catch (e) {
+                console.warn("Capacitor custom microphone permission request error:", e);
+            }
+        }
+
+        // 4. Microphone native mapping via browser interface
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -232,7 +241,7 @@ window.EnteangadiMobile = {
             console.warn("Web API native microphone permission mapping error:", e);
         }
 
-        // 4. Camera native mapping via browser interface
+        // 5. Camera native mapping via browser interface
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -246,7 +255,7 @@ window.EnteangadiMobile = {
     /**
      * Helper to render Action Sheet slide-up menu on mobile viewports
      */
-    showPhotoSourceSelection: function (onSuccess, showDelete = false, onDelete = null) {
+    showPhotoSourceSelection: function (onSuccess, showDelete = false, onDelete = null, isMultiple = false) {
         const backdrop = document.createElement('div');
         backdrop.className = 'mobile-action-sheet-backdrop';
 
@@ -289,12 +298,12 @@ window.EnteangadiMobile = {
 
         backdrop.querySelector('#btn-take-photo').onclick = async () => {
             closeSheet();
-            await this.capturePhotoNatively('CAMERA', onSuccess);
+            await this.capturePhotoNatively('CAMERA', onSuccess, isMultiple);
         };
 
         backdrop.querySelector('#btn-choose-gallery').onclick = async () => {
             closeSheet();
-            await this.capturePhotoNatively('PHOTOS', onSuccess);
+            await this.capturePhotoNatively('PHOTOS', onSuccess, isMultiple);
         };
 
         if (showDelete && onDelete) {
@@ -352,48 +361,36 @@ window.EnteangadiMobile = {
         });
     },
 
-    capturePhotoNatively: async function (sourceType, onSuccess) {
+    capturePhotoNatively: async function (sourceType, onSuccess, isMultiple = false) {
         try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
                 // Secure camera/photos permissions first
                 await window.Capacitor.Plugins.Camera.requestPermissions();
 
-                if (sourceType === 'PHOTOS' && typeof window.Capacitor.Plugins.Camera.pickImages === 'function') {
-                    const result = await window.Capacitor.Plugins.Camera.pickImages({
-                        quality: 80
-                    });
-
-                    if (result && result.photos && result.photos.length > 0) {
-                        const dataUrls = [];
-                        for (let i = 0; i < result.photos.length; i++) {
-                            const photo = result.photos[i];
-                            try {
-                                const dataUrl = await window.EnteangadiMobile.readPhotoAsDataURL(photo);
-                                dataUrls.push(dataUrl);
-                            } catch (fetchErr) {
-                                console.error("Error converting webPath to dataURL:", fetchErr);
-                            }
-                        }
-                        if (dataUrls.length > 0) {
-                            onSuccess(dataUrls);
-                        }
+                if (sourceType === 'PHOTOS' && isMultiple) {
+                    // Trigger standard file input click for multiple selection to bypass CORS/mixed content limitations on remote origin
+                    const input = document.getElementById('images');
+                    if (input) {
+                        const prevClick = input.onclick;
+                        input.onclick = null;
+                        input.click();
+                        setTimeout(() => {
+                            input.onclick = prevClick;
+                        }, 500);
                     }
-                } else {
-                    const photo = await window.Capacitor.Plugins.Camera.getPhoto({
-                        quality: 80,
-                        allowEditing: false,
-                        resultType: 'uri', // use local URI for consistent conversion via patched path resolver
-                        source: sourceType // 'CAMERA'
-                    });
+                    return;
+                }
 
-                    if (photo) {
-                        try {
-                            const dataUrl = await window.EnteangadiMobile.readPhotoAsDataURL(photo);
-                            onSuccess(dataUrl);
-                        } catch (err) {
-                            console.error("Error converting camera photo to dataURL:", err);
-                        }
-                    }
+                // For single select (profile pic) or camera captures, use native Camera.getPhoto with dataUrl to bypass CORS/mixed-content issues
+                const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+                    quality: 80,
+                    allowEditing: false,
+                    resultType: 'dataUrl', // Base64 data URL bypasses the need for local webPath/file fetches
+                    source: sourceType // 'CAMERA' or 'PHOTOS'
+                });
+
+                if (photo && photo.dataUrl) {
+                    onSuccess(photo.dataUrl);
                 }
             } else {
                 console.warn("Capacitor native Camera plugin is not linked. Falling back to default browser input picker.");
@@ -494,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             previewImages();
                         }
                     }
-                });
+                }, false, null, true);
             };
         }
     }
@@ -527,7 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof deleteProfilePicture === 'function') {
                     deleteProfilePicture();
                 }
-            });
+            }, false);
         };
     }
 });
@@ -565,7 +562,7 @@ document.addEventListener('click', (e) => {
             if (typeof deleteProfilePicture === 'function') {
                 deleteProfilePicture();
             }
-        });
+        }, false);
         return;
     }
 
@@ -600,6 +597,6 @@ document.addEventListener('click', (e) => {
                     previewImages();
                 }
             }
-        });
+        }, false, null, true);
     }
 });

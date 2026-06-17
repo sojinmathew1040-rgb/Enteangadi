@@ -624,6 +624,15 @@ function App() {
   const toggleRecording = async () => {
     if (!isRecording) {
       try {
+        // Trigger native mobile OS permission requests if in WebView wrapper
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MicrophonePermission) {
+          try {
+            await window.Capacitor.Plugins.MicrophonePermission.checkPermission();
+          } catch (e) {
+            console.warn("Capacitor custom microphone permission request error:", e);
+          }
+        }
+
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error("SECURE_CONTEXT_REQUIRED");
         }
