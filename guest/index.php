@@ -123,7 +123,7 @@ if ($category_filter) {
                 <a href="index.php?category_id=<?= $cat['id'] ?>"
                     style="text-decoration: none; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; width: 100px;">
                     <?php if ($cat['photo_path']): ?>
-                        <img src="../<?= htmlspecialchars($cat['photo_path']) ?>" loading="lazy"
+                        <img src="<?= $base_url ?>/<?= htmlspecialchars($cat['photo_path']) ?>" loading="lazy"
                             style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; border: 2px solid <?= ($parent_id == $cat['id'] || $category_filter == $cat['id']) ? 'var(--primary-green)' : 'transparent' ?>; padding: 2px;">
                     <?php else: ?>
                         <div
@@ -144,7 +144,7 @@ if ($category_filter) {
                     <a href="index.php?category_id=<?= $cat['id'] ?>"
                         style="text-decoration: none; flex: 0 0 auto; display: flex; align-items: center; padding: 6px 12px; border-radius: 20px; background: <?= ($category_filter == $cat['id']) ? 'var(--primary-green)' : '#f0f0f0' ?>; color: <?= ($category_filter == $cat['id']) ? 'white' : 'var(--text-dark)' ?>; font-size: 13px; font-weight: 500;">
                         <?php if ($cat['photo_path']): ?>
-                            <img src="../<?= htmlspecialchars($cat['photo_path']) ?>"
+                            <img src="<?= $base_url ?>/<?= htmlspecialchars($cat['photo_path']) ?>"
                                 style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; margin-right: 6px;">
                         <?php endif; ?>
                         <?= htmlspecialchars($cat['name']) ?>

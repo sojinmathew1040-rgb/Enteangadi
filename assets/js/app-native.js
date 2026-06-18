@@ -460,45 +460,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 sessionStorage.setItem('mobile-permissions-requested', 'true');
             }, 2500); // 2.5s delay to prevent UI splash stuttering
         }
-
-        // Hijack inline clicks for Ad Media uploading card
-        const addPhotoCard = document.querySelector('.add-photo-btn-card');
-        if (addPhotoCard) {
-            addPhotoCard.removeAttribute('onclick');
-            addPhotoCard.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
-                    const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
-                    const input = document.getElementById('images');
-                    if (input) {
-                        const dt = new DataTransfer();
-                        if (input.files) {
-                            for (let i = 0; i < input.files.length; i++) {
-                                dt.items.add(input.files[i]);
-                            }
-                        }
-                        urls.forEach((dataUrl, idx) => {
-                            const filename = `photo_${Date.now()}_${idx}.jpg`;
-                            const file = dataURLtoFile(dataUrl, filename);
-                            file.dataURL = dataUrl;
-                            window.EnteangadiImageCache = window.EnteangadiImageCache || {};
-                            window.EnteangadiImageCache[filename] = dataUrl;
-                            dt.items.add(file);
-                        });
-                        input.files = dt.files;
-                        if (typeof previewImages === 'function') {
-                            previewImages();
-                        }
-                    }
-                }, false, null, true);
-            };
-        }
     }
 
+    // Hijack inline clicks for Ad Media uploading card on both desktop and mobile
+    const addPhotoCards = document.querySelectorAll('.add-photo-btn-card');
+    addPhotoCards.forEach(addPhotoCard => {
+        addPhotoCard.removeAttribute('onclick');
+        addPhotoCard.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
+                const urls = Array.isArray(dataUrls) ? dataUrls : [dataUrls];
+                const input = document.getElementById('images');
+                if (input) {
+                    const dt = new DataTransfer();
+                    if (input.files) {
+                        for (let i = 0; i < input.files.length; i++) {
+                            dt.items.add(input.files[i]);
+                        }
+                    }
+                    urls.forEach((dataUrl, idx) => {
+                        const filename = `photo_${Date.now()}_${idx}.jpg`;
+                        const file = dataURLtoFile(dataUrl, filename);
+                        file.dataURL = dataUrl;
+                        window.EnteangadiImageCache = window.EnteangadiImageCache || {};
+                        window.EnteangadiImageCache[filename] = dataUrl;
+                        dt.items.add(file);
+                    });
+                    input.files = dt.files;
+                    if (typeof previewImages === 'function') {
+                        previewImages();
+                    }
+                }
+            }, false, null, true);
+        };
+    });
+
     // Hijack inline clicks for Profile Picture Avatar Wrapper on both desktop and mobile
-    const avatarWrapper = document.querySelector('.profile-avatar-wrapper');
-    if (avatarWrapper) {
+    const avatarWrappers = document.querySelectorAll('.profile-avatar-wrapper');
+    avatarWrappers.forEach(avatarWrapper => {
         avatarWrapper.removeAttribute('onclick');
         avatarWrapper.onclick = (e) => {
             e.preventDefault();
@@ -526,13 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, false);
         };
-    }
+    });
 });
 
 // Fallback dynamic click listener for late-rendered or dynamically loaded templates
 document.addEventListener('click', (e) => {
-    if (!window.EnteangadiMobile.isRunningInMobile()) return;
-
     // A. Intercept Profile picture upload
     const avatarWrapper = e.target.closest('.profile-avatar-wrapper');
     if (avatarWrapper && avatarWrapper.getAttribute('onclick')) {

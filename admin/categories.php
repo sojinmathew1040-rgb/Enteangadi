@@ -200,7 +200,7 @@ require_once 'includes/header.php';
                 <label>Category Photo (Optional)</label>
                 <?php if ($edit_cat && $edit_cat['photo_path']): ?>
                     <div style="margin-bottom: 10px;">
-                        <img src="../<?= htmlspecialchars($edit_cat['photo_path']) ?>" style="width: 50px; height: 50px; border-radius: 4px; object-fit: cover;">
+                        <img src="<?= $base_url ?>/<?= htmlspecialchars($edit_cat['photo_path']) ?>" style="width: 50px; height: 50px; border-radius: 4px; object-fit: cover;">
                     </div>
                 <?php endif; ?>
                 <input type="file" name="photo" class="form-control" accept="image/*" style="padding: 9px;">
@@ -231,7 +231,7 @@ require_once 'includes/header.php';
                     <tr style="border-bottom: 1px solid var(--border-color); background: #fcfcfc;">
                         <td style="padding: 16px;">
                             <?php if ($cat['photo_path']): ?>
-                                <img src="../<?= htmlspecialchars($cat['photo_path']) ?>" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
+                                <img src="<?= $base_url ?>/<?= htmlspecialchars($cat['photo_path']) ?>" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
                             <?php else: ?>
                                 <div style="width: 40px; height: 40px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                     <i class="fa fa-folder"></i>
@@ -259,7 +259,7 @@ require_once 'includes/header.php';
                             <tr style="border-bottom: 1px solid var(--border-color);">
                                 <td style="padding: 16px; padding-left: 32px;">
                                     <?php if ($sub['photo_path']): ?>
-                                        <img src="../<?= htmlspecialchars($sub['photo_path']) ?>" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+                                        <img src="<?= $base_url ?>/<?= htmlspecialchars($sub['photo_path']) ?>" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
                                     <?php else: ?>
                                         <div style="width: 32px; height: 32px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                             <i class="fa fa-file-alt" style="font-size: 12px; color: #999;"></i>
