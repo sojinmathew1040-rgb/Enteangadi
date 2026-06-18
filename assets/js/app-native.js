@@ -383,8 +383,21 @@ window.EnteangadiMobile = {
     capturePhotoNatively: async function (sourceType, onSuccess, isMultiple = false) {
         try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
-                // Secure camera/photos permissions first
-                await window.Capacitor.Plugins.Camera.requestPermissions();
+                // Secure specific camera/photos permissions based on source type for API 33+ compatibility
+                try {
+                    if (sourceType === 'PHOTOS') {
+                        await window.Capacitor.Plugins.Camera.requestPermissions({ permissions: ['photos'] });
+                    } else {
+                        await window.Capacitor.Plugins.Camera.requestPermissions({ permissions: ['camera', 'photos'] });
+                    }
+                } catch (permErr) {
+                    console.warn("Camera.requestPermissions with options failed, trying generic requestPermissions...", permErr);
+                    try {
+                        await window.Capacitor.Plugins.Camera.requestPermissions();
+                    } catch (e) {
+                        console.error("Generic requestPermissions failed:", e);
+                    }
+                }
 
                 if (sourceType === 'PHOTOS' && isMultiple) {
                     if (window.Capacitor.Plugins.Camera.pickImages) {
