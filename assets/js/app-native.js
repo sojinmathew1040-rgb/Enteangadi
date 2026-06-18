@@ -331,6 +331,22 @@ window.EnteangadiMobile = {
         if (!path) {
             throw new Error("No valid path found for photo");
         }
+
+        // Try reading natively via Capacitor Filesystem plugin to bypass webview HTTP fetch issues on remote server
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && photo.path) {
+            try {
+                const fsResult = await window.Capacitor.Plugins.Filesystem.readFile({
+                    path: photo.path
+                });
+                if (fsResult && fsResult.data) {
+                    const mimeType = photo.format ? `image/${photo.format}` : 'image/jpeg';
+                    return `data:${mimeType};base64,${fsResult.data}`;
+                }
+            } catch (fsErr) {
+                console.warn("Capacitor Filesystem.readFile failed, falling back to fetch...", fsErr);
+            }
+        }
+        
         let convertedUrl = window.Capacitor.convertFileSrc(path);
         
         // Remove sub-directory prefixes (like /enteangadi/) before _capacitor_file_
@@ -349,6 +365,9 @@ window.EnteangadiMobile = {
         }
 
         const response = await fetch(convertedUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch local path URL: ${response.statusText}`);
+        }
         const blob = await response.blob();
         if (blob.size === 0) {
             throw new Error("Opaque or 0-byte blob returned from path fetch");
