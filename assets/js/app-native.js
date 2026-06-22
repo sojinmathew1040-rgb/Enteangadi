@@ -400,32 +400,9 @@ window.EnteangadiMobile = {
                 }
 
                 if (sourceType === 'PHOTOS' && isMultiple) {
-                    if (window.Capacitor.Plugins.Camera.pickImages) {
-                        try {
-                            const result = await window.Capacitor.Plugins.Camera.pickImages({
-                                quality: 80
-                            });
-                            if (result && result.photos && result.photos.length > 0) {
-                                const dataUrls = [];
-                                for (const photo of result.photos) {
-                                    try {
-                                        const dataUrl = await this.readPhotoAsDataURL(photo);
-                                        dataUrls.push(dataUrl);
-                                    } catch (readErr) {
-                                        console.error("Error reading photo path:", readErr);
-                                    }
-                                }
-                                if (dataUrls.length > 0) {
-                                    onSuccess(dataUrls);
-                                    return;
-                                }
-                            }
-                        } catch (pickErr) {
-                            console.warn("Native pickImages failed, falling back to standard input click picker:", pickErr);
-                        }
-                    }
-                    
-                    // Trigger standard file input click for multiple selection to bypass CORS/mixed content limitations on remote origin
+                    // Bypass pickImages because it doesn't support resultType: 'dataUrl',
+                    // which causes CORS / Mixed Content issues on remote domains when trying to read local files.
+                    // Instead, trigger the standard file input picker which works natively without CORS.
                     const input = document.getElementById('images');
                     if (input) {
                         const prevClick = input.onclick;
