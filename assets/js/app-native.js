@@ -416,53 +416,54 @@ window.EnteangadiMobile = {
                             }
                             if (dataUrls.length > 0) {
                                 onSuccess(dataUrls);
+                                return;
                             }
                         }
+                        throw new Error("No photos could be successfully read or selected.");
                     } catch (pickErr) {
-                        console.error("Capacitor pickImages failed, falling back to input picker...", pickErr);
-                        // Fallback: Trigger standard click on input
-                        const input = document.getElementById('images');
-                        if (input) {
-                            const prevClick = input.onclick;
-                            input.onclick = null;
-                            input.click();
-                            setTimeout(() => {
-                                input.onclick = prevClick;
-                            }, 500);
-                        }
+                        console.error("Capacitor pickImages failed or returned no photos, falling back to input picker...", pickErr);
+                        this.triggerInputFallback();
                     }
                     return;
                 }
 
-                // For single select (profile pic) or camera captures, use native Camera.getPhoto with dataUrl to bypass CORS/mixed-content issues
-                const photo = await window.Capacitor.Plugins.Camera.getPhoto({
-                    quality: 80,
-                    allowEditing: false,
-                    resultType: 'dataUrl', // Base64 data URL bypasses the need for local webPath/file fetches
-                    source: sourceType // 'CAMERA' or 'PHOTOS'
-                });
+                try {
+                    // For single select (profile pic) or camera captures, use native Camera.getPhoto with dataUrl to bypass CORS/mixed-content issues
+                    const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+                        quality: 80,
+                        allowEditing: false,
+                        resultType: 'dataUrl', // Base64 data URL bypasses the need for local webPath/file fetches
+                        source: sourceType // 'CAMERA' or 'PHOTOS'
+                    });
 
-                if (photo && photo.dataUrl) {
-                    onSuccess(photo.dataUrl);
+                    if (photo && photo.dataUrl) {
+                        onSuccess(photo.dataUrl);
+                    } else {
+                        throw new Error("No photo data URL returned.");
+                    }
+                } catch (photoErr) {
+                    console.error("Capacitor getPhoto failed, falling back to input picker...", photoErr);
+                    this.triggerInputFallback();
                 }
             } else {
                 console.warn("Capacitor native Camera plugin is not linked. Falling back to default browser input picker.");
-                // Fallback: Trigger standard click on input
-                const isProfile = document.getElementById('profile_picture_input');
-                const targetInput = (sourceType === 'CAMERA' && isProfile) ? isProfile : document.getElementById('images');
-                if (targetInput) {
-                    // Temporarily disable our interceptor to avoid infinite loop
-                    const prevClick = targetInput.onclick;
-                    targetInput.onclick = null;
-                    targetInput.click();
-                    // Restore after a short delay
-                    setTimeout(() => {
-                        targetInput.onclick = prevClick;
-                    }, 500);
-                }
+                this.triggerInputFallback();
             }
         } catch (err) {
             console.error("Error capturing native photo:", err);
+            this.triggerInputFallback();
+        }
+    },
+
+    triggerInputFallback: function () {
+        const targetInput = document.getElementById('profile_picture_input') || document.getElementById('images');
+        if (targetInput) {
+            const prevClick = targetInput.onclick;
+            targetInput.onclick = null;
+            targetInput.click();
+            setTimeout(() => {
+                targetInput.onclick = prevClick;
+            }, 500);
         }
     }
 };
@@ -520,6 +521,10 @@ document.addEventListener('DOMContentLoaded', () => {
     addPhotoCards.forEach(addPhotoCard => {
         addPhotoCard.removeAttribute('onclick');
         addPhotoCard.onclick = (e) => {
+            // Prevent hijacking clicks originating directly from input elements
+            if (e.target && e.target.tagName === 'INPUT') {
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             window.EnteangadiMobile.showPhotoSourceSelection((dataUrls) => {
@@ -554,6 +559,10 @@ document.addEventListener('DOMContentLoaded', () => {
     avatarWrappers.forEach(avatarWrapper => {
         avatarWrapper.removeAttribute('onclick');
         avatarWrapper.onclick = (e) => {
+            // Prevent hijacking clicks originating directly from input elements
+            if (e.target && e.target.tagName === 'INPUT') {
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             const hasPhoto = !!document.getElementById('profile-avatar-img');
@@ -587,6 +596,9 @@ document.addEventListener('click', (e) => {
     // A. Intercept Profile picture upload
     const avatarWrapper = e.target.closest('.profile-avatar-wrapper');
     if (avatarWrapper && avatarWrapper.getAttribute('onclick')) {
+        if (e.target && e.target.tagName === 'INPUT') {
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         avatarWrapper.removeAttribute('onclick'); // prevent repeating
@@ -620,6 +632,9 @@ document.addEventListener('click', (e) => {
     // B. Intercept Ad Post/Edit photo card click
     const addPhotoCard = e.target.closest('.add-photo-btn-card');
     if (addPhotoCard && addPhotoCard.getAttribute('onclick')) {
+        if (e.target && e.target.tagName === 'INPUT') {
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         addPhotoCard.removeAttribute('onclick'); // prevent repeating
