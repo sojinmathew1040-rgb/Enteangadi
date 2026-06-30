@@ -255,7 +255,7 @@ window.EnteangadiMobile = {
     /**
      * Helper to render Action Sheet slide-up menu on mobile viewports
      */
-    showPhotoSourceSelection: function (onSuccess, showDelete = false, onDelete = null, isMultiple = false) {
+    showPhotoSourceSelection: function (onSuccess, showDelete = false, onDelete = null, isMultiple = false, targetInput = null) {
         const backdrop = document.createElement('div');
         backdrop.className = 'mobile-action-sheet-backdrop';
 
@@ -298,12 +298,12 @@ window.EnteangadiMobile = {
 
         backdrop.querySelector('#btn-take-photo').onclick = async () => {
             closeSheet();
-            await this.capturePhotoNatively('CAMERA', onSuccess, isMultiple);
+            await this.capturePhotoNatively('CAMERA', onSuccess, isMultiple, targetInput);
         };
 
         backdrop.querySelector('#btn-choose-gallery').onclick = () => {
             closeSheet();
-            this.triggerInputFallback();
+            this.triggerInputFallback(targetInput);
         };
 
         if (showDelete && onDelete) {
@@ -380,7 +380,7 @@ window.EnteangadiMobile = {
         });
     },
 
-    capturePhotoNatively: async function (sourceType, onSuccess, isMultiple = false) {
+    capturePhotoNatively: async function (sourceType, onSuccess, isMultiple = false, targetInput = null) {
         try {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
                 // Secure specific camera/photos permissions based on source type for API 33+ compatibility
@@ -422,7 +422,7 @@ window.EnteangadiMobile = {
                         throw new Error("No photos could be successfully read or selected.");
                     } catch (pickErr) {
                         console.error("Capacitor pickImages failed or returned no photos, falling back to input picker...", pickErr);
-                        this.triggerInputFallback();
+                        this.triggerInputFallback(targetInput);
                     }
                     return;
                 }
@@ -448,27 +448,54 @@ window.EnteangadiMobile = {
                         console.log("User cancelled camera operation, not falling back.");
                     } else {
                         console.log("Capacitor getPhoto error, falling back to input picker...");
-                        this.triggerInputFallback();
+                        this.triggerInputFallback(targetInput);
                     }
                 }
             } else {
                 console.warn("Capacitor native Camera plugin is not linked. Falling back to default browser input picker.");
-                this.triggerInputFallback();
+                this.triggerInputFallback(targetInput);
             }
         } catch (err) {
             console.error("Error capturing native photo:", err);
-            this.triggerInputFallback();
+            this.triggerInputFallback(targetInput);
         }
     },
 
-    triggerInputFallback: function () {
-        const targetInput = document.getElementById('profile_picture_input') || document.getElementById('images');
-        if (targetInput) {
-            const prevClick = targetInput.onclick;
-            targetInput.onclick = null;
-            targetInput.click();
+    triggerInputFallback: function (targetInput = null) {
+        let input = targetInput;
+        if (typeof input === 'string') {
+            input = document.getElementById(input);
+        }
+        if (!input) {
+            input = document.getElementById('profile_picture_input') || document.getElementById('images');
+        }
+        if (input) {
+            // Temporarily make it block & visible with opacity 0 to bypass WebView programmatic click security
+            const originalDisplay = input.style.display;
+            const originalVisibility = input.style.visibility;
+            const originalOpacity = input.style.opacity;
+            const originalPosition = input.style.position;
+            const originalWidth = input.style.width;
+            const originalHeight = input.style.height;
+
+            input.style.display = 'block';
+            input.style.visibility = 'visible';
+            input.style.opacity = '0';
+            input.style.position = 'absolute';
+            input.style.width = '1px';
+            input.style.height = '1px';
+
+            const prevClick = input.onclick;
+            input.onclick = null;
+            input.click();
             setTimeout(() => {
-                targetInput.onclick = prevClick;
+                input.onclick = prevClick;
+                input.style.display = originalDisplay;
+                input.style.visibility = originalVisibility;
+                input.style.opacity = originalOpacity;
+                input.style.position = originalPosition;
+                input.style.width = originalWidth;
+                input.style.height = originalHeight;
             }, 500);
         }
     }
@@ -556,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         previewImages();
                     }
                 }
-            }, false, null, true);
+            }, false, null, true, 'images');
         };
     });
 
@@ -592,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof deleteProfilePicture === 'function') {
                     deleteProfilePicture();
                 }
-            }, false);
+            }, false, 'profile_picture_input');
         };
     });
 });
@@ -631,7 +658,7 @@ document.addEventListener('click', (e) => {
             if (typeof deleteProfilePicture === 'function') {
                 deleteProfilePicture();
             }
-        }, false);
+        }, false, 'profile_picture_input');
         return;
     }
 
@@ -669,6 +696,6 @@ document.addEventListener('click', (e) => {
                     previewImages();
                 }
             }
-        }, false, null, true);
+        }, false, null, true, 'images');
     }
 });
