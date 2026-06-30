@@ -301,9 +301,9 @@ window.EnteangadiMobile = {
             await this.capturePhotoNatively('CAMERA', onSuccess, isMultiple);
         };
 
-        backdrop.querySelector('#btn-choose-gallery').onclick = async () => {
+        backdrop.querySelector('#btn-choose-gallery').onclick = () => {
             closeSheet();
-            await this.capturePhotoNatively('PHOTOS', onSuccess, isMultiple);
+            this.triggerInputFallback();
         };
 
         if (showDelete && onDelete) {
@@ -442,8 +442,14 @@ window.EnteangadiMobile = {
                         throw new Error("No photo data URL returned.");
                     }
                 } catch (photoErr) {
-                    console.error("Capacitor getPhoto failed, falling back to input picker...", photoErr);
-                    this.triggerInputFallback();
+                    console.error("Capacitor getPhoto failed...", photoErr);
+                    const errMsg = (photoErr && photoErr.message) || String(photoErr);
+                    if (/cancel/i.test(errMsg)) {
+                        console.log("User cancelled camera operation, not falling back.");
+                    } else {
+                        console.log("Capacitor getPhoto error, falling back to input picker...");
+                        this.triggerInputFallback();
+                    }
                 }
             } else {
                 console.warn("Capacitor native Camera plugin is not linked. Falling back to default browser input picker.");
