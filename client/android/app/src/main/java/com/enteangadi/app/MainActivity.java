@@ -1,6 +1,7 @@
 package com.enteangadi.app;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
 
@@ -24,7 +25,11 @@ public class MainActivity extends BridgeActivity {
         // Start background notification polling service
         try {
             Intent serviceIntent = new Intent(this, BackgroundNotificationService.class);
-            startService(serviceIntent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }

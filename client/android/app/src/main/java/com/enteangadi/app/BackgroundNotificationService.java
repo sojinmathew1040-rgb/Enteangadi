@@ -34,7 +34,37 @@ public class BackgroundNotificationService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        createForegroundNotificationChannel();
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "foreground_service_channel")
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("Enteangadi Background Checker")
+            .setContentText("Checking for new messages...")
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(2002, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        } else {
+            startForeground(2002, builder.build());
+        }
+
         return START_STICKY;
+    }
+
+    private void createForegroundNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = "Background Service";
+            String description = "Ensures message checks run continuously";
+            int importance = NotificationManager.IMPORTANCE_MIN;
+            NotificationChannel channel = new NotificationChannel("foreground_service_channel", name, importance);
+            channel.setDescription(description);
+            channel.setShowBadge(false);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+        }
     }
 
     @Override
