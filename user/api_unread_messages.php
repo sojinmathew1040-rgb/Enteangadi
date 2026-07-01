@@ -5,12 +5,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-if (!isset($_SESSION['user_id'])) {
+if (isset($_SESSION['user_id'])) {
+    $my_id = $_SESSION['user_id'];
+} else if (isset($_REQUEST['user_id']) && !empty($_REQUEST['user_id'])) {
+    $my_id = $_REQUEST['user_id'];
+} else {
     echo json_encode(['success' => false, 'messages' => []]);
     exit;
 }
-
-$my_id = $_SESSION['user_id'];
 
 try {
     $stmt = $pdo->prepare("

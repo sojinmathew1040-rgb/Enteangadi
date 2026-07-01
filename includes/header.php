@@ -116,7 +116,14 @@ try {
                 // Store active credentials dynamically
                 localStorage.setItem('enteangadi_user_id', '<?= $_SESSION['user_id'] ?? '' ?>');
                 localStorage.setItem('enteangadi_session_token', '<?= $_SESSION['session_token'] ?? '' ?>');
+
+                if (window.EnteangadiNativeHelper && typeof window.EnteangadiNativeHelper.setLoggedInUser === 'function') {
+                    window.EnteangadiNativeHelper.setLoggedInUser('<?= $_SESSION['user_id'] ?? '' ?>');
+                }
             } else {
+                if (window.EnteangadiNativeHelper && typeof window.EnteangadiNativeHelper.setLoggedInUser === 'function') {
+                    window.EnteangadiNativeHelper.setLoggedInUser('');
+                }
                 // Auto-login from saved persistent state if PHP session is guest
                 const savedUserId = localStorage.getItem('enteangadi_user_id');
                 const savedToken = localStorage.getItem('enteangadi_session_token');

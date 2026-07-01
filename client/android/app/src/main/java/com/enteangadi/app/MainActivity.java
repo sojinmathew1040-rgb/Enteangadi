@@ -22,6 +22,21 @@ public class MainActivity extends BridgeActivity {
             e.printStackTrace();
         }
 
+        // Inject custom native bridge helper to store user ID
+        try {
+            getBridge().getWebView().addJavascriptInterface(new Object() {
+                @android.webkit.JavascriptInterface
+                public void setLoggedInUser(String userId) {
+                    getSharedPreferences("EnteangadiPrefs", MODE_PRIVATE)
+                        .edit()
+                        .putString("logged_in_user_id", userId)
+                        .apply();
+                }
+            }, "EnteangadiNativeHelper");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         // Start optimized background notification polling service
         try {
             Intent serviceIntent = new Intent(this, BackgroundNotificationService.class);

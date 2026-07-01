@@ -165,10 +165,13 @@ public class BackgroundNotificationService extends Service {
                 return;
             }
 
-            CookieManager cookieManager = CookieManager.getInstance();
-            String cookies = cookieManager.getCookie(serverUrl);
+            String loggedInUserId = prefs.getString("logged_in_user_id", "");
+            String apiUrl = serverUrl + (serverUrl.endsWith("/") ? "" : "/") + "user/api_unread_messages.php";
+            if (!loggedInUserId.isEmpty()) {
+                apiUrl += "?user_id=" + loggedInUserId;
+            }
 
-            URL url = new URL(serverUrl + (serverUrl.endsWith("/") ? "" : "/") + "user/api_unread_messages.php");
+            URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             if (cookies != null) {
