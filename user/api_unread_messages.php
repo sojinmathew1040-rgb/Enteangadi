@@ -14,7 +14,7 @@ $my_id = $_SESSION['user_id'];
 
 try {
     $stmt = $pdo->prepare("
-        SELECT m.id, m.sender_id, u.username as sender_name, m.message_text, m.created_at 
+        SELECT m.id, m.sender_id, m.product_id, u.username as sender_name, m.message_text, m.created_at 
         FROM messages m 
         JOIN users u ON m.sender_id = u.id 
         WHERE m.receiver_id = ? AND m.is_read = 0 

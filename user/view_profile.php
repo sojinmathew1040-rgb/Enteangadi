@@ -102,33 +102,34 @@ require_once '../includes/header.php';
                 <p>This user hasn't posted any active advertisements recently.</p>
             </div>
         <?php else: ?>
-            <div class="my-ads-grid">
+            <div class="product-grid" style="margin-top: 20px;">
                 <?php foreach ($active_ads as $ad): ?>
-                    <div class="my-ad-card" onclick="window.location.href='../product.php?id=<?= $ad['id'] ?>';">
-                        <div class="ad-card-image-box">
-                            <?php if ($ad['main_image']): ?>
-                                <img src="../<?= htmlspecialchars($ad['main_image']) ?>" alt="<?= htmlspecialchars($ad['title']) ?>"
-                                    class="ad-image">
-                            <?php else: ?>
-                                <div class="ad-image-placeholder"><i class="fa fa-image"></i></div>
-                            <?php endif; ?>
+                    <a href="../product.php?id=<?= $ad['id'] ?>" class="product-card" style="text-decoration: none;">
+                        <?php if ($ad['type'] == 'buy'): ?>
+                            <div class="badge-wanted">Wanted</div>
+                        <?php else: ?>
+                            <div class="badge-selling">For Sale</div>
+                        <?php endif; ?>
 
-                            <div class="ad-status-badge status-active">
-                                ACTIVE
+                        <?php if ($ad['main_image']): ?>
+                            <img src="../<?= htmlspecialchars($ad['main_image']) ?>" loading="lazy"
+                                alt="<?= htmlspecialchars($ad['title']) ?>" class="product-card-image">
+                        <?php else: ?>
+                            <div class="product-card-image"
+                                style="display: flex; align-items: center; justify-content: center; background: #e0e0e0;">
+                                <i class="fa fa-image" style="font-size: 40px; color: #999;"></i>
                             </div>
-                        </div>
+                        <?php endif; ?>
 
-                        <div class="ad-card-details">
-                            <div class="ad-price">₹ <?= number_format($ad['price'], 0) ?></div>
-                            <h3 class="ad-title"><?= htmlspecialchars($ad['title']) ?></h3>
-
-                            <div class="ad-stats-mini">
+                        <div class="product-card-content">
+                            <div class="product-card-price">₹ <?= number_format($ad['price'], 0) ?></div>
+                            <div class="product-card-title"><?= htmlspecialchars($ad['title']) ?></div>
+                            <div class="product-card-meta">
                                 <span><i class="fa fa-eye"></i> <?= number_format($ad['views']) ?></span>
-                                <span><i class="fa fa-heart"></i> <?= number_format($ad['like_count']) ?></span>
-                                <span><i class="fa fa-calendar"></i> <?= date('M d', strtotime($ad['created_at'])) ?></span>
+                                <span><?= date('M d', strtotime($ad['created_at'])) ?></span>
                             </div>
                         </div>
-                    </div>
+                    </a>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>

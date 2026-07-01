@@ -7,9 +7,12 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.app.AlarmManager;
+import android.os.SystemClock;
 import android.os.Build;
 import android.os.IBinder;
 import android.webkit.CookieManager;
+import android.media.RingtoneManager;
 import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,8 +31,8 @@ public class BackgroundNotificationService extends Service {
     public void onCreate() {
         super.onCreate();
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Poll every 3 seconds for new messages
-        scheduler.scheduleAtFixedRate(this::pollUnreadMessages, 2, 3, TimeUnit.SECONDS);
+        // Poll every 30 seconds for new messages to prevent battery drain
+        scheduler.scheduleAtFixedRate(this::pollUnreadMessages, 10, 30, TimeUnit.SECONDS);
     }
 
     @Override
@@ -80,6 +83,30 @@ public class BackgroundNotificationService extends Service {
         return null;
     }
 
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
+        restartServiceIntent.setPackage(getPackageName());
+
+        PendingIntent restartServicePendingIntent = PendingIntent.getService(
+            getApplicationContext(), 
+            1, 
+            restartServiceIntent, 
+            PendingIntent.FLAG_ONE_SHOT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
+        if (alarmService != null) {
+            alarmService.set(
+                AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + 1000,
+                restartServicePendingIntent
+            );
+        }
+
+        super.onTaskRemoved(rootIntent);
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "New Messages";
@@ -98,14 +125,16 @@ public class BackgroundNotificationService extends Service {
         }
     }
 
-    private void showNotification(String senderName, String messageText, int unreadCount) {
+    private void showNotification(String senderName, String messageText, int unreadCount, int senderId, int productId) {
         createNotificationChannel();
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        intent.putExtra("user_id", senderId);
+        intent.putExtra("product_id", productId);
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            (int) System.currentTimeMillis(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
@@ -117,8 +146,10 @@ public class BackgroundNotificationService extends Service {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setNumber(unreadCount);
+            .setNumber(unreadCount)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager != null) {
@@ -178,7 +209,9 @@ public class BackgroundNotificationService extends Service {
                                     messageText = "📷 Shared photo";
                                 }
 
-                                showNotification(senderName, messageText, unreadCount);
+                                int senderId = msg.optInt("sender_id", 0);
+                                int productId = msg.optInt("product_id", 0);
+                                showNotification(senderName, messageText, unreadCount, senderId, productId);
                                 if (msgId > maxId) {
                                     maxId = msgId;
                                 }
