@@ -28,8 +28,8 @@ public class BackgroundNotificationService extends Service {
     public void onCreate() {
         super.onCreate();
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Poll every 10 seconds for new messages
-        scheduler.scheduleAtFixedRate(this::pollUnreadMessages, 5, 10, TimeUnit.SECONDS);
+        // Poll every 3 seconds for new messages
+        scheduler.scheduleAtFixedRate(this::pollUnreadMessages, 2, 3, TimeUnit.SECONDS);
     }
 
     @Override
@@ -57,6 +57,10 @@ public class BackgroundNotificationService extends Service {
             int importance = NotificationManager.IMPORTANCE_HIGH;
             NotificationChannel channel = new NotificationChannel("new_messages_channel", name, importance);
             channel.setDescription(description);
+            channel.setShowBadge(true);
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+            channel.enableLights(true);
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(channel);
@@ -64,7 +68,7 @@ public class BackgroundNotificationService extends Service {
         }
     }
 
-    private void showNotification(String senderName, String messageText) {
+    private void showNotification(String senderName, String messageText, int unreadCount) {
         createNotificationChannel();
 
         Intent intent = new Intent(this, MainActivity.class);
@@ -82,7 +86,9 @@ public class BackgroundNotificationService extends Service {
             .setContentText(messageText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
-            .setAutoCancel(true);
+            .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setNumber(unreadCount);
 
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager != null) {
@@ -126,6 +132,7 @@ public class BackgroundNotificationService extends Service {
                         int lastSeenId = prefs.getInt("last_seen_message_id", 0);
                         int maxId = lastSeenId;
                         boolean shouldSave = false;
+                        int unreadCount = messages.length();
 
                         // Display oldest to newest
                         for (int i = messages.length() - 1; i >= 0; i--) {
@@ -141,7 +148,7 @@ public class BackgroundNotificationService extends Service {
                                     messageText = "📷 Shared photo";
                                 }
 
-                                showNotification(senderName, messageText);
+                                showNotification(senderName, messageText, unreadCount);
                                 if (msgId > maxId) {
                                     maxId = msgId;
                                 }

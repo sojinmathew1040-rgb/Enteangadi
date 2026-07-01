@@ -185,8 +185,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 .catch(err => console.error("Error fetching unread count", err));
         }
 
-        // Check unread count every 5 seconds for quicker notifications
-        setInterval(updateUnreadBadge, 5000);
+        // Check unread count every 2 seconds for quicker notifications
+        setInterval(updateUnreadBadge, 2000);
         // Initial check
         updateUnreadBadge();
     </script>

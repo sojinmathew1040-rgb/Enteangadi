@@ -239,7 +239,7 @@ async function loadNSFWModel() {
                 await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
             }
             if (typeof nsfwjs === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs');
+                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs/dist/nsfwjs.min.js');
             }
             nsfwModel = await nsfwjs.load();
             return nsfwModel;

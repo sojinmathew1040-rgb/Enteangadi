@@ -23,6 +23,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ad_action'])) {
     ];
 
     if (isset($status_map[$action])) {
+        if ($action === 'delete') {
+            $password_input = $_POST['delete_password'] ?? '';
+            $user_stmt = $pdo->prepare("SELECT password FROM users WHERE id = ?");
+            $user_stmt->execute([$user_id]);
+            $user_pass = $user_stmt->fetchColumn();
+
+            if (empty($password_input) || !password_verify($password_input, $user_pass)) {
+                $error = "Incorrect password. Confirm with your correct account password to delete the ad.";
+                goto end_post;
+            }
+
+            // Select and delete image files from disk
+            $img_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ?");
+            $img_stmt->execute([$ad_id]);
+            $images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($images as $img) {
+                $fullPath = '../' . $img;
+                if (file_exists($fullPath)) {
+                    @unlink($fullPath);
+                }
+            }
+
+            // Delete product row (CASCADE deletes corresponding child rows)
+            $stmt = $pdo->prepare("DELETE FROM products WHERE id = ? AND user_id = ?");
+            if ($stmt->execute([$ad_id, $user_id])) {
+                $success = "Ad deleted completely.";
+            } else {
+                $error = "Failed to delete ad.";
+            }
+            goto end_post;
+        }
+
         $new_status = $status_map[$action];
         $reason = $_POST['status_reason'] ?? null;
         if ($reason === 'Other') {
@@ -267,6 +299,11 @@ require_once '../includes/header.php';
             <div id="customReasonWrapper" style="display: none; margin-top: 15px;">
                 <textarea name="custom_reason" class="form-control" rows="3"
                     placeholder="Type your reason here..."></textarea>
+            </div>
+
+            <div id="deletePasswordWrapper" style="display: none; margin-top: 15px;">
+                <label for="delete_password" style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: var(--text-dark);">Enter Password to Confirm *</label>
+                <input type="password" name="delete_password" id="delete_password" class="form-control" placeholder="Your account password" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 12px; font-size: 14px; outline: none; box-sizing: border-box;">
             </div>
 
             <div class="modal-footer-btns">
@@ -1030,6 +1067,15 @@ require_once '../includes/header.php';
             label.innerHTML = `<input type="radio" name="status_reason" value="${r}" ${i === 0 ? 'checked' : ''} onchange="toggleCustomReason(this.value)"> <span>${r}</span>`;
             optionsDiv.appendChild(label);
         });
+
+        if (action === 'delete') {
+            document.getElementById('deletePasswordWrapper').style.display = 'block';
+            document.getElementById('delete_password').required = true;
+        } else {
+            document.getElementById('deletePasswordWrapper').style.display = 'none';
+            document.getElementById('delete_password').required = false;
+            document.getElementById('delete_password').value = '';
+        }
 
         document.getElementById('customReasonWrapper').style.display = 'none';
         modal.style.display = 'flex';

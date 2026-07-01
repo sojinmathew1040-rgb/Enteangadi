@@ -30,6 +30,22 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 session_start();
 
+// Set base URL dynamically
+if (!isset($base_url)) {
+    $current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+    $base_url = ($current_dir == '/' || $current_dir == '.') ? '' : $current_dir;
+    if (basename($base_url) == 'user' || basename($base_url) == 'admin' || basename($base_url) == 'guest' || basename($base_url) == 'api' || basename($base_url) == 'includes') {
+        $base_url = dirname($base_url);
+    }
+    if (basename($base_url) == 'user' || basename($base_url) == 'admin' || basename($base_url) == 'guest' || basename($base_url) == 'api' || basename($base_url) == 'includes') {
+        $base_url = dirname($base_url);
+    }
+    $base_url = str_replace('\\', '/', $base_url);
+    if ($base_url == '/') {
+        $base_url = '';
+    }
+}
+
 // Unified Cookie Helper Function
 if (!function_exists('enteangadi_set_cookie')) {
     function enteangadi_set_cookie($name, $value, $expiry)
@@ -103,7 +119,7 @@ header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Ac
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 
 // Return immediately for OPTIONS preflight checks
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit;
 }

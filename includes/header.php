@@ -288,7 +288,7 @@ try {
         window.addEventListener('DOMContentLoaded', () => {
             updateThemeIcon(document.documentElement.getAttribute('data-theme'));
             fetchNotifications();
-            setInterval(fetchNotifications, 30000); // Poll every 30s
+            setInterval(fetchNotifications, 5000); // Poll every 5s
         });
 
         async function fetchNotifications() {
