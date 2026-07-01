@@ -52,6 +52,21 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title><?= __('app_name') ?> - <?= __('tagline') ?></title>
     <meta name="description" content="Buy and sell anything locally with <?= __('app_name') ?>.">
+    
+    <!-- Open Graph / Facebook Meta Tags -->
+    <?php if (isset($og_title)): ?>
+        <meta property="og:title" content="<?= htmlspecialchars($og_title) ?>" />
+    <?php endif; ?>
+    <?php if (isset($og_desc)): ?>
+        <meta property="og:description" content="<?= htmlspecialchars($og_desc) ?>" />
+    <?php endif; ?>
+    <?php if (isset($og_image)): ?>
+        <meta property="og:image" content="<?= htmlspecialchars($og_image) ?>" />
+    <?php endif; ?>
+    <?php if (isset($og_url)): ?>
+        <meta property="og:url" content="<?= htmlspecialchars($og_url) ?>" />
+    <?php endif; ?>
+    <meta property="og:type" content="website" />
     <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=1.3">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

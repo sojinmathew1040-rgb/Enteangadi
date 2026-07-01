@@ -9,17 +9,22 @@ if (!isset($_SESSION['user_id'])) {
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $my_id = $_SESSION['user_id'];
 
-// Security check: Check if product is deleted or user is blocked
+// Security check: Check if product is deleted/sold, self-chat, or user is blocked
 if (in_array($action, ['send', 'send_audio', 'send_image'])) {
     $product_id = $_POST['product_id'] ?? 0;
     $receiver_id = $_POST['receiver_id'] ?? 0;
+
+    if ($receiver_id == $my_id) {
+        echo json_encode(['success' => false, 'error' => 'You cannot chat with yourself.']);
+        exit;
+    }
 
     if ($product_id) {
         $prod_stmt = $pdo->prepare("SELECT status FROM products WHERE id = ?");
         $prod_stmt->execute([$product_id]);
         $prod_status = $prod_stmt->fetchColumn();
-        if ($prod_status === 'deleted') {
-            echo json_encode(['success' => false, 'error' => 'Product deleted by the seller']);
+        if ($prod_status === 'deleted' || $prod_status === 'sold') {
+            echo json_encode(['success' => false, 'error' => 'This product listing is no longer active.']);
             exit;
         }
     }
@@ -40,6 +45,12 @@ if ($action === 'send') {
     $message = trim($_POST['message'] ?? '');
 
     if ($receiver_id && $product_id && !empty($message)) {
+        require_once '../includes/helpers.php';
+        if (isTextInappropriate($message)) {
+            echo json_encode(['success' => false, 'error' => 'Inappropriate content detected in message text.']);
+            exit;
+        }
+
         try {
             $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
             $stmt->execute([$my_id, $receiver_id, $product_id, $message]);
@@ -86,6 +97,12 @@ if ($action === 'send') {
 
     if ($receiver_id && $product_id && isset($_FILES['image_data'])) {
         try {
+            require_once '../includes/helpers.php';
+            if (isImageNSFW($_FILES['image_data']['tmp_name'])) {
+                echo json_encode(['success' => false, 'error' => 'Inappropriate/adult content detected in the image.']);
+                exit;
+            }
+
             $upload_dir = '../uploads/chat_images/';
             if (!is_dir($upload_dir)) {
                 mkdir($upload_dir, 0777, true);

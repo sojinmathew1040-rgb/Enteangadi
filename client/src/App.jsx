@@ -2,6 +2,16 @@ import { useState, useEffect } from 'react';
 import { apiFetch, getBaseUrl } from './utils/apiClient';
 import './App.css';
 
+function base64ToBlob(base64, mimeType) {
+  const byteCharacters = atob(base64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], { type: mimeType });
+}
+
 function App() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -624,43 +634,45 @@ function App() {
   const toggleRecording = async () => {
     if (!isRecording) {
       try {
-        // Trigger native mobile OS permission requests if in WebView wrapper
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MicrophonePermission) {
+        const isMobile = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MicrophonePermission;
+        if (isMobile) {
           try {
             await window.Capacitor.Plugins.MicrophonePermission.checkPermission();
           } catch (e) {
             console.warn("Capacitor custom microphone permission request error:", e);
           }
+          await window.Capacitor.Plugins.MicrophonePermission.startRecording();
+          setIsRecording(true);
+        } else {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("SECURE_CONTEXT_REQUIRED");
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          setAudioStream(stream);
+
+          const recorder = new MediaRecorder(stream);
+          const chunks = [];
+
+          recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+
+          recorder.onstop = async () => {
+            const audioBlob = new Blob(chunks, { type: 'audio/wav' });
+            if (chunks.length > 0) {
+              await uploadVoiceNote(audioBlob);
+            }
+            stream.getTracks().forEach(t => t.stop());
+          };
+
+          recorder.start();
+          setMediaRecorder(recorder);
+          setIsRecording(true);
         }
 
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("SECURE_CONTEXT_REQUIRED");
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setAudioStream(stream);
-
-        const recorder = new MediaRecorder(stream);
-        const chunks = [];
-
-        recorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            chunks.push(e.data);
-          }
-        };
-
-        recorder.onstop = async () => {
-          const audioBlob = new Blob(chunks, { type: 'audio/wav' });
-          if (chunks.length > 0) {
-            await uploadVoiceNote(audioBlob);
-          }
-          stream.getTracks().forEach(t => t.stop());
-        };
-
-        recorder.start();
-        setMediaRecorder(recorder);
-        setIsRecording(true);
         setRecordingSeconds(0);
-
         const interval = setInterval(() => {
           setRecordingSeconds(prev => prev + 1);
         }, 1000);
@@ -686,15 +698,27 @@ function App() {
     clearInterval(recordingInterval);
     setIsRecording(false);
 
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      if (!shouldSend) {
-        mediaRecorder.onstop = () => {
-          if (audioStream) {
-            audioStream.getTracks().forEach(t => t.stop());
-          }
-        };
+    const isMobile = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.MicrophonePermission;
+    if (isMobile) {
+      window.Capacitor.Plugins.MicrophonePermission.stopRecording().then(async (result) => {
+        if (shouldSend && result && result.base64 && recordingSeconds > 0) {
+          const audioBlob = base64ToBlob(result.base64, result.format || 'audio/mp4');
+          await uploadVoiceNote(audioBlob);
+        }
+      }).catch(err => {
+        console.error("Native voice recording stop failed:", err);
+      });
+    } else {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        if (!shouldSend) {
+          mediaRecorder.onstop = () => {
+            if (audioStream) {
+              audioStream.getTracks().forEach(t => t.stop());
+            }
+          };
+        }
+        mediaRecorder.stop();
       }
-      mediaRecorder.stop();
     }
   };
 

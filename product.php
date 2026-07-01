@@ -62,6 +62,22 @@ try {
         $is_wishlisted = (bool) $wish_stmt->fetch();
     }
 
+    if ($product) {
+        $og_title = $product['title'];
+        $og_desc = substr(strip_tags($product['description']), 0, 150);
+        if (strlen(strip_tags($product['description'])) > 150) {
+            $og_desc .= '...';
+        }
+        $og_image = '';
+        if (!empty($images)) {
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+            $host = $_SERVER['HTTP_HOST'];
+            $og_image = $protocol . $host . ($base_url ? $base_url : '') . '/' . $images[0];
+        }
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+        $og_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    }
+
 } catch (PDOException $e) {
     $product = null;
 }
@@ -208,7 +224,24 @@ require_once 'includes/header.php';
                                         </a>
                                         <?php if (!empty($product['product_whatsapp'])): ?>
                                             <?php
-                                            $whatsapp_msg = urlencode("Hello! I saw your listing '" . $product['title'] . "' on " . ($app_settings['app_name'] ?? 'Enteangadi') . ". Is it still available? I would love to make an offer.");
+                                            $first_img_url = '';
+                                            if (!empty($images)) {
+                                                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+                                                $host = $_SERVER['HTTP_HOST'];
+                                                $first_img_url = $protocol . $host . ($base_url ? $base_url : '') . '/' . $images[0];
+                                            }
+
+                                            $whatsapp_text = "Hello! I saw your listing on " . ($app_settings['app_name'] ?? 'Enteangadi') . ".\n\n"
+                                                           . "Title: " . $product['title'] . "\n"
+                                                           . "Price: ₹ " . number_format($product['price'], 0) . "\n"
+                                                           . "Location: " . ($product['location_name'] ?? 'Kerala') . "\n";
+
+                                            if ($first_img_url) {
+                                                $whatsapp_text .= "Image: " . $first_img_url . "\n";
+                                            }
+
+                                            $whatsapp_text .= "\nIs it still available? I would love to make an offer.";
+                                            $whatsapp_msg = urlencode($whatsapp_text);
                                             ?>
                                             <a href="https://wa.me/<?= preg_replace('/\D/', '', $product['product_whatsapp']) ?>?text=<?= $whatsapp_msg ?>"
                                                 target="_blank" class="btn-whatsapp" title="Chat on WhatsApp">

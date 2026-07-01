@@ -113,7 +113,7 @@ require_once '../includes/header.php';
                             </div>
                             <div class="product-tag">
                                 <i class="fa fa-shopping-bag"></i>
-                                <?= htmlspecialchars($conv['product_title']) ?>
+                                <?= htmlspecialchars($conv['product_title']) ?> - ₹<?= number_format($conv['product_price']) ?>
                             </div>
                             <div class="last-message-snippet">
                                 <?php if ($conv['last_sender_id'] == $my_id): ?>

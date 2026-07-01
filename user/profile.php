@@ -37,29 +37,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
         if (in_array($ext, $allowed)) {
-            $new_name = uniqid() . '.' . $ext;
-            $dest = $upload_dir . $new_name;
-
-            if (compressAndResizeImage($_FILES['profile_picture']['tmp_name'], $dest, 400, 80) || move_uploaded_file($_FILES['profile_picture']['tmp_name'], $dest)) {
-                @chmod($dest, 0644);
-                $db_path = 'uploads/profiles/' . $new_name;
-
-                // Fetch old profile picture to delete it
-                $old_pic_stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ?");
-                $old_pic_stmt->execute([$user_id]);
-                $old_pic = $old_pic_stmt->fetchColumn();
-
-                $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
-                if ($stmt->execute([$db_path, $user_id])) {
-                    if ($old_pic && file_exists('../' . $old_pic)) {
-                        unlink('../' . $old_pic);
-                    }
-                    $success = "Profile picture updated successfully!";
-                } else {
-                    $error = "Failed to update profile picture in database.";
-                }
+            require_once '../includes/helpers.php';
+            if (isImageNSFW($_FILES['profile_picture']['tmp_name'])) {
+                $error = "Inappropriate profile picture content detected.";
             } else {
-                $error = "Failed to upload image.";
+                $new_name = uniqid() . '.' . $ext;
+                $dest = $upload_dir . $new_name;
+
+                if (compressAndResizeImage($_FILES['profile_picture']['tmp_name'], $dest, 400, 80) || move_uploaded_file($_FILES['profile_picture']['tmp_name'], $dest)) {
+                    @chmod($dest, 0644);
+                    $db_path = 'uploads/profiles/' . $new_name;
+
+                    // Fetch old profile picture to delete it
+                    $old_pic_stmt = $pdo->prepare("SELECT profile_picture FROM users WHERE id = ?");
+                    $old_pic_stmt->execute([$user_id]);
+                    $old_pic = $old_pic_stmt->fetchColumn();
+
+                    $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
+                    if ($stmt->execute([$db_path, $user_id])) {
+                        if ($old_pic && file_exists('../' . $old_pic)) {
+                            unlink('../' . $old_pic);
+                        }
+                        $success = "Profile picture updated successfully!";
+                    } else {
+                        $error = "Failed to update profile picture in database.";
+                    }
+                } else {
+                    $error = "Failed to upload image.";
+                }
             }
         } else {
             $error = "Invalid file format. Only JPG, PNG, and WEBP are allowed.";

@@ -26,7 +26,7 @@ $stmt->execute([$other_user_id]);
 $other_user = $stmt->fetch();
 
 $stmt2 = $pdo->prepare("
-    SELECT p.title, p.price, p.status, 
+    SELECT p.title, p.price, p.status, p.updated_at, p.created_at, 
     (SELECT image_path FROM product_images WHERE product_id = p.id ORDER BY id ASC LIMIT 1) as thumbnail 
     FROM products p 
     WHERE p.id = ?
@@ -37,6 +37,19 @@ $product = $stmt2->fetch();
 if (!$other_user || !$product) {
     header("Location: inbox.php");
     exit;
+}
+
+$days_left = 15;
+$is_chat_expired = false;
+if ($product['status'] === 'sold' || $product['status'] === 'deleted') {
+    $is_chat_expired = true;
+    $updated_time = strtotime($product['updated_at'] ?? $product['created_at']);
+    $diff_seconds = time() - $updated_time;
+    $diff_days = (int) floor($diff_seconds / 86400);
+    $days_left = 15 - $diff_days;
+    if ($days_left < 0) {
+        $days_left = 0;
+    }
 }
 
 // Check block status
@@ -123,10 +136,13 @@ require_once '../includes/header.php';
 
             <!-- Input Area -->
             <div class="chat-input-area">
-                <?php if ($product['status'] === 'deleted'): ?>
-                    <div class="chat-disabled-banner" style="background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                        <i class="fa fa-exclamation-triangle" style="font-size: 18px;"></i>
-                        <span>This product has been deleted by the seller. Chat is disabled.</span>
+                <?php if ($is_chat_expired): ?>
+                    <div class="chat-disabled-banner" style="background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 16px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-weight: 700; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.03); text-align: center;">
+                        <div>
+                            <i class="fa fa-exclamation-triangle" style="font-size: 18px; margin-right: 6px;"></i>
+                            <span>This product has been marked as <?= htmlspecialchars($product['status']) ?>. Chat is disabled.</span>
+                        </div>
+                        <span style="font-size: 13px; font-weight: 500; color: #b91c1c;">This chat and all shared media will be permanently deleted in <?= $days_left ?> days.</span>
                     </div>
                 <?php elseif ($is_blocked): ?>
                     <div class="chat-disabled-banner" style="background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">

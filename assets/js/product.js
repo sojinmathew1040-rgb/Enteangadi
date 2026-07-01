@@ -146,8 +146,15 @@ function openCustomShare(url, title) {
     const modal = document.getElementById('customShareModal');
     if (!modal) return;
 
+    // Retrieve the first image from the main slider gallery
+    let imageText = "";
+    const firstImg = document.querySelector('.carousel-item-premium img')?.src;
+    if (firstImg) {
+        imageText = "\n\nImage: " + firstImg;
+    }
+
     // Configure share links
-    const textMsg = encodeURIComponent("Check out this product on Enteangadi: " + title + "\n" + url);
+    const textMsg = encodeURIComponent("Check out this product on Enteangadi: " + title + "\n" + url + imageText);
     const whatsapp = document.getElementById('share-whatsapp');
     const telegram = document.getElementById('share-telegram');
     const facebook = document.getElementById('share-facebook');

@@ -366,6 +366,30 @@ function toggleAudioPlayback(btn, url) {
     });
 }
 
+function isTextInappropriateJS(text) {
+    const bannedWords = [
+        'sex', 'porn', 'nude', 'naked', 'erotic', 'escort', 'massage parlour', 'sensual', 
+        'vulgar', 'orgasm', 'xxx', 'hentai', 'playboy', 'slut', 'whore', 'hookup', 
+        'condom', 'vagina', 'penis', 'breasts', 'boobs', 'strip club', 'call girl',
+        'kambi', 'vedi', 'chundu', 'mulakalo', 'sugam', 'kundila', 'mypu', 'poola', 'kunna',
+        'drugs', 'cocaine', 'heroin', 'marijuana', 'weed', 'cannabis', 'meth', 'ecstasy',
+        'lsd', 'ganja', 'kannabis', 'mdma', 'hashish', 'steroids',
+        'weapons', 'ammunition', 'firearms', 'gun for sale', 'pistol for sale', 'explosives',
+        'grenade', 'bomb', 'assault rifle', 'murder', 'suicide', 'slaughter'
+    ];
+    const cleanText = text.toLowerCase();
+    for (let word of bannedWords) {
+        const regex = new RegExp('\\b' + word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'u');
+        if (regex.test(cleanText)) {
+            return true;
+        }
+        if (word.length > 3 && cleanText.includes(word)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function sendMessage() {
     const messageInput = document.getElementById('message-input');
     const chatBox = document.getElementById('chat-box');
@@ -373,6 +397,16 @@ function sendMessage() {
 
     const text = messageInput.value.trim();
     if (!text) return;
+
+    if (isTextInappropriateJS(text)) {
+        showCustomAlert({
+            title: "Inappropriate Content",
+            message: "Your message contains inappropriate words or adult content and cannot be sent.",
+            isDanger: true,
+            iconClass: "fa fa-exclamation-triangle"
+        });
+        return;
+    }
 
     messageInput.value = '';
     updateInputButtons();
@@ -392,8 +426,34 @@ function sendMessage() {
             if (data.success) {
                 fetchMessages();
                 setTimeout(() => chatBox.scrollTop = chatBox.scrollHeight, 100);
+            } else {
+                showCustomAlert({
+                    title: "Message Failed",
+                    message: data.error || "Failed to send message.",
+                    isDanger: true,
+                    iconClass: "fa fa-exclamation-triangle"
+                });
             }
+        })
+        .catch(err => {
+            console.error("Send message error:", err);
+            showCustomAlert({
+                title: "Connection Error",
+                message: "Failed to send message due to a connection error.",
+                isDanger: true,
+                iconClass: "fa fa-wifi"
+            });
         });
+}
+
+function base64ToBlob(base64, mimeType) {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
 }
 
 // Start and stop voice recording
@@ -408,33 +468,36 @@ async function toggleVoiceRecording() {
 
     if (!isRecording) {
         try {
-            // Trigger native mobile OS permission requests if in WebView wrapper
-            if (window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile()) {
+            const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
+            if (isMobile) {
+                // Trigger native mobile OS permission requests if in WebView wrapper
                 await window.EnteangadiMobile.requestAllPermissions();
-            }
-
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error("SECURE_CONTEXT_REQUIRED");
-            }
-
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                if (audioChunks.length > 0 && recordingSeconds > 0) {
-                    await uploadAudioMessage(audioBlob);
+                await window.EnteangadiMobile.startRecording();
+                isRecording = true;
+            } else {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("SECURE_CONTEXT_REQUIRED");
                 }
-                stream.getTracks().forEach(track => track.stop()); // shut down microhardware
-            };
 
-            mediaRecorder.start();
-            isRecording = true;
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    if (audioChunks.length > 0 && recordingSeconds > 0) {
+                        await uploadAudioMessage(audioBlob);
+                    }
+                    stream.getTracks().forEach(track => track.stop()); // shut down microhardware
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+            }
 
             // Adjust input UI to show recording pulses
             msgInput.style.display = 'none';
@@ -473,11 +536,23 @@ function stopVoiceRecording(shouldSend) {
     clearInterval(recordingTimerInterval);
     isRecording = false;
 
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        if (!shouldSend) {
-            audioChunks = []; // clear chunks
+    const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
+    if (isMobile) {
+        window.EnteangadiMobile.stopRecording().then(async (result) => {
+            if (shouldSend && result && result.base64 && recordingSeconds > 0) {
+                const audioBlob = base64ToBlob(result.base64, result.format || 'audio/mp4');
+                await uploadAudioMessage(audioBlob);
+            }
+        }).catch((err) => {
+            console.error("Native voice recording stop/read failed:", err);
+        });
+    } else {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            if (!shouldSend) {
+                audioChunks = []; // clear chunks
+            }
+            mediaRecorder.stop();
         }
-        mediaRecorder.stop();
     }
 
     const micBtn = document.getElementById('micBtn');

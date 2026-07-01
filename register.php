@@ -29,7 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $confirm_password = $_POST['confirm_password'] ?? '';
 
     if (!empty($username) && !empty($phone_number) && !empty($email) && !empty($password)) {
-        if ($password !== $confirm_password) {
+        require_once 'includes/helpers.php';
+        if (isTextInappropriate($username)) {
+            $error = "This username is not allowed.";
+        } elseif ($password !== $confirm_password) {
             $error = "Passwords do not match.";
         } else {
             // Check if phone number already exists

@@ -95,6 +95,60 @@
         background: rgba(239, 68, 68, 0.15);
         color: #fca5a5;
     }
+    
+    /* Premium Phone/WhatsApp country selector styles */
+    .phone-input-container {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--border-color, #e2e8f0);
+        border-radius: 12px;
+        background: var(--white, #ffffff);
+        overflow: hidden;
+        width: 100%;
+        box-sizing: border-box;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 8px;
+    }
+    .phone-input-container:focus-within {
+        border-color: var(--primary-green, #2E7D32);
+        box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
+    }
+    .country-code-select {
+        border: none !important;
+        background: transparent !important;
+        padding: 12px 8px 12px 12px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: var(--text-dark, #1e293b) !important;
+        outline: none !important;
+        border-right: 1px solid var(--border-color, #e2e8f0) !important;
+        cursor: pointer !important;
+        width: 110px !important;
+        min-width: 110px !important;
+        box-sizing: border-box !important;
+    }
+    .phone-local-input {
+        border: none !important;
+        background: transparent !important;
+        padding: 12px !important;
+        font-size: 15px !important;
+        outline: none !important;
+        flex: 1 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        color: var(--text-dark, #1e293b) !important;
+    }
+    [data-theme="dark"] .phone-input-container {
+        background: #0f172a;
+        border-color: #334155;
+    }
+    [data-theme="dark"] .country-code-select {
+        border-right-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+    [data-theme="dark"] .phone-local-input {
+        color: #f8fafc !important;
+    }
     `;
     document.head.appendChild(style);
 })();
@@ -250,6 +304,26 @@ window.EnteangadiMobile = {
         } catch (e) {
             console.warn("Web API native camera permission mapping error:", e);
         }
+    },
+
+    /**
+     * Start voice note recording natively.
+     */
+    startRecording: async function () {
+        if (this.isRunningInMobile() && window.Capacitor.Plugins.MicrophonePermission) {
+            return await window.Capacitor.Plugins.MicrophonePermission.startRecording();
+        }
+        throw new Error("Native recording not available");
+    },
+
+    /**
+     * Stop voice note recording natively.
+     */
+    stopRecording: async function () {
+        if (this.isRunningInMobile() && window.Capacitor.Plugins.MicrophonePermission) {
+            return await window.Capacitor.Plugins.MicrophonePermission.stopRecording();
+        }
+        throw new Error("Native recording not available");
     },
 
     /**
@@ -699,3 +773,210 @@ document.addEventListener('click', (e) => {
         }, false, null, true, 'images');
     }
 });
+
+// Premium Country Code Selector Implementation
+(function () {
+    const countryCodes = [
+        { code: "91", country: "IN", name: "India", flag: "🇮🇳" },
+        { code: "971", country: "AE", name: "United Arab Emirates", flag: "🇦🇪" },
+        { code: "966", country: "SA", name: "Saudi Arabia", flag: "🇸🇦" },
+        { code: "968", country: "OM", name: "Oman", flag: "🇴🇲" },
+        { code: "974", country: "QA", name: "Qatar", flag: "🇶🇦" },
+        { code: "965", country: "KW", name: "Kuwait", flag: "🇰🇼" },
+        { code: "973", country: "BH", name: "Bahrain", flag: "🇧🇭" },
+        { code: "1", country: "US", name: "United States", flag: "🇺🇸" },
+        { code: "44", country: "GB", name: "United Kingdom", flag: "🇬🇧" },
+        { code: "61", country: "AU", name: "Australia", flag: "🇦🇺" },
+        { code: "65", country: "SG", name: "Singapore", flag: "🇸🇬" },
+        { code: "60", country: "MY", name: "Malaysia", flag: "🇲🇾" },
+        { code: "1", country: "CA", name: "Canada", flag: "🇨🇦" },
+        { code: "33", country: "FR", name: "France", flag: "🇫🇷" },
+        { code: "49", country: "DE", name: "Germany", flag: "🇩🇪" },
+        { code: "81", country: "JP", name: "Japan", flag: "🇯🇵" },
+        { code: "86", country: "CN", name: "China", flag: "🇨🇳" },
+        { code: "39", country: "IT", name: "Italy", flag: "🇮🇹" },
+        { code: "7", country: "RU", name: "Russia", flag: "🇷🇺" },
+        { code: "34", country: "ES", name: "Spain", flag: "🇪🇸" },
+        { code: "55", country: "BR", name: "Brazil", flag: "🇧🇷" },
+        { code: "27", country: "ZA", name: "South Africa", flag: "🇿🇦" },
+        { code: "92", country: "PK", name: "Pakistan", flag: "🇵🇰" },
+        { code: "880", country: "BD", name: "Bangladesh", flag: "🇧🇩" },
+        { code: "94", country: "LK", name: "Sri Lanka", flag: "🇱🇰" },
+        { code: "977", country: "NP", name: "Nepal", flag: "🇳🇵" },
+        { code: "62", country: "ID", name: "Indonesia", flag: "🇮🇩" },
+        { code: "63", country: "PH", name: "Philippines", flag: "🇵🇭" },
+        { code: "64", country: "NZ", name: "New Zealand", flag: "🇳🇿" },
+        { code: "353", country: "IE", name: "Ireland", flag: "🇮🇪" },
+        { code: "41", country: "CH", name: "Switzerland", flag: "🇨🇭" },
+        { code: "31", country: "NL", name: "Netherlands", flag: "🇳🇱" },
+        { code: "46", country: "SE", name: "Sweden", flag: "🇸🇪" },
+        { code: "47", country: "NO", name: "Norway", flag: "🇳🇴" },
+        { code: "45", country: "DK", name: "Denmark", flag: "🇩🇰" },
+        { code: "32", country: "BE", name: "Belgium", flag: "🇧🇪" },
+        { code: "43", country: "AT", name: "Austria", flag: "🇦🇹" },
+        { code: "351", country: "PT", name: "Portugal", flag: "🇵🇹" },
+        { code: "30", country: "GR", name: "Greece", flag: "🇬🇷" },
+        { code: "90", country: "TR", name: "Turkey", flag: "🇹🇷" },
+        { code: "20", country: "EG", name: "Egypt", flag: "🇪🇬" },
+        { code: "234", country: "NG", name: "Nigeria", flag: "🇳🇬" },
+        { code: "254", country: "KE", name: "Kenya", flag: "🇰🇪" },
+        { code: "255", country: "TZ", name: "Tanzania", flag: "🇹🇿" },
+        { code: "256", country: "UG", name: "Uganda", flag: "🇺🇬" },
+        { code: "212", country: "MA", name: "Morocco", flag: "🇲🇦" },
+        { code: "213", country: "DZ", name: "Algeria", flag: "🇩🇿" },
+        { code: "216", country: "TN", name: "Tunisia", flag: "🇹🇳" },
+        { code: "218", country: "LY", name: "Libya", flag: "🇱🇾" },
+        { code: "962", country: "JO", name: "Jordan", flag: "🇯🇴" },
+        { code: "961", country: "LB", name: "Lebanon", flag: "🇱🇧" },
+        { code: "963", country: "SY", name: "Syria", flag: "🇸🇾" },
+        { code: "964", country: "IQ", name: "Iraq", flag: "🇮🇶" },
+        { code: "967", country: "YE", name: "Yemen", flag: "🇾🇪" },
+        { code: "98", country: "IR", name: "Iran", flag: "🇮🇷" },
+        { code: "972", country: "IL", name: "Israel", flag: "🇮🇱" },
+        { code: "95", country: "MM", name: "Myanmar", flag: "🇲🇲" },
+        { code: "66", country: "TH", name: "Thailand", flag: "🇹🇭" },
+        { code: "84", country: "VN", name: "Vietnam", flag: "🇻🇳" },
+        { code: "82", country: "KR", name: "South Korea", flag: "🇰🇷" },
+        { code: "852", country: "HK", name: "Hong Kong", flag: "🇭🇰" },
+        { code: "886", country: "TW", name: "Taiwan", flag: "🇹🇼" },
+        { code: "380", country: "UA", name: "Ukraine", flag: "🇺🇦" },
+        { code: "48", country: "PL", name: "Poland", flag: "🇵🇱" },
+        { code: "40", country: "RO", name: "Romania", flag: "🇷🇴" },
+        { code: "36", country: "HU", name: "Hungary", flag: "🇭🇺" },
+        { code: "420", country: "CZ", name: "Czech Republic", flag: "🇨🇿" },
+        { code: "358", country: "FI", name: "Finland", flag: "🇫🇮" }
+    ];
+
+    let detectedCountryCode = null;
+    async function getAutoDetectedCountryCode() {
+        if (detectedCountryCode) return detectedCountryCode;
+        try {
+            const response = await fetch('https://ipapi.co/json/');
+            const data = await response.json();
+            if (data && data.country_calling_code) {
+                detectedCountryCode = data.country_calling_code.replace('+', '');
+                return detectedCountryCode;
+            }
+        } catch (e) {
+            console.warn("ipapi.co failed, trying ipwho.is:", e);
+        }
+        try {
+            const response = await fetch('https://ipwho.is/');
+            const data = await response.json();
+            if (data && data.calling_code) {
+                detectedCountryCode = data.calling_code;
+                return detectedCountryCode;
+            }
+        } catch (e) {
+            console.warn("ipwho.is failed:", e);
+        }
+        return "91"; // Default fallback
+    }
+
+    async function convertPhoneInput(originalInput) {
+        if (!originalInput || originalInput.dataset.converted === "true") return;
+        originalInput.dataset.converted = "true";
+
+        const container = document.createElement('div');
+        container.className = 'phone-input-container';
+
+        const select = document.createElement('select');
+        select.className = 'country-code-select';
+
+        const sortedCountryCodes = [...countryCodes].sort((a, b) => b.code.length - a.code.length);
+
+        countryCodes.forEach(cc => {
+            const option = document.createElement('option');
+            option.value = cc.code;
+            option.innerText = `${cc.flag} +${cc.code}`;
+            select.appendChild(option);
+        });
+
+        const localInput = document.createElement('input');
+        localInput.type = 'tel';
+        localInput.className = 'phone-local-input';
+        localInput.placeholder = originalInput.placeholder || 'Local phone number';
+
+        container.appendChild(select);
+        container.appendChild(localInput);
+
+        originalInput.style.display = 'none';
+        originalInput.parentNode.insertBefore(container, originalInput.nextSibling);
+
+        let initialValue = originalInput.value.trim().replace(/\D/g, '');
+        let matchedCode = "91";
+        let localVal = initialValue;
+
+        if (initialValue.length > 0) {
+            for (const cc of sortedCountryCodes) {
+                if (initialValue.startsWith(cc.code)) {
+                    const remaining = initialValue.substring(cc.code.length);
+                    if (remaining.length >= 6) {
+                        matchedCode = cc.code;
+                        localVal = remaining;
+                        break;
+                    }
+                }
+            }
+        } else {
+            matchedCode = await getAutoDetectedCountryCode();
+        }
+
+        select.value = matchedCode;
+        localInput.value = localVal;
+
+        const updateOriginalValue = () => {
+            const cleanLocal = localInput.value.replace(/\D/g, '');
+            if (cleanLocal) {
+                originalInput.value = select.value + cleanLocal;
+            } else {
+                originalInput.value = '';
+            }
+        };
+
+        updateOriginalValue();
+
+        select.addEventListener('change', updateOriginalValue);
+        localInput.addEventListener('input', updateOriginalValue);
+
+        // Sync required property from original input to local input
+        localInput.required = originalInput.required;
+        Object.defineProperty(originalInput, 'required', {
+            get: function () {
+                return localInput.required;
+            },
+            set: function (val) {
+                localInput.required = val;
+            },
+            configurable: true
+        });
+
+        // Mirror style changes (like validation error borders)
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'style') {
+                    const borderColor = originalInput.style.borderColor;
+                    if (borderColor) {
+                        container.style.borderColor = borderColor;
+                    }
+                }
+            });
+        });
+        observer.observe(originalInput, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    function initPhoneInputs() {
+        const targets = document.querySelectorAll('input[type="tel"]');
+        targets.forEach(input => {
+            if (input.id.includes('phone') || input.id.includes('whatsapp') || input.name.includes('phone') || input.name.includes('whatsapp')) {
+                convertPhoneInput(input);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPhoneInputs);
+    } else {
+        initPhoneInputs();
+    }
+})();

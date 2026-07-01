@@ -150,6 +150,45 @@ try {
         }
     }
 
+    // Cleanup expired chats for products sold/deleted more than 15 days ago
+    try {
+        $cutoff_date = date('Y-m-d H:i:s', time() - (15 * 86400));
+        $stmt_exp = $pdo->prepare("SELECT id FROM products WHERE status IN ('sold', 'deleted') AND updated_at < ?");
+        $stmt_exp->execute([$cutoff_date]);
+        $expired_products = $stmt_exp->fetchAll(PDO::FETCH_COLUMN);
+
+        if (!empty($expired_products)) {
+            foreach ($expired_products as $p_id) {
+                // Find all messages with files (audio or images) for this product
+                $file_stmt = $pdo->prepare("SELECT message_text FROM messages WHERE product_id = ? AND (message_text LIKE '[AUDIO]:%' OR message_text LIKE '[IMAGE]:%')");
+                $file_stmt->execute([$p_id]);
+                $files = $file_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+                foreach ($files as $file_text) {
+                    $prefix = '';
+                    if (strpos($file_text, '[AUDIO]:') === 0) {
+                        $prefix = '[AUDIO]:';
+                    } elseif (strpos($file_text, '[IMAGE]:') === 0) {
+                        $prefix = '[IMAGE]:';
+                    }
+                    if (!empty($prefix)) {
+                        $relative_path = substr($file_text, strlen($prefix));
+                        $absolute_path = dirname(__FILE__) . '/' . $relative_path;
+                        if (file_exists($absolute_path)) {
+                            @unlink($absolute_path);
+                        }
+                    }
+                }
+
+                // Delete all messages associated with this product
+                $del_msgs = $pdo->prepare("DELETE FROM messages WHERE product_id = ?");
+                $del_msgs->execute([$p_id]);
+            }
+        }
+    } catch (Exception $exp_err) {
+        // Fail silently
+    }
+
     // --- HELPER FUNCTIONS ---
 
     /**

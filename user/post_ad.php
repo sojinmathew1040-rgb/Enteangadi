@@ -183,6 +183,34 @@ function compressImage($source, $destination, $max_width, $quality)
     }
 
     imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+
+    // Apply Enteangadi drop-shadow text watermark
+    $watermark_text = "Enteangadi";
+    $font = 5; // largest built-in GD font
+    $font_width = imagefontwidth($font);
+    $font_height = imagefontheight($font);
+    $text_width = $font_width * strlen($watermark_text);
+    $text_height = $font_height;
+
+    // Position bottom-right corner with 15px margin
+    $x = $new_width - $text_width - 15;
+    $y = $new_height - $text_height - 15;
+
+    if ($x < 0) $x = 10;
+    if ($y < 0) $y = 10;
+
+    $white = imagecolorallocate($new_image, 255, 255, 255);
+    $black = imagecolorallocate($new_image, 0, 0, 0);
+
+    // Draw shadow outline for visibility on any background
+    imagestring($new_image, $font, $x + 1, $y + 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x - 1, $y - 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x + 1, $y - 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x - 1, $y + 1, $watermark_text, $black);
+
+    // Draw foreground text
+    imagestring($new_image, $font, $x, $y, $watermark_text, $white);
+
     $result = imagejpeg($new_image, $destination, $quality);
     return $result;
 }
