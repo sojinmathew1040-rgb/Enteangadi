@@ -115,9 +115,21 @@ async function toggleWishlist(event, productId) {
     } catch (e) { console.error(e); }
 }
 
+async function getProductImageFile(imageUrl) {
+    try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1) || 'product.jpg';
+        return new File([blob], filename, { type: blob.type });
+    } catch (e) {
+        console.error("Failed to fetch image file for sharing", e);
+        return null;
+    }
+}
+
 let currentShareUrl = '';
 
-function shareProduct(productId, productTitle) {
+async function shareProduct(productId, productTitle) {
     // 1. Build the share URL
     let shareUrl = window.location.origin + window.location.pathname + '?id=' + productId;
     
@@ -128,18 +140,34 @@ function shareProduct(productId, productTitle) {
 
     currentShareUrl = shareUrl;
 
-    // 3. Check if standard navigator.share is available AND not inside Capacitor/Mobile app
-    if (navigator.share && !(window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile())) {
-        navigator.share({
-            title: productTitle || document.title,
-            url: shareUrl
-        }).catch(err => {
-            console.log("Native share failed or dismissed", err);
-        });
-    } else {
-        // Show fallback custom share modal
-        openCustomShare(shareUrl, productTitle || document.title);
+    const firstImgUrl = document.querySelector('.carousel-item-premium img')?.src;
+
+    // 3. Try to share via native Web Share API
+    if (navigator.share) {
+        try {
+            const shareData = {
+                title: productTitle || document.title,
+                text: "Check out this product on Enteangadi: " + (productTitle || document.title) + "\n" + shareUrl,
+                url: shareUrl
+            };
+
+            if (firstImgUrl) {
+                const file = await getProductImageFile(firstImgUrl);
+                if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    shareData.files = [file];
+                }
+            }
+
+            await navigator.share(shareData);
+            console.log("Shared successfully");
+            return;
+        } catch (err) {
+            console.log("Native share failed or dismissed, falling back to modal", err);
+        }
     }
+
+    // Show fallback custom share modal
+    openCustomShare(shareUrl, productTitle || document.title);
 }
 
 function openCustomShare(url, title) {

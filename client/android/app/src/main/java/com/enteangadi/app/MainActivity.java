@@ -22,7 +22,8 @@ public class MainActivity extends BridgeActivity {
             e.printStackTrace();
         }
 
-        // Start background notification polling service
+        // Background service disabled to prevent battery drain
+        /*
         try {
             Intent serviceIntent = new Intent(this, BackgroundNotificationService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -33,5 +34,6 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        */
     }
 }

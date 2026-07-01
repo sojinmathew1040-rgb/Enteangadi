@@ -74,7 +74,7 @@ require_once '../includes/header.php';
             <div class="chat-header-premium">
                 <div class="header-left">
                     <a href="inbox.php" class="back-btn"><i class="fa fa-chevron-left"></i></a>
-                    <div class="user-info-chat">
+                    <a href="view_profile.php?id=<?= $other_user_id ?>" class="user-info-chat" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 12px;">
                         <?php if (!empty($other_user['profile_picture'])): ?>
                             <img src="<?= $base_url ?>/<?= htmlspecialchars($other_user['profile_picture']) ?>"
                                 class="header-avatar">
@@ -86,7 +86,7 @@ require_once '../includes/header.php';
                             <span class="user-name"><?= htmlspecialchars($other_user['username']) ?></span>
                             <span class="online-status">Online</span>
                         </div>
-                    </div>
+                    </a>
                 </div>
                 <div class="header-actions" style="position: relative;">
                     <button onclick="toggleChatMenu(event)" class="btn-chat-action" id="chatMenuBtn" title="Chat Actions" style="background: transparent; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">

@@ -201,7 +201,7 @@ require_once 'includes/header.php';
 
                         <!-- Seller Section -->
                         <div class="seller-card-premium">
-                            <div class="seller-info-top">
+                            <a href="user/view_profile.php?id=<?= $product['user_id'] ?>" class="seller-info-top" style="text-decoration: none; display: flex; align-items: center; gap: 16px; color: inherit;">
                                 <?php if (!empty($product['profile_picture'])): ?>
                                     <img src="<?= htmlspecialchars($product['profile_picture']) ?>" alt="Seller"
                                         class="seller-avatar">
@@ -210,10 +210,10 @@ require_once 'includes/header.php';
                                     </div>
                                 <?php endif; ?>
                                 <div class="seller-names">
-                                    <h4><?= htmlspecialchars($product['username']) ?></h4>
-                                    <p>Member since <?= date('Y', strtotime($product['created_at'])) ?></p>
+                                    <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-dark);"><?= htmlspecialchars($product['username']) ?></h4>
+                                    <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">Member since <?= date('Y', strtotime($product['created_at'])) ?></p>
                                 </div>
-                            </div>
+                            </a>
 
                             <?php if (isset($_SESSION['user_id'])): ?>
                                 <?php if ($_SESSION['user_id'] != $product['user_id']): ?>

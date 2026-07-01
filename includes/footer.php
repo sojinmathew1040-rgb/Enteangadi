@@ -158,22 +158,60 @@ $current_page = basename($_SERVER['PHP_SELF']);
             }, 4000);
         }
 
-        let lastUnreadCount = -1;
-
         function updateUnreadBadge() {
-            fetch('<?= $base_url ?>/user/api_unread_count.php')
+            fetch('<?= $base_url ?>/user/api_unread_messages.php')
                 .then(res => res.json())
                 .then(data => {
-                    const count = data.success ? data.count : 0;
+                    const messages = (data.success && data.messages) ? data.messages : [];
+                    const count = messages.length;
                     const dBadge = document.getElementById('desktop-unread-badge');
                     const mBadge = document.getElementById('mobile-unread-badge');
 
-                    if (lastUnreadCount !== -1 && count > lastUnreadCount) {
-                        showToast("You have a new message!");
+                    // Track last notified message ID to prevent duplicate alerts
+                    const isFirstRun = localStorage.getItem('last_notified_msg_id') === null;
+                    let lastNotifiedId = parseInt(localStorage.getItem('last_notified_msg_id') || '0');
+                    let maxId = lastNotifiedId;
+                    let hasNewMessage = false;
+
+                    // Do not show local notifications if the user is actively chatting inside chat.php
+                    const isChatPage = window.location.pathname.endsWith('chat.php');
+
+                    if (isFirstRun) {
+                        // Initialize lastNotifiedId with the max ID of current unread messages
+                        let initialMax = 0;
+                        messages.forEach(msg => {
+                            const msgId = parseInt(msg.id);
+                            if (msgId > initialMax) initialMax = msgId;
+                        });
+                        localStorage.setItem('last_notified_msg_id', initialMax.toString());
+                    } else {
+                        // Messages are returned DESC (newest first). Let's iterate oldest to newest
+                        for (let i = messages.length - 1; i >= 0; i--) {
+                            const msg = messages[i];
+                            const msgId = parseInt(msg.id);
+                            if (msgId > lastNotifiedId) {
+                                if (msgId > maxId) {
+                                    maxId = msgId;
+                                }
+                                hasNewMessage = true;
+
+                                if (!isChatPage) {
+                                    // Trigger native/Capacitor notification
+                                    if (window.EnteangadiMobile && typeof window.EnteangadiMobile.showLocalNotification === 'function') {
+                                        window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'User', msg.message_text);
+                                    }
+                                    showToast("New message from " + (msg.sender_name || "User"));
+                                }
+                            }
+                        }
+                    }
+
+                    if (hasNewMessage) {
+                        localStorage.setItem('last_notified_msg_id', maxId.toString());
                         playBeep();
                     }
-                    if (count >= 0) lastUnreadCount = count;
 
+                    // Always keep the badge counts updated
                     if (count > 0) {
                         if (dBadge) { dBadge.style.display = 'inline-block'; dBadge.innerText = count > 99 ? '99+' : count; }
                         if (mBadge) { mBadge.style.display = 'flex'; mBadge.innerText = count > 99 ? '99+' : count; }
@@ -182,7 +220,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                         if (mBadge) mBadge.style.display = 'none';
                     }
                 })
-                .catch(err => console.error("Error fetching unread count", err));
+                .catch(err => console.error("Error fetching unread messages", err));
         }
 
         // Check unread count every 2 seconds for quicker notifications
