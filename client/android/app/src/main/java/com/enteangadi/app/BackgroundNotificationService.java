@@ -174,6 +174,7 @@ public class BackgroundNotificationService extends Service {
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
+            String cookies = CookieManager.getInstance().getCookie(serverUrl);
             if (cookies != null) {
                 conn.setRequestProperty("Cookie", cookies);
             }
