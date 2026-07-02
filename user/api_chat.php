@@ -8,6 +8,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $my_id = $_SESSION['user_id'];
+session_write_close(); // Release session file lock early to prevent blocking concurrent requests
 
 // Security check: Check if product is deleted/sold, self-chat, or user is blocked
 if (in_array($action, ['send', 'send_audio', 'send_image'])) {

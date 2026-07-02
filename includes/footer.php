@@ -159,6 +159,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
 
         function updateUnreadBadge() {
+            if (document.hidden) return; // Prevent polling in inactive background tabs
             fetch('<?= $base_url ?>/user/api_unread_messages.php')
                 .then(res => res.json())
                 .then(data => {
@@ -223,8 +224,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 .catch(err => console.error("Error fetching unread messages", err));
         }
 
-        // Check unread count every 2 seconds for quicker notifications
-        setInterval(updateUnreadBadge, 2000);
+        // Check unread count every 10 seconds for standard responsiveness without server overload
+        setInterval(updateUnreadBadge, 10000);
         // Initial check
         updateUnreadBadge();
     </script>

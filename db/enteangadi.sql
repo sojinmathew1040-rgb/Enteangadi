@@ -205,6 +205,7 @@ CREATE TABLE `messages` (
   KEY `sender_id` (`sender_id`),
   KEY `receiver_id` (`receiver_id`),
   KEY `product_id` (`product_id`),
+  KEY `idx_messages_receiver_read_deleted` (`receiver_id`,`is_read`,`deleted_by_receiver`),
   CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `messages_ibfk_2` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `messages_ibfk_3` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
@@ -283,6 +284,7 @@ CREATE TABLE `products` (
   KEY `user_id` (`user_id`),
   KEY `category_id` (`category_id`),
   KEY `idx_products_status_created` (`status`,`created_at`),
+  KEY `idx_products_status_type_created` (`status`,`type`,`created_at`),
   CONSTRAINT `products_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `products_ibfk_2` FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

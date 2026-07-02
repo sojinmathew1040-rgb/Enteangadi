@@ -556,8 +556,10 @@ function App() {
     let interval;
     if (chatOpen && selectedProduct) {
       interval = setInterval(() => {
-        fetchChatMessages();
-      }, 3000);
+        if (!document.hidden) {
+          fetchChatMessages();
+        }
+      }, 4000);
     }
     return () => clearInterval(interval);
   }, [chatOpen, selectedProduct, myId]);

@@ -13,6 +13,7 @@ if (isset($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'messages' => []]);
     exit;
 }
+session_write_close(); // Release session file lock early to prevent blocking concurrent requests
 
 try {
     $stmt = $pdo->prepare("

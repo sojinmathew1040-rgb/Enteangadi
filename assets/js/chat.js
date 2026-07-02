@@ -218,6 +218,7 @@ function renderImageGroupHTML(group) {
 }
 
 function fetchMessages() {
+    if (document.hidden) return; // Halt queries in background/inactive tabs
     if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
 
     fetch(`api_chat.php?action=fetch&other_id=${otherId}&product_id=${productId}`)
