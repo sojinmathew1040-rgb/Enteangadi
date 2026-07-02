@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiFetch, getBaseUrl } from './utils/apiClient';
 import './App.css';
 
@@ -39,6 +39,26 @@ function App() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [myId, setMyId] = useState(null);
   const [myUsername, setMyUsername] = useState('');
+  const [selectedMessageAction, setSelectedMessageAction] = useState(null); // { id: number, isMe: boolean } or null
+
+  const longPressTimers = useRef({});
+
+  const startLongPress = (msgId, isMe) => {
+    if (longPressTimers.current[msgId]) {
+      clearTimeout(longPressTimers.current[msgId]);
+    }
+    longPressTimers.current[msgId] = setTimeout(() => {
+      setSelectedMessageAction({ id: msgId, isMe });
+      delete longPressTimers.current[msgId];
+    }, 600); // 600ms hold duration for long press
+  };
+
+  const cancelLongPress = (msgId) => {
+    if (longPressTimers.current[msgId]) {
+      clearTimeout(longPressTimers.current[msgId]);
+      delete longPressTimers.current[msgId];
+    }
+  };
 
   // Location Auto-Detection States for Splash Screen
   const [locationStatus, setLocationStatus] = useState('Detecting location...');
@@ -420,6 +440,30 @@ function App() {
     }
   };
 
+  // Delete message in React app
+  const deleteMessageReact = async (messageId, deleteType) => {
+    const isEveryone = deleteType === 'for_everyone';
+    const confirmMsg = isEveryone 
+      ? "This message will be deleted for all participants. Are you sure?" 
+      : "This message will be deleted for you. Are you sure?";
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const response = await apiFetch(`/user/api_chat.php?action=delete_message&message_id=${messageId}&delete_type=${deleteType}`, {
+        method: 'POST'
+      });
+      if (response.success) {
+        fetchChatMessages();
+      } else {
+        alert(response.error || "Failed to delete message");
+      }
+    } catch (err) {
+      console.error("Delete message failed", err);
+      alert("Error deleting message");
+    }
+  };
+
   // Poll chat messages
   useEffect(() => {
     let interval;
@@ -513,7 +557,8 @@ function App() {
   const renderImageGroup = (group) => {
     const count = group.images.length;
 
-    const handleImageClick = (clickedIndex) => {
+    const handleImageClick = (e, clickedIndex) => {
+      e.stopPropagation();
       setLightboxImages(group.images.map(img => `${backendUrl}/${img.url}`));
       setLightboxIndex(clickedIndex);
       setLightboxOpen(true);
@@ -522,7 +567,7 @@ function App() {
     if (count === 1) {
       const img = group.images[0];
       return (
-        <div className="chat-image-single" onClick={() => handleImageClick(0)}>
+        <div className="chat-image-single" onClick={(e) => handleImageClick(e, 0)}>
           <img
             src={`${backendUrl}/${img.url}`}
             className="message-chat-image"
@@ -536,7 +581,7 @@ function App() {
       return (
         <div className="chat-image-grid grid-2">
           {group.images.map((img, idx) => (
-            <div key={img.id} className="grid-item" onClick={() => handleImageClick(idx)}>
+            <div key={img.id} className="grid-item" onClick={(e) => handleImageClick(e, idx)}>
               <img src={`${backendUrl}/${img.url}`} alt={`Shared Photo ${idx + 1}`} />
             </div>
           ))}
@@ -547,14 +592,14 @@ function App() {
     if (count === 3) {
       return (
         <div className="chat-image-grid grid-3">
-          <div className="grid-left" onClick={() => handleImageClick(0)}>
+          <div className="grid-left" onClick={(e) => handleImageClick(e, 0)}>
             <img src={`${backendUrl}/${group.images[0].url}`} alt="Shared Photo 1" />
           </div>
           <div className="grid-right">
-            <div className="grid-sub-item" onClick={() => handleImageClick(1)}>
+            <div className="grid-sub-item" onClick={(e) => handleImageClick(e, 1)}>
               <img src={`${backendUrl}/${group.images[1].url}`} alt="Shared Photo 2" />
             </div>
-            <div className="grid-sub-item" onClick={() => handleImageClick(2)}>
+            <div className="grid-sub-item" onClick={(e) => handleImageClick(e, 2)}>
               <img src={`${backendUrl}/${group.images[2].url}`} alt="Shared Photo 3" />
             </div>
           </div>
@@ -574,7 +619,7 @@ function App() {
             <div
               key={img.id}
               className="grid-item"
-              onClick={() => handleImageClick(idx)}
+              onClick={(e) => handleImageClick(e, idx)}
             >
               <img src={`${backendUrl}/${img.url}`} alt={`Shared Photo ${idx + 1}`} />
               {isLast && remaining > 1 && (
@@ -1172,6 +1217,48 @@ function App() {
         </section>
       </main>
 
+      {/* Message Actions Modal */}
+      {selectedMessageAction && (
+        <div className="modal-overlay" style={{ zIndex: 10000 }} onClick={() => setSelectedMessageAction(null)}>
+          <div className="modal-content" style={{ maxWidth: '320px', padding: '24px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Message Options</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button 
+                onClick={() => {
+                  const msgId = selectedMessageAction.id;
+                  setSelectedMessageAction(null);
+                  deleteMessageReact(msgId, 'for_me');
+                }} 
+                className="btn-secondary" 
+                style={{ width: '100%', padding: '12px', borderRadius: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', border: '1px solid var(--border-color)', background: '#fff', fontWeight: 'bold' }}
+              >
+                🗑️ Delete for me
+              </button>
+              {selectedMessageAction.isMe && (
+                <button 
+                  onClick={() => {
+                    const msgId = selectedMessageAction.id;
+                    setSelectedMessageAction(null);
+                    deleteMessageReact(msgId, 'for_everyone');
+                  }} 
+                  className="btn-primary" 
+                  style={{ width: '100%', padding: '12px', borderRadius: '12px', background: '#ef4444', borderColor: '#ef4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  🔄 Delete for everyone
+                </button>
+              )}
+              <button 
+                onClick={() => setSelectedMessageAction(null)} 
+                className="btn-secondary" 
+                style={{ width: '100%', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid var(--border-color)', background: '#fff', fontWeight: 'bold' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product Detail Modal */}
       {selectedProduct && (
         <div className="modal-overlay" onClick={() => { setSelectedProduct(null); setChatOpen(false); }}>
@@ -1314,7 +1401,15 @@ function App() {
                           const time = new Date(lastImageMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                           return (
                             <div key={group.id} className={`chat-bubble-row ${group.isMe ? 'msg-me' : 'msg-other'}`}>
-                              <div className="chat-bubble chat-bubble-images">
+                              <div 
+                                className="chat-bubble chat-bubble-images"
+                                onMouseDown={() => startLongPress(lastImageMsg.id, group.isMe)}
+                                onMouseUp={() => cancelLongPress(lastImageMsg.id)}
+                                onMouseMove={() => cancelLongPress(lastImageMsg.id)}
+                                onTouchStart={() => startLongPress(lastImageMsg.id, group.isMe)}
+                                onTouchEnd={() => cancelLongPress(lastImageMsg.id)}
+                                onTouchMove={() => cancelLongPress(lastImageMsg.id)}
+                              >
                                 {renderImageGroup(group)}
                                 <span className="msg-time">{time}</span>
                               </div>
@@ -1326,10 +1421,18 @@ function App() {
                           const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                           return (
                             <div key={msg.id} className={`chat-bubble-row ${isMe ? 'msg-me' : 'msg-other'}`}>
-                              <div className="chat-bubble">
+                              <div 
+                                className="chat-bubble"
+                                onMouseDown={() => startLongPress(msg.id, isMe)}
+                                onMouseUp={() => cancelLongPress(msg.id)}
+                                onMouseMove={() => cancelLongPress(msg.id)}
+                                onTouchStart={() => startLongPress(msg.id, isMe)}
+                                onTouchEnd={() => cancelLongPress(msg.id)}
+                                onTouchMove={() => cancelLongPress(msg.id)}
+                              >
                                 {msg.message_text.startsWith('[AUDIO]:') ? (
                                   <div className="message-audio-player">
-                                    <button type="button" className="react-audio-btn" onClick={() => playVoiceNote(`${backendUrl}/${msg.message_text.replace('[AUDIO]:', '')}`)}>
+                                    <button type="button" className="react-audio-btn" onClick={(e) => { e.stopPropagation(); playVoiceNote(`${backendUrl}/${msg.message_text.replace('[AUDIO]:', '')}`); }}>
                                       ▶️
                                     </button>
                                     <span className="audio-duration-tag">Voice note</span>

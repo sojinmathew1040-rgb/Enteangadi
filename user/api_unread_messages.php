@@ -19,7 +19,7 @@ try {
         SELECT m.id, m.sender_id, m.product_id, u.username as sender_name, m.message_text, m.created_at 
         FROM messages m 
         JOIN users u ON m.sender_id = u.id 
-        WHERE m.receiver_id = ? AND m.is_read = 0 
+        WHERE m.receiver_id = ? AND m.is_read = 0 AND m.deleted_by_receiver = 0
         ORDER BY m.created_at DESC
     ");
     $stmt->execute([$my_id]);

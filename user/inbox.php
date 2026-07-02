@@ -24,11 +24,11 @@ try {
     FROM (
         SELECT product_id, receiver_id as other_user_id, created_at, 0 as unread_flag
         FROM messages 
-        WHERE sender_id = :my_id
+        WHERE sender_id = :my_id AND deleted_by_sender = 0
         UNION ALL
         SELECT product_id, sender_id as other_user_id, created_at, (CASE WHEN is_read = 0 THEN 1 ELSE 0 END) as unread_flag
         FROM messages 
-        WHERE receiver_id = :my_id
+        WHERE receiver_id = :my_id AND deleted_by_receiver = 0
     ) t
     JOIN users u ON u.id = t.other_user_id
     JOIN products p ON p.id = t.product_id
@@ -46,9 +46,10 @@ try {
             FROM messages 
             WHERE product_id = ? 
             AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) 
+            AND ((sender_id = ? AND deleted_by_sender = 0) OR (receiver_id = ? AND deleted_by_receiver = 0))
             ORDER BY created_at DESC LIMIT 1
         ");
-        $msg_stmt->execute([$conv['product_id'], $my_id, $conv['other_user_id'], $conv['other_user_id'], $my_id]);
+        $msg_stmt->execute([$conv['product_id'], $my_id, $conv['other_user_id'], $conv['other_user_id'], $my_id, $my_id, $my_id]);
         $last_msg = $msg_stmt->fetch();
         $conv['last_message'] = $last_msg ? $last_msg['message_text'] : '';
         $conv['last_sender_id'] = $last_msg ? $last_msg['sender_id'] : 0;

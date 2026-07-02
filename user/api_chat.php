@@ -153,22 +153,65 @@ if ($action === 'send') {
     if ($other_id && $product_id) {
         try {
             // Mark messages as read
-            $update_stmt = $pdo->prepare("UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND product_id = ? AND is_read = 0");
+            $update_stmt = $pdo->prepare("UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND product_id = ? AND is_read = 0 AND deleted_by_receiver = 0");
             $update_stmt->execute([$my_id, $other_id, $product_id]);
 
-            // Fetch messages
+            // Fetch messages (only those not deleted by the current user)
             $stmt = $pdo->prepare("
                 SELECT m.*, u_sender.username as sender_name 
                 FROM messages m
                 JOIN users u_sender ON m.sender_id = u_sender.id
                 WHERE m.product_id = ? 
                 AND ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
+                AND ((m.sender_id = ? AND m.deleted_by_sender = 0) OR (m.receiver_id = ? AND m.deleted_by_receiver = 0))
                 ORDER BY m.created_at ASC
             ");
-            $stmt->execute([$product_id, $my_id, $other_id, $other_id, $my_id]);
+            $stmt->execute([$product_id, $my_id, $other_id, $other_id, $my_id, $my_id, $my_id]);
             $messages = $stmt->fetchAll();
 
             echo json_encode(['success' => true, 'messages' => $messages]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'error' => 'Database error']);
+        }
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
+    }
+} elseif ($action === 'delete_message') {
+    $message_id = $_POST['message_id'] ?? $_GET['message_id'] ?? 0;
+    $delete_type = $_POST['delete_type'] ?? $_GET['delete_type'] ?? 'for_me';
+
+    if ($message_id) {
+        try {
+            $stmt_msg = $pdo->prepare("SELECT sender_id, receiver_id FROM messages WHERE id = ?");
+            $stmt_msg->execute([$message_id]);
+            $msg = $stmt_msg->fetch();
+
+            if ($msg) {
+                if ($msg['sender_id'] != $my_id && $msg['receiver_id'] != $my_id) {
+                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+                    exit;
+                }
+
+                if ($delete_type === 'for_everyone') {
+                    if ($msg['sender_id'] == $my_id) {
+                        $stmt_del = $pdo->prepare("DELETE FROM messages WHERE id = ?");
+                        $stmt_del->execute([$message_id]);
+                        echo json_encode(['success' => true]);
+                    } else {
+                        echo json_encode(['success' => false, 'error' => 'Only the sender can delete this message for everyone.']);
+                    }
+                } else {
+                    if ($msg['sender_id'] == $my_id) {
+                        $stmt_upd = $pdo->prepare("UPDATE messages SET deleted_by_sender = 1 WHERE id = ?");
+                    } else {
+                        $stmt_upd = $pdo->prepare("UPDATE messages SET deleted_by_receiver = 1 WHERE id = ?");
+                    }
+                    $stmt_upd->execute([$message_id]);
+                    echo json_encode(['success' => true]);
+                }
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Message not found']);
+            }
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'error' => 'Database error']);
         }

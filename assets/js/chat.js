@@ -269,6 +269,7 @@ function renderMessages(messages) {
             html += `
                 <div class="message-row ${isMe ? 'msg-me' : 'msg-other'}">
                     <div class="message-bubble message-bubble-images">
+                        <i class="fa fa-chevron-down msg-dropdown-trigger" onclick="openMessageActions(event, ${lastImageMsg.id}, ${isMe})"></i>
                         ${renderImageGroupHTML(group)}
                         <div class="message-meta">
                             <span class="msg-time">${time}</span>
@@ -305,6 +306,7 @@ function renderMessages(messages) {
             html += `
                 <div class="message-row ${isMe ? 'msg-me' : 'msg-other'}">
                     <div class="message-bubble">
+                        <i class="fa fa-chevron-down msg-dropdown-trigger" onclick="openMessageActions(event, ${msg.id}, ${isMe})"></i>
                         ${messageContent}
                         <div class="message-meta">
                             <span class="msg-time">${time}</span>
@@ -1029,6 +1031,100 @@ function toggleBlockUser() {
         });
     });
 }
+
+function openMessageActions(event, msgId, isMe) {
+    if (event.target.closest('.audio-play-btn') || event.target.closest('.audio-waveform-wrapper')) {
+        return;
+    }
+    if (event.target.closest('.message-chat-image') || event.target.closest('.grid-item') || event.target.closest('.grid-left') || event.target.closest('.grid-sub-item') || event.target.closest('.grid-overlay')) {
+        return;
+    }
+
+    const modal = document.getElementById('messageActionsModal');
+    const deleteForEveryoneBtn = document.getElementById('deleteForEveryoneBtn');
+    const deleteForMeBtn = document.getElementById('deleteForMeBtn');
+
+    if (!modal) return;
+
+    if (isMe) {
+        deleteForEveryoneBtn.style.display = 'flex';
+    } else {
+        deleteForEveryoneBtn.style.display = 'none';
+    }
+
+    deleteForMeBtn.onclick = () => {
+        closeMessageActionsModal();
+        confirmDeleteMessage(msgId, 'for_me');
+    };
+
+    deleteForEveryoneBtn.onclick = () => {
+        closeMessageActionsModal();
+        confirmDeleteMessage(msgId, 'for_everyone');
+    };
+
+    modal.style.display = 'flex';
+}
+
+function closeMessageActionsModal() {
+    const modal = document.getElementById('messageActionsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function confirmDeleteMessage(msgId, deleteType) {
+    const title = deleteType === 'for_everyone' ? "Delete for everyone" : "Delete for me";
+    const message = deleteType === 'for_everyone' 
+        ? "This message will be deleted for all participants in this chat. Are you sure?" 
+        : "This message will be deleted for you. Other participants can still see it. Are you sure?";
+
+    showCustomConfirm({
+        title: title,
+        message: message,
+        isDanger: true,
+        iconClass: "fa fa-trash-alt"
+    }, () => {
+        const formData = new FormData();
+        formData.append('action', 'delete_message');
+        formData.append('message_id', msgId);
+        formData.append('delete_type', deleteType);
+
+        fetch('api_chat.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                fetchMessages();
+            } else {
+                showCustomAlert({
+                    title: "Failed to Delete",
+                    message: data.error || "Could not delete message.",
+                    isDanger: true,
+                    iconClass: "fa fa-exclamation-triangle"
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Delete message error:", err);
+            showCustomAlert({
+                title: "Error",
+                message: "A network error occurred while deleting the message.",
+                isDanger: true,
+                iconClass: "fa fa-wifi"
+            });
+        });
+    });
+}
+
+// Close message actions modal when clicking outside content area
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('messageActionsModal');
+    if (modal && e.target === modal) {
+        closeMessageActionsModal();
+    }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('message-input');

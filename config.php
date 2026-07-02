@@ -283,11 +283,24 @@ try {
         product_id INT NOT NULL,
         message_text TEXT NOT NULL,
         is_read TINYINT(1) DEFAULT 0,
+        deleted_by_sender TINYINT(1) DEFAULT 0,
+        deleted_by_receiver TINYINT(1) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )");
+
+    // Migration: Add deleted_by_sender and deleted_by_receiver columns to messages if they don't exist
+    $check_del_sender = $pdo->query("SHOW COLUMNS FROM messages LIKE 'deleted_by_sender'");
+    if (!$check_del_sender->fetch()) {
+        $pdo->exec("ALTER TABLE messages ADD COLUMN deleted_by_sender TINYINT(1) DEFAULT 0");
+    }
+
+    $check_del_receiver = $pdo->query("SHOW COLUMNS FROM messages LIKE 'deleted_by_receiver'");
+    if (!$check_del_receiver->fetch()) {
+        $pdo->exec("ALTER TABLE messages ADD COLUMN deleted_by_receiver TINYINT(1) DEFAULT 0");
+    }
 
     // Migration: Add email, phone, and is_admin columns to users if they don't exist
     $check_email = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");

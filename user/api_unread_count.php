@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_id'])) {
 $my_id = $_SESSION['user_id'];
 
 try {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM messages WHERE receiver_id = ? AND is_read = 0 AND deleted_by_receiver = 0");
     $stmt->execute([$my_id]);
     $count = $stmt->fetchColumn();
 

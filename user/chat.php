@@ -293,6 +293,24 @@ require_once '../includes/header.php';
     </div>
 </div>
 
+<!-- Message Actions Modal (Delete for me / Delete for everyone) -->
+<div id="messageActionsModal" class="modal-overlay" style="display: none; z-index: 999999; justify-content: center; align-items: center; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
+    <div class="modal-content" style="max-width: 320px; padding: 24px; border-radius: 20px; background: var(--white, #fff); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 90%; box-sizing: border-box; text-align: center; border: 1px solid var(--border-color, #e2e8f0); animation: popIn 0.2s ease-out;">
+        <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 800; color: var(--text-dark, #1f2937);">Message Options</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="deleteForMeBtn" class="btn-secondary" style="width: 100%; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 14px; border: 1px solid var(--border-color, #cbd5e1); background: var(--white, #fff); color: #ef4444; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-trash-alt"></i> Delete for me
+            </button>
+            <button id="deleteForEveryoneBtn" class="btn-primary" style="width: 100%; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 14px; background: #ef4444; border: 1px solid #ef4444; color: #fff; cursor: pointer; transition: all 0.2s; display: none; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-trash"></i> Delete for everyone
+            </button>
+            <button onclick="closeMessageActionsModal()" class="btn-secondary" style="width: 100%; padding: 12px; border-radius: 12px; font-weight: 700; font-size: 14px; border: 1px solid var(--border-color, #cbd5e1); background: var(--white, #fff); color: var(--text-dark, #1e293b); cursor: pointer; transition: all 0.2s;">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Custom Themed Alert & Confirm Dialog Modal -->
 <div id="customConfirmModal" class="modal-overlay" style="display: none; z-index: 999999; justify-content: center; align-items: center; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); position: fixed; top: 0; left: 0; right: 0; bottom: 0;">
     <div class="modal-content" style="max-width: 400px; padding: 28px; border-radius: 20px; background: var(--white, #fff); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); width: 90%; box-sizing: border-box; text-align: center; border: 1px solid var(--border-color, #e2e8f0); animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
