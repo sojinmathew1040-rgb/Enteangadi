@@ -117,6 +117,9 @@ $blocked_by_me = $is_blocked && ($block_record['blocker_id'] == $my_id);
 require_once '../includes/header.php';
 ?>
 
+<!-- PeerJS WebRTC Library -->
+<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+
 <script>
     document.body.classList.add('chat-page-body');
 </script>
@@ -142,7 +145,10 @@ require_once '../includes/header.php';
                         </div>
                     </a>
                 </div>
-                <div class="header-actions" style="position: relative;">
+                <div class="header-actions" style="position: relative; display: flex; align-items: center; gap: 8px;">
+                    <button onclick="startVoiceCall()" class="btn-chat-action" id="chatVoiceCallBtn" title="Voice Call" style="background: transparent; border: none; font-size: 18px; color: var(--primary-green); cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                        <i class="fa fa-phone"></i>
+                    </button>
                     <button onclick="toggleChatMenu(event)" class="btn-chat-action" id="chatMenuBtn" title="Chat Actions" style="background: transparent; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
                         <i class="fa fa-ellipsis-v"></i>
                     </button>
@@ -340,8 +346,412 @@ require_once '../includes/header.php';
     const isBlocked = <?= $is_blocked ? 'true' : 'false' ?>;
     const blockedByMe = <?= $blocked_by_me ? 'true' : 'false' ?>;
 </script>
-<script src="../assets/js/chat.js?v=1.2"></script>
 
+<!-- Voice Call Modal Overlay -->
+<div id="voiceCallModal" class="modal-overlay" style="display: none; z-index: 999999; justify-content: center; align-items: center; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); position: fixed; top: 0; left: 0; right: 0; bottom: 0; font-family: 'Inter', sans-serif;">
+    <div class="modal-content" style="max-width: 320px; padding: 40px 24px; border-radius: 28px; background: var(--white, #fff); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 90%; box-sizing: border-box; text-align: center; border: 1px solid var(--border-color, #e2e8f0); display: flex; flex-direction: column; align-items: center; gap: 20px; animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+        
+        <!-- Pulsing Avatar wrapper -->
+        <div style="position: relative; width: 100px; height: 100px; margin-bottom: 8px;">
+            <div id="callPulseRing" style="position: absolute; width: 100%; height: 100%; background: rgba(27, 94, 32, 0.2); border-radius: 50%; animation: voicePulse 2s infinite;"></div>
+            <div id="callPulseRing2" style="position: absolute; width: 100%; height: 100%; background: rgba(27, 94, 32, 0.15); border-radius: 50%; animation: voicePulse 2s infinite 0.6s;"></div>
+            <div style="position: absolute; width: 80px; height: 80px; top: 10px; left: 10px; background: #f1f5f9; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.08);">
+                <?php if (!empty($other_user['profile_picture'])): ?>
+                    <img src="<?= $base_url ?>/<?= htmlspecialchars($other_user['profile_picture']) ?>" style="width: 100%; height: 100%; object-fit: cover;">
+                <?php else: ?>
+                    <span style="font-size: 28px; font-weight: 800; color: var(--primary-green);"><?= strtoupper(substr($other_user['username'], 0, 1)) ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
 
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <h3 id="callUserTitle" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--text-dark);"><?= htmlspecialchars($other_user['username']) ?></h3>
+            <span id="callStatusLabel" style="font-size: 13px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Ringing...</span>
+            <span id="callDuration" style="font-size: 14px; color: var(--primary-green); font-weight: 700; display: none;">00:00</span>
+        </div>
+
+        <!-- Audio element to play remote stream -->
+        <audio id="remoteAudioStream" autoplay></audio>
+
+        <!-- Call Actions Container -->
+        <div style="display: flex; gap: 16px; width: 100%; justify-content: center; margin-top: 10px;">
+            <!-- Incoming call controls -->
+            <button id="declineCallBtn" onclick="declineIncomingCall()" class="btn-secondary" style="display: none; flex: 1; padding: 14px; border-radius: 16px; font-weight: 700; font-size: 14px; border: 1px solid #fecaca; background: #fee2e2; color: #ef4444; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-phone-slash"></i> Decline
+            </button>
+            <button id="acceptCallBtn" onclick="acceptIncomingCall()" class="btn-primary" style="display: none; flex: 1.5; padding: 14px; border-radius: 16px; font-weight: 700; font-size: 14px; background: var(--primary-green); border: 1px solid var(--primary-green); color: #fff; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-phone"></i> Accept
+            </button>
+
+            <!-- Ongoing call controls -->
+            <button id="muteCallBtn" onclick="toggleMuteCall()" class="btn-secondary" style="display: none; flex: 1; padding: 14px; border-radius: 16px; font-weight: 700; font-size: 14px; border: 1px solid var(--border-color); background: #f1f5f9; color: #475569; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center;">
+                <i class="fa fa-microphone"></i>
+            </button>
+            <button id="endCallBtn" onclick="endActiveCall()" class="btn-primary" style="display: none; flex: 1.5; padding: 14px; border-radius: 16px; font-weight: 700; font-size: 14px; background: #ef4444; border: 1px solid #ef4444; color: #fff; cursor: pointer; transition: all 0.2s; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-phone-slash"></i> Hang Up
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let localAudioStream = null;
+    let activeCallInstance = null;
+    let callTimerInterval = null;
+    let isMuted = false;
+    let peerConnection = null;
+
+    // Call Signal Control States
+    window.lastIncomingCallId = null;
+    window.callDeclinedId = null;
+    window.callAcceptedId = null;
+    window.activeIncomingCallId = null;
+    window.callerActiveCallId = null;
+    window.callConnectingStarted = false;
+    window.callWatchdogTimer = null;
+
+    function sendSignalMessage(text) {
+        if (typeof otherId === 'undefined' || typeof productId === 'undefined') return Promise.resolve();
+        const formData = new FormData();
+        formData.append('action', 'send');
+        formData.append('receiver_id', otherId);
+        formData.append('product_id', productId);
+        formData.append('message', text);
+        return fetch('api_chat.php', { method: 'POST', body: formData })
+            .then(res => res.json());
+    }
+
+    // JS Signal Handler Hooks triggered by chat.js renderer
+    window.handleCallRequestSignal = function(callId, isMe, createdAt) {
+        const msgTime = new Date(createdAt).getTime();
+        const isRecent = (Date.now() - msgTime) < 20000;
+        if (!isRecent) return;
+        
+        if (!isMe && !activeCallInstance && window.lastIncomingCallId !== callId && window.callDeclinedId !== callId && window.callAcceptedId !== callId) {
+            window.lastIncomingCallId = callId;
+            window.activeIncomingCallId = callId;
+            
+            // Show Incoming Call Modal
+            const modal = document.getElementById('voiceCallModal');
+            const statusLabel = document.getElementById('callStatusLabel');
+            const userTitle = document.getElementById('callUserTitle');
+            
+            userTitle.innerText = "Incoming Call";
+            statusLabel.innerText = "Calling...";
+            modal.style.display = 'flex';
+
+            // Show accept/decline buttons
+            document.getElementById('declineCallBtn').style.display = 'flex';
+            document.getElementById('acceptCallBtn').style.display = 'flex';
+            document.getElementById('muteCallBtn').style.display = 'none';
+            document.getElementById('endCallBtn').style.display = 'none';
+        }
+    };
+
+    window.handleCallAcceptSignal = function(callId, isMe, createdAt) {
+        const msgTime = new Date(createdAt).getTime();
+        const isRecent = (Date.now() - msgTime) < 20000;
+        if (!isRecent) return;
+
+        if (!isMe && window.callerActiveCallId === callId && !window.callConnectingStarted) {
+            window.callConnectingStarted = true;
+            if (window.callWatchdogTimer) {
+                clearTimeout(window.callWatchdogTimer);
+                window.callWatchdogTimer = null;
+            }
+            console.log("Call accepted by other party. Initiating WebRTC streaming...");
+            establishPeerJSCall();
+        }
+    };
+
+    window.handleCallDeclineSignal = function(callId, isMe, createdAt) {
+        const msgTime = new Date(createdAt).getTime();
+        const isRecent = (Date.now() - msgTime) < 20000;
+        if (!isRecent) return;
+
+        if (!isMe && window.callerActiveCallId === callId) {
+            if (window.callWatchdogTimer) {
+                clearTimeout(window.callWatchdogTimer);
+                window.callWatchdogTimer = null;
+            }
+            showCallStatusText('Call Declined', 'Failed');
+            setTimeout(cleanupCallState, 2000);
+        }
+    };
+
+    // Initialize PeerJS
+    function initVoiceCallPeer() {
+        const peerId = `enteangadi-user-${myId}`;
+        peerConnection = new Peer(peerId, {
+            debug: 1
+        });
+
+        peerConnection.on('open', (id) => {
+            console.log('PeerJS server connection established with ID:', id);
+        });
+
+        peerConnection.on('error', (err) => {
+            console.error('PeerJS error:', err);
+            if (err.type === 'peer-unavailable') {
+                showCallStatusText('User is offline', 'Failed to connect');
+                setTimeout(cleanupCallState, 3000);
+            } else {
+                cleanupCallState();
+            }
+        });
+
+        // Listen for incoming WebRTC call triggers
+        peerConnection.on('call', (call) => {
+            console.log('Incoming WebRTC call received...');
+            activeCallInstance = call;
+            
+            // Automatically answer if we have already clicked accept
+            if (window.callAcceptedId === window.activeIncomingCallId) {
+                if (localAudioStream) {
+                    call.answer(localAudioStream);
+                    setupCallStreamHandlers(call);
+                } else {
+                    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                        localAudioStream = stream;
+                        call.answer(localAudioStream);
+                        setupCallStreamHandlers(call);
+                    }).catch(err => {
+                        console.error("Delayed mic capture failed:", err);
+                        call.close();
+                        cleanupCallState();
+                    });
+                }
+            } else {
+                // Showing visual incoming call fallback overlay
+                const modal = document.getElementById('voiceCallModal');
+                const statusLabel = document.getElementById('callStatusLabel');
+                const userTitle = document.getElementById('callUserTitle');
+                
+                userTitle.innerText = "Incoming Voice Call";
+                statusLabel.innerText = "Calling...";
+                modal.style.display = 'flex';
+
+                document.getElementById('declineCallBtn').style.display = 'flex';
+                document.getElementById('acceptCallBtn').style.display = 'flex';
+                document.getElementById('muteCallBtn').style.display = 'none';
+                document.getElementById('endCallBtn').style.display = 'none';
+            }
+        });
+    }
+
+    function showCallStatusText(status, label) {
+        const statusLabel = document.getElementById('callStatusLabel');
+        if (statusLabel) {
+            statusLabel.innerText = status;
+        }
+    }
+
+    async function startVoiceCall() {
+        if (isBlocked) {
+            alert("Cannot call. Chat is blocked.");
+            return;
+        }
+
+        const callId = `enteangadi-call-${myId}-${otherId}-${Date.now()}`;
+        window.callerActiveCallId = callId;
+        window.callConnectingStarted = false;
+
+        const modal = document.getElementById('voiceCallModal');
+        const statusLabel = document.getElementById('callStatusLabel');
+        const userTitle = document.getElementById('callUserTitle');
+
+        userTitle.innerText = "<?= htmlspecialchars($other_user['username']) ?>";
+        statusLabel.innerText = "Sending request...";
+        modal.style.display = 'flex';
+
+        // Outgoing call only shows End Call while dialing
+        document.getElementById('declineCallBtn').style.display = 'none';
+        document.getElementById('acceptCallBtn').style.display = 'none';
+        document.getElementById('muteCallBtn').style.display = 'none';
+        document.getElementById('endCallBtn').style.display = 'flex';
+
+        try {
+            await sendSignalMessage(`[CALL_REQUEST]:${callId}`);
+            statusLabel.innerText = "Ringing...";
+
+            // Watchdog: cancel call after 25 seconds if unanswered
+            window.callWatchdogTimer = setTimeout(() => {
+                if (!window.callConnectingStarted) {
+                    statusLabel.innerText = "No Answer";
+                    setTimeout(cleanupCallState, 2000);
+                }
+            }, 25000);
+
+        } catch (err) {
+            console.error("Outgoing call signal failed:", err);
+            statusLabel.innerText = "Call Request Failed";
+            setTimeout(cleanupCallState, 2000);
+        }
+    }
+
+    async function establishPeerJSCall() {
+        const statusLabel = document.getElementById('callStatusLabel');
+        try {
+            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const receiverPeerId = `enteangadi-user-${otherId}`;
+            console.log("PeerJS dialing connection to:", receiverPeerId);
+            
+            const call = peerConnection.call(receiverPeerId, localAudioStream);
+            activeCallInstance = call;
+            
+            document.getElementById('muteCallBtn').style.display = 'flex';
+            document.getElementById('endCallBtn').style.display = 'flex';
+            
+            setupCallStreamHandlers(call);
+        } catch (err) {
+            console.error("Microphone capture failed on outgoing call connection:", err);
+            statusLabel.innerText = "Mic Permission Denied";
+            sendSignalMessage(`[CALL_DECLINE]:${window.callerActiveCallId}`);
+            setTimeout(cleanupCallState, 2500);
+        }
+    }
+
+    async function acceptIncomingCall() {
+        const callId = window.activeIncomingCallId;
+        window.callAcceptedId = callId;
+        
+        await sendSignalMessage(`[CALL_ACCEPT]:${callId}`);
+        
+        const statusLabel = document.getElementById('callStatusLabel');
+        statusLabel.innerText = "Connecting...";
+        
+        document.getElementById('declineCallBtn').style.display = 'none';
+        document.getElementById('acceptCallBtn').style.display = 'none';
+        
+        try {
+            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            document.getElementById('muteCallBtn').style.display = 'flex';
+            document.getElementById('endCallBtn').style.display = 'flex';
+            
+            // Wait for WebRTC incoming streams...
+        } catch (err) {
+            console.error("Microphone capture failed on accepting call:", err);
+            statusLabel.innerText = "Mic Permission Denied";
+            await sendSignalMessage(`[CALL_DECLINE]:${callId}`);
+            setTimeout(cleanupCallState, 2500);
+        }
+    }
+
+    async function declineIncomingCall() {
+        const callId = window.activeIncomingCallId;
+        window.callDeclinedId = callId;
+        await sendSignalMessage(`[CALL_DECLINE]:${callId}`);
+        cleanupCallState();
+    }
+
+    function setupCallStreamHandlers(call) {
+        const statusLabel = document.getElementById('callStatusLabel');
+        const durationLabel = document.getElementById('callDuration');
+
+        call.on('stream', (remoteStream) => {
+            console.log("Voice stream connected. Playing audio...");
+            const remoteAudio = document.getElementById('remoteAudioStream');
+            if (remoteAudio) {
+                remoteAudio.srcObject = remoteStream;
+            }
+            
+            statusLabel.innerText = "Connected";
+            durationLabel.style.display = 'block';
+            startCallTimer();
+        });
+
+        call.on('close', () => {
+            console.log("Call closed by remote peer.");
+            cleanupCallState();
+        });
+
+        call.on('error', (err) => {
+            console.error("Call stream error:", err);
+            cleanupCallState();
+        });
+    }
+
+    function toggleMuteCall() {
+        if (localAudioStream) {
+            isMuted = !isMuted;
+            localAudioStream.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted;
+            });
+            const muteBtn = document.getElementById('muteCallBtn');
+            if (muteBtn) {
+                muteBtn.innerHTML = isMuted 
+                    ? '<i class="fa fa-microphone-slash" style="color: #ef4444;"></i>' 
+                    : '<i class="fa fa-microphone"></i>';
+            }
+        }
+    }
+
+    function startCallTimer() {
+        let seconds = 0;
+        const durationLabel = document.getElementById('callDuration');
+        callTimerInterval = setInterval(() => {
+            seconds++;
+            const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const secs = String(seconds % 60).padStart(2, '0');
+            durationLabel.innerText = `${mins}:${secs}`;
+        }, 1000);
+    }
+
+    function endActiveCall() {
+        if (activeCallInstance) {
+            activeCallInstance.close();
+        }
+        cleanupCallState();
+    }
+
+    function cleanupCallState() {
+        if (window.callWatchdogTimer) {
+            clearTimeout(window.callWatchdogTimer);
+            window.callWatchdogTimer = null;
+        }
+
+        // Clear timer
+        if (callTimerInterval) {
+            clearInterval(callTimerInterval);
+            callTimerInterval = null;
+        }
+        const durationLabel = document.getElementById('callDuration');
+        if (durationLabel) {
+            durationLabel.style.display = 'none';
+            durationLabel.innerText = '00:00';
+        }
+
+        // Stop microphone tracks
+        if (localAudioStream) {
+            localAudioStream.getTracks().forEach(track => track.stop());
+            localAudioStream = null;
+        }
+
+        // Reset mute status
+        isMuted = false;
+        const muteBtn = document.getElementById('muteCallBtn');
+        if (muteBtn) {
+            muteBtn.innerHTML = '<i class="fa fa-microphone"></i>';
+        }
+
+        // Close modal
+        const modal = document.getElementById('voiceCallModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+
+        activeCallInstance = null;
+        window.callConnectingStarted = false;
+        console.log("WebRTC voice call state cleaned up.");
+    }
+
+    // Initialize Peer connection on page load
+    window.addEventListener('load', () => {
+        initVoiceCallPeer();
+    });
+</script>
+
+<script src="../assets/js/chat.js?v=1.3"></script>
 
 <?php require_once '../includes/footer.php'; ?>

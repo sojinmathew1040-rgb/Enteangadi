@@ -310,6 +310,24 @@ function renderMessages(messages) {
                         <span class="audio-duration-tag">Voice note</span>
                     </div>
                 `;
+            } else if (msg.message_text.startsWith('[CALL_REQUEST]:')) {
+                const callId = msg.message_text.replace('[CALL_REQUEST]:', '');
+                messageContent = `<div class="message-text" style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--primary-green, #1b5e20);"><i class="fa fa-phone"></i> ${isMe ? 'Outgoing Call Request' : 'Incoming Call Request'}</div>`;
+                if (typeof window.handleCallRequestSignal === 'function') {
+                    window.handleCallRequestSignal(callId, isMe, msg.created_at);
+                }
+            } else if (msg.message_text.startsWith('[CALL_ACCEPT]:')) {
+                const callId = msg.message_text.replace('[CALL_ACCEPT]:', '');
+                messageContent = `<div class="message-text" style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #10b981;"><i class="fa fa-phone-volume"></i> Call Connected</div>`;
+                if (typeof window.handleCallAcceptSignal === 'function') {
+                    window.handleCallAcceptSignal(callId, isMe, msg.created_at);
+                }
+            } else if (msg.message_text.startsWith('[CALL_DECLINE]:')) {
+                const callId = msg.message_text.replace('[CALL_DECLINE]:', '');
+                messageContent = `<div class="message-text" style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #ef4444;"><i class="fa fa-phone-slash"></i> Call Declined</div>`;
+                if (typeof window.handleCallDeclineSignal === 'function') {
+                    window.handleCallDeclineSignal(callId, isMe, msg.created_at);
+                }
             } else {
                 messageContent = `<div class="message-text">${escapeHtml(msg.message_text)}</div>`;
             }
