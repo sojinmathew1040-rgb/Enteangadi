@@ -313,127 +313,16 @@ if (!function_exists('isVideoFile')) {
 if (!function_exists('isImageNSFWLocal')) {
     /**
      * Local fallback to detect adult/NSFW content using skin tone heuristics.
-     * Downsamples the image and scans for pixels matching skin tone ranges.
+     * NOTE: This local heuristic is disabled (returns false) by default because color-based skin-tone
+     * detection generates high false positives on benign images containing brown, beige, or gold tones
+     * (e.g., cakes, wooden furniture, brown boxes, eggs).
      * 
      * @param string $tmpFilePath Path to the temporary file
      * @return bool True if flagged as NSFW, false otherwise
      */
     function isImageNSFWLocal($tmpFilePath)
     {
-        if (empty($tmpFilePath) || !file_exists($tmpFilePath)) {
-            return false;
-        }
-
-        $info = @getimagesize($tmpFilePath);
-        if (!$info) {
-            // Not a valid image file
-            return true;
-        }
-
-        $width = $info[0];
-        $height = $info[1];
-
-        $image = null;
-        $data = @file_get_contents($tmpFilePath);
-        if ($data) {
-            $image = @imagecreatefromstring($data);
-        }
-
-        // Manual fallback if imagecreatefromstring fails
-        if (!$image) {
-            $mime = $info['mime'];
-            if ($mime == 'image/jpeg' || $mime == 'image/jpg') {
-                if (function_exists('imagecreatefromjpeg')) {
-                    $image = @imagecreatefromjpeg($tmpFilePath);
-                }
-            } elseif ($mime == 'image/png') {
-                if (function_exists('imagecreatefrompng')) {
-                    $image = @imagecreatefrompng($tmpFilePath);
-                }
-            } elseif ($mime == 'image/gif') {
-                if (function_exists('imagecreatefromgif')) {
-                    $image = @imagecreatefromgif($tmpFilePath);
-                }
-            } elseif ($mime == 'image/webp') {
-                if (function_exists('imagecreatefromwebp')) {
-                    $image = @imagecreatefromwebp($tmpFilePath);
-                }
-            } elseif ($mime == 'image/avif') {
-                if (function_exists('imagecreatefromavif')) {
-                    $image = @imagecreatefromavif($tmpFilePath);
-                }
-            }
-        }
-
-        if (!$image) {
-            // Failed to load or unsupported image format
-            return true;
-        }
-
-        // Downsample to 100x100 to make analysis extremely fast (approx 1ms) and memory-friendly
-        $target_w = 100;
-        $target_h = 100;
-        $thumb = @imagecreatetruecolor($target_w, $target_h);
-        if (!$thumb) {
-            imagedestroy($image);
-            return false;
-        }
-
-        // Copy and resize
-        imagecopyresampled($thumb, $image, 0, 0, 0, 0, $target_w, $target_h, $width, $height);
-
-        $skin_pixels = 0;
-        $total_pixels = $target_w * $target_h;
-
-        // Strictness threshold percentage (22.0%)
-        $skin_threshold = 22.0;
-
-        for ($y = 0; $y < $target_h; $y++) {
-            for ($x = 0; $x < $target_w; $x++) {
-                $color_index = imagecolorat($thumb, $x, $y);
-                $r = ($color_index >> 16) & 0xFF;
-                $g = ($color_index >> 8) & 0xFF;
-                $b = $color_index & 0xFF;
-
-                // RGB skin heuristic (Peer et al.) - Daylight
-                $max = max($r, $g, $b);
-                $min = min($r, $g, $b);
-                $isSkinDaylight = (
-                    $r > 95 && $g > 40 && $b > 20 &&
-                    ($max - $min) > 15 &&
-                    abs($r - $g) > 15 &&
-                    $r > $g && $r > $b
-                );
-
-                // RGB skin heuristic (Peer et al.) - Flashlight
-                $isSkinFlash = (
-                    $r > 220 && $g > 210 && $b > 170 &&
-                    abs($r - $g) <= 15 &&
-                    $r > $b && $g > $b
-                );
-
-                $isSkinRGB = ($isSkinDaylight || $isSkinFlash);
-
-                // YCbCr skin tone heuristic
-                $y_val = 0.299 * $r + 0.587 * $g + 0.114 * $b;
-                $cb = ($b - $y_val) * 0.564 + 128;
-                $cr = ($r - $y_val) * 0.713 + 128;
-                $isSkinYCbCr = ($cb >= 77 && $cb <= 127 && $cr >= 133 && $cr <= 173);
-
-                if ($isSkinRGB || $isSkinYCbCr) {
-                    $skin_pixels++;
-                }
-            }
-        }
-
-        imagedestroy($image);
-        imagedestroy($thumb);
-
-        $skin_percentage = ($skin_pixels / $total_pixels) * 100;
-        if ($skin_percentage >= $skin_threshold) {
-            return true;
-        }
-
+        // Disabled to prevent blocking benign images.
         return false;
     }
 }

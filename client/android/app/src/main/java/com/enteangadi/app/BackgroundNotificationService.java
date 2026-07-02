@@ -46,10 +46,14 @@ public class BackgroundNotificationService extends Service {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(2002, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        } else {
-            startForeground(2002, builder.build());
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(2002, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(2002, builder.build());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         return START_STICKY;
@@ -88,20 +92,34 @@ public class BackgroundNotificationService extends Service {
         Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
         restartServiceIntent.setPackage(getPackageName());
 
-        PendingIntent restartServicePendingIntent = PendingIntent.getService(
-            getApplicationContext(), 
-            1, 
-            restartServiceIntent, 
-            PendingIntent.FLAG_ONE_SHOT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-        );
+        PendingIntent restartServicePendingIntent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            restartServicePendingIntent = PendingIntent.getForegroundService(
+                getApplicationContext(), 
+                1, 
+                restartServiceIntent, 
+                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
+            );
+        } else {
+            restartServicePendingIntent = PendingIntent.getService(
+                getApplicationContext(), 
+                1, 
+                restartServiceIntent, 
+                PendingIntent.FLAG_ONE_SHOT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+        }
 
         AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
         if (alarmService != null) {
-            alarmService.set(
-                AlarmManager.ELAPSED_REALTIME,
-                SystemClock.elapsedRealtime() + 1000,
-                restartServicePendingIntent
-            );
+            try {
+                alarmService.set(
+                    AlarmManager.ELAPSED_REALTIME,
+                    SystemClock.elapsedRealtime() + 1000,
+                    restartServicePendingIntent
+                );
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         super.onTaskRemoved(rootIntent);
@@ -174,6 +192,7 @@ public class BackgroundNotificationService extends Service {
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
+            String cookies = CookieManager.getInstance().getCookie(serverUrl);
             if (cookies != null) {
                 conn.setRequestProperty("Cookie", cookies);
             }

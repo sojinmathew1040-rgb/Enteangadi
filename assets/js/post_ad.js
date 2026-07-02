@@ -236,12 +236,18 @@ async function loadNSFWModel() {
     modelLoadingPromise = (async () => {
         try {
             if (typeof tf === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.8.5/dist/tf.min.js');
             }
             if (typeof nsfwjs === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs/dist/nsfwjs.min.js');
+                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs@2.4.2/dist/nsfwjs.min.js');
             }
-            nsfwModel = await nsfwjs.load();
+            
+            // Resolve absolute base path for local model hosting
+            const baseUrl = (window.EnteangadiConfig && typeof window.EnteangadiConfig.baseUrl !== 'undefined') ? window.EnteangadiConfig.baseUrl : '..';
+            const modelUrl = baseUrl + '/assets/models/nsfw/';
+            
+            // Load from locally hosted model files to prevent remote dependency down-times
+            nsfwModel = await nsfwjs.load(modelUrl);
             return nsfwModel;
         } catch (e) {
             console.error("Failed to load NSFW detection model:", e);

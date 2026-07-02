@@ -181,8 +181,18 @@ require_once 'includes/header.php';
                         <h1 class="product-title-premium"><?= htmlspecialchars($product['title']) ?></h1>
 
                         <div class="meta-tags-premium">
-                            <span class="meta-tag"><i class="fa fa-map-marker-alt"></i>
-                                <?= htmlspecialchars($product['location_name'] ?? 'Kerala') ?></span>
+                            <?php
+                            $maps_url = 'https://www.google.com/maps/search/?api=1&query=';
+                            if (!empty($product['latitude']) && !empty($product['longitude'])) {
+                                $maps_url .= urlencode($product['latitude'] . ',' . $product['longitude']);
+                            } else {
+                                $maps_url .= urlencode($product['location_name'] ?? 'Kerala');
+                            }
+                            ?>
+                            <a href="<?= $maps_url ?>" target="_blank" class="meta-tag location-interactive" style="text-decoration: none; cursor: pointer; color: var(--text-muted);" title="Open in Google Maps">
+                                <i class="fa fa-map-marker-alt"></i>
+                                <?= htmlspecialchars($product['location_name'] ?? 'Kerala') ?>
+                            </a>
                             <span class="meta-tag"><i class="fa fa-calendar-alt"></i>
                                 <?= date('M d, Y', strtotime($product['created_at'])) ?></span>
                             <span class="meta-tag"><i class="fa fa-eye"></i> <?= number_format($product['views']) ?>

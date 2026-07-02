@@ -98,7 +98,7 @@ require_once '../includes/header.php';
         <div class="profile-header-bg"></div>
         <div class="container" style="position: relative; z-index: 2; padding-top: 60px; padding-bottom: 40px;">
             <div class="profile-hero-content">
-                <div class="profile-avatar-wrapper" onclick="document.getElementById('profile_picture_input').click()">
+                <div class="profile-avatar-wrapper" onclick="window.changeProfilePicture ? window.changeProfilePicture() : document.getElementById('profile_picture_input').click()">
                     <?php if (!empty($user['profile_picture'])): ?>
                         <img src="<?= $base_url . '/' . htmlspecialchars($user['profile_picture']) ?>" alt="Profile"
                             class="profile-avatar-img" id="profile-avatar-img" onerror="this.style.display='none'; document.getElementById('profile-avatar-fallback').style.display='flex';">
@@ -649,6 +649,24 @@ require_once '../includes/header.php';
     let isDragging = false;
     let startX, startY;
     let displayWidth = 0, displayHeight = 0;
+
+    window.changeProfilePicture = function() {
+        if (window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile()) {
+            window.EnteangadiMobile.showPhotoSourceSelection(
+                function(dataUrl) {
+                    window.startProfileCropper(dataUrl);
+                },
+                <?= !empty($user['profile_picture']) ? 'true' : 'false' ?>,
+                function() {
+                    deleteProfilePicture();
+                },
+                false,
+                'profile_picture_input'
+            );
+        } else {
+            document.getElementById('profile_picture_input').click();
+        }
+    };
 
     function updateTransform() {
         image.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
