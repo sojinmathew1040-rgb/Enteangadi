@@ -1,4 +1,4 @@
-const CACHE_NAME = 'enteangadi-cache-v2';
+const CACHE_NAME = 'enteangadi-cache-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

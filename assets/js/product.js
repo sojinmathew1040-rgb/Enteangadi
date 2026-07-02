@@ -174,15 +174,18 @@ function openCustomShare(url, title) {
     const modal = document.getElementById('customShareModal');
     if (!modal) return;
 
-    // Retrieve the first image from the main slider gallery
-    let imageText = "";
-    const firstImg = document.querySelector('.carousel-item-premium img')?.src;
-    if (firstImg) {
-        imageText = "\n\nImage: " + firstImg;
-    }
-
-    // Configure share links
-    const textMsg = encodeURIComponent("Check out this product on Enteangadi: " + title + "\n" + url + imageText);
+    // Construct premium Manglish WhatsApp Share Card text
+    const priceText = document.querySelector('.price-value')?.innerText.trim() || '';
+    const locText = document.querySelector('.meta-tag.location-interactive')?.innerText.trim() || 'Kerala';
+    
+    let manglishMsg = `*Enteangadi Local listing* 🛍️🌟\n\n`;
+    manglishMsg += `*Item:* ${title}\n`;
+    if (priceText) manglishMsg += `*Price:* ${priceText}\n`;
+    manglishMsg += `*Location:* ${locText}\n\n`;
+    manglishMsg += `Nalla smart deal aanu! 🥳 Nokki thiranj vaangan click cheyoo:\n`;
+    manglishMsg += `${url}`;
+    
+    const textMsg = encodeURIComponent(manglishMsg);
     const whatsapp = document.getElementById('share-whatsapp');
     const telegram = document.getElementById('share-telegram');
     const facebook = document.getElementById('share-facebook');

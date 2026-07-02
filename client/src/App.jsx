@@ -24,6 +24,11 @@ function App() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [radius, setRadius] = useState('');
+  const [sortBy, setSortBy] = useState('');
+  const [spec, setSpec] = useState('');
+  const [isSpeechSearching, setIsSpeechSearching] = useState(false);
+  const [speechError, setSpeechError] = useState('');
+  const [speechStatusText, setSpeechStatusText] = useState('');
   const [categories, setCategories] = useState([]);
 
   // Selected product for detailed modal view
@@ -1015,6 +1020,8 @@ function App() {
       if (minPrice) params.append('min_price', minPrice);
       if (maxPrice) params.append('max_price', maxPrice);
       if (radius) params.append('radius', radius);
+      if (sortBy) params.append('sort_by', sortBy);
+      if (spec) params.append('spec', spec);
 
       const queryString = params.toString() ? `?${params.toString()}` : '';
       const response = await apiFetch(`/api/products.php${queryString}`);
@@ -1034,7 +1041,7 @@ function App() {
 
   useEffect(() => {
     fetchProducts();
-  }, [categoryFilter, adTypeFilter]);
+  }, [categoryFilter, adTypeFilter, sortBy, spec]);
 
   // Clean formatted price helper
   const formatPrice = (price) => {
@@ -1052,6 +1059,186 @@ function App() {
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
+  const startReactSpeechSearch = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // Clean up active speech sessions and reset mic capture channels
+    setIsSpeechSearching(false);
+    setSpeechError('');
+    setSpeechStatusText('');
+    if (window.activeSpeechRecognition) {
+      window.activeSpeechRecognition.abort();
+    }
+    if (window.activeReactMediaRecorder && window.activeReactMediaRecorder.state === 'recording') {
+      window.activeReactMediaRecorder.onstop = null;
+      window.activeReactMediaRecorder.stop();
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser/device.");
+      return;
+    }
+
+    let recognition;
+    try {
+      recognition = new SpeechRecognition();
+    } catch (err) {
+      console.error("Failed to initialize Speech Recognition:", err);
+      alert("Failed to initialize Speech Recognition. Please verify browser microphone permissions or security settings.");
+      return;
+    }
+
+    recognition.lang = navigator.language || 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    setIsSpeechSearching(true);
+    window.activeSpeechRecognition = recognition;
+
+    recognition.onerror = async (e) => {
+      console.error("Speech recognition error:", e);
+      startReactAudioRecorderFallback();
+    };
+
+    recognition.onend = () => {
+      setIsSpeechSearching(false);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.trim(); // Trim spaces!
+      setSearchTerm(transcript);
+      setTimeout(() => {
+        fetchProducts();
+      }, 100);
+    };
+
+    try {
+      recognition.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setIsSpeechSearching(false);
+      alert("Microphone is currently unavailable or in use by another application.");
+    }
+  };
+
+  const startReactAudioRecorderFallback = async () => {
+    const isMalayalam = (localStorage.getItem('enteangadi_lang') || 'en') === 'ml';
+    setSpeechStatusText(isMalayalam ? 'ബാക്കപ്പ് എഞ്ചിൻ...' : 'Using backup engine...');
+    setSpeechError(isMalayalam ? 'സംസാരിക്കൂ (പരമാവധി 7 സെക്കൻഡ്)...' : 'Speak now (max 7s)...');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+
+      let recType = 'audio/webm;codecs=opus';
+      let ext = 'webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        recType = 'audio/webm;codecs=opus';
+        ext = 'webm';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        recType = 'audio/webm';
+        ext = 'webm';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+        recType = 'audio/ogg';
+        ext = 'ogg';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        recType = 'audio/mp4';
+        ext = 'mp4';
+      } else {
+        recType = 'audio/wav';
+        ext = 'wav';
+      }
+
+      const recorder = new MediaRecorder(stream, { mimeType: recType });
+      const chunks = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+
+        const audioBlob = new Blob(chunks, { type: recType });
+        stream.getTracks().forEach(t => t.stop());
+
+        setSpeechStatusText(isMalayalam ? 'പ്രൊസസ്സ് ചെയ്യുന്നു...' : 'Transcribing...');
+        setSpeechError(isMalayalam ? 'ദയവായി കാത്തിരിക്കൂ...' : 'Processing audio...');
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob, `speech.${ext}`);
+
+        try {
+          const response = await fetch(`${backendUrl}/api/transcribe.php`, {
+            method: 'POST',
+            body: formData
+          });
+          const result = await response.json();
+
+          if (result.success && result.transcript) {
+            setSearchTerm(result.transcript.trim());
+            setIsSpeechSearching(false);
+            setSpeechError('');
+            setSpeechStatusText('');
+            setTimeout(() => {
+              fetchProducts();
+            }, 100);
+          } else {
+            if (result.error === 'API_KEY_NOT_CONFIGURED') {
+              const isBrave = (navigator.brave && typeof navigator.brave.isBrave === 'function')
+                ? await navigator.brave.isBrave()
+                : false;
+              if (isBrave) {
+                setSpeechError(isMalayalam
+                  ? 'Brave-ൽ വോയ്‌സ് വർക്ക് ചെയ്യാൻ Settings -> Privacy-ൽ "Use Google Services for Web Speech API" ഓൺ ചെയ്യുക'
+                  : 'Brave blocks voice. Enable "Use Google Services for Web Speech API" in Brave Settings -> Privacy.');
+              } else {
+                setSpeechError(isMalayalam
+                  ? 'കോൺഫിഗറേഷനിൽ ഗൂഗിൾ/ഗ്രോക്ക് എപിഐ കീ നൽകുക'
+                  : 'Speech API key is not configured in config.php');
+              }
+            } else {
+              setSpeechError(result.message || 'Error transcribing voice');
+            }
+            setTimeout(() => {
+              setIsSpeechSearching(false);
+              setSpeechError('');
+              setSpeechStatusText('');
+            }, 7000);
+          }
+        } catch (err) {
+          console.error("Transcription failed", err);
+          setIsSpeechSearching(false);
+          setSpeechError('');
+          setSpeechStatusText('');
+        }
+      };
+
+      recorder.start();
+      window.activeReactMediaRecorder = recorder;
+
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
+      }, 7000);
+
+    } catch (err) {
+      console.error("Mic access failed", err);
+      setSpeechError(isMalayalam ? 'മൈക്രോഫോൺ പെർമിഷൻ നൽകുക' : 'Microphone permissions denied.');
+      setTimeout(() => {
+        setIsSpeechSearching(false);
+        setSpeechError('');
+      }, 2500);
+    }
+  };
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     fetchProducts();
@@ -1064,6 +1251,8 @@ function App() {
     setMinPrice('');
     setMaxPrice('');
     setRadius('');
+    setSortBy('');
+    setSpec('');
     fetchProducts();
   };
 
@@ -1127,14 +1316,35 @@ function App() {
           <form onSubmit={handleSearchSubmit} className="filters-form">
             <div className="form-group">
               <label>Search Listings</label>
-              <div className="search-input-wrapper">
+              <div className="search-input-wrapper" style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                 <input
                   type="text"
                   placeholder="What are you looking for?"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="input-field"
+                  style={{ paddingRight: '40px' }}
                 />
+                <button 
+                  type="button" 
+                  onClick={startReactSpeechSearch}
+                  className="search-mic-btn"
+                  style={{
+                    position: 'absolute',
+                    right: '42px',
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    color: isSpeechSearching ? '#ef4444' : '#64748b',
+                    display: 'flex',
+                    align-items: 'center',
+                    justify-content: 'center'
+                  }}
+                  title="Voice Search"
+                >
+                  {isSpeechSearching ? '🎙️' : '🎤'}
+                </button>
                 <button type="submit" className="search-btn">🔍</button>
               </div>
             </div>
@@ -1222,6 +1432,97 @@ function App() {
               </div>
             )}
 
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label>Sort By</label>
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)} 
+                className="input-field"
+                style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', width: '100%', boxSizing: 'border-box' }}
+              >
+                <option value="">Newest Listings</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                {locationCoords && (
+                  <option value="distance">Nearest First</option>
+                )}
+              </select>
+            </div>
+
+            {/* Dynamic Specific Filters based on Category Selection */}
+            {(() => {
+              const catId = parseInt(categoryFilter);
+              const isCars = catId === 25 || catId === 26;
+              const isMobiles = catId === 11 || catId === 12;
+              const isProperties = catId === 32 || catId === 33 || catId === 34 || catId === 35 || catId === 36 || catId === 37 || catId === 38;
+
+              if (!isCars && !isMobiles && !isProperties) return null;
+
+              let filterGroups = {};
+              if (isCars) {
+                filterGroups = {
+                  'Popular Brands': ['Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Mahindra'],
+                  'Body Types': ['Sedan', 'SUV', 'Hatchback'],
+                  'Fuel Types': ['Petrol', 'Diesel', 'Electric', 'CNG']
+                };
+              } else if (isMobiles) {
+                filterGroups = {
+                  'Brands': ['Apple', 'Samsung', 'OnePlus', 'Xiaomi', 'Realme'],
+                  'Storage': ['64 GB', '128 GB', '256 GB', '512 GB']
+                };
+              } else if (isProperties) {
+                filterGroups = {
+                  'Properties Type': ['House', 'Apartment', 'Villa', 'Plot'],
+                  'Size / Layout': ['1 BHK', '2 BHK', '3 BHK', '4 BHK']
+                };
+              }
+
+              return (
+                <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-dark)' }}>Category Filters</span>
+                    {spec && (
+                      <button type="button" onClick={() => setSpec('')} style={{ fontSize: '11px', color: 'var(--primary-green)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {Object.entries(filterGroups).map(([groupTitle, options]) => (
+                      <div key={groupTitle}>
+                        <span style={{ fontSize: '10px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>{groupTitle}</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {options.map(opt => {
+                            const isSelected = spec === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                onClick={() => setSpec(isSelected ? '' : opt)}
+                                style={{
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  borderRadius: '8px',
+                                  border: isSelected ? '1px solid var(--primary-green)' : '1px solid var(--border-color)',
+                                  backgroundColor: isSelected ? '#f0fdf4' : '#fff',
+                                  color: isSelected ? 'var(--primary-green-dark)' : 'var(--text-dark)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="filter-actions">
               <button type="button" onClick={fetchProducts} className="apply-btn">
                 Apply Filters
@@ -1294,8 +1595,15 @@ function App() {
                       <span className="card-date">{formatDate(product.created_at)}</span>
                     </div>
                     {product.location_name && (
-                      <div className="card-location">
-                        📍 {product.location_name.split(',')[0]}
+                      <div className="card-location" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                        <span>📍 {product.location_name.split(',')[0]}</span>
+                        {product.distance !== undefined && product.distance !== null && (
+                          <span className="card-distance" style={{ fontSize: '11px', color: 'var(--primary-green)', fontWeight: 'bold' }}>
+                            🚴 {parseFloat(product.distance) < 1 
+                              ? `${Math.round(parseFloat(product.distance) * 1000)} m` 
+                              : `${parseFloat(product.distance).toFixed(1)} km`}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1464,6 +1772,22 @@ function App() {
                         💬 Chat on WhatsApp
                       </a>
                     )}
+                    <button 
+                      className="contact-btn share-btn" 
+                      style={{ background: '#25d366', color: '#fff', border: '1.5px solid #25d366', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                      onClick={() => {
+                        const shareUrl = window.location.origin + '/product.php?id=' + selectedProduct.id;
+                        let text = `*Enteangadi Local listing* 🛍️🌟\n\n`;
+                        text += `*Item:* ${selectedProduct.title}\n`;
+                        text += `*Price:* ₹${parseFloat(selectedProduct.price).toLocaleString('en-IN')}\n`;
+                        text += `*Location:* ${selectedProduct.location_name || 'Kerala'}\n\n`;
+                        text += `Nalla smart deal aanu! 🥳 Nokki thiranj vaangan click cheyoo:\n`;
+                        text += `${shareUrl}`;
+                        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                    >
+                      🟢 Share on WhatsApp
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -1642,6 +1966,129 @@ function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Voice Search modal overlay */}
+      {isSpeechSearching && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'Inter, sans-serif'
+        }}>
+          <div style={{
+            background: 'var(--white, #fff)',
+            padding: '40px',
+            borderRadius: '24px',
+            boxShadow: 'var(--shadow-lg)',
+            textAlign: 'center',
+            maxWidth: '320px',
+            width: '90%'
+          }}>
+            <div style={{ position: 'relative', width: '90px', height: '90px', margin: '0 auto 24px' }}>
+              <div style={{
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                background: 'rgba(46, 125, 50, 0.2)',
+                borderRadius: '50%',
+                animation: 'voicePulse 2s infinite'
+              }}></div>
+              <div style={{
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                background: 'rgba(46, 125, 50, 0.15)',
+                borderRadius: '50%',
+                animation: 'voicePulse 2s infinite 0.6s'
+              }}></div>
+              <div style={{
+                position: 'absolute',
+                width: '70px',
+                height: '70px',
+                top: '10px',
+                left: '10px',
+                background: 'var(--primary-green)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '28px',
+                boxShadow: '0 4px 10px rgba(46,125,50,0.3)'
+              }}>
+                🎤
+              </div>
+            </div>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '800', color: 'var(--text-dark)' }}>
+              {speechStatusText || (speechError
+                ? ((localStorage.getItem('enteangadi_lang') || 'en') === 'ml' ? 'തടസ്സം നേരിട്ടു' : 'Failed to record')
+                : ((localStorage.getItem('enteangadi_lang') || 'en') === 'ml' ? 'കേൾക്കുന്നു...' : 'Listening...'))}
+            </h3>
+            <p style={{ margin: '0 0 24px 0', fontSize: '13px', color: speechError ? '#ef4444' : 'var(--text-muted)' }}>
+              {speechError || ((localStorage.getItem('enteangadi_lang') || 'en') === 'ml' ? 'സംസാരിക്കൂ...' : 'Speak now...')}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.activeReactMediaRecorder && window.activeReactMediaRecorder.state === 'recording') {
+                  window.activeReactMediaRecorder.stop();
+                } else if (window.activeSpeechRecognition) {
+                  window.activeSpeechRecognition.stop();
+                }
+              }}
+              style={{
+                background: 'var(--primary-green)',
+                border: 'none',
+                color: 'white',
+                padding: '10px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '13px',
+                cursor: 'pointer',
+                marginRight: '8px'
+              }}
+            >
+              Done
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSpeechSearching(false);
+                setSpeechError('');
+                setSpeechStatusText('');
+                if (window.activeSpeechRecognition) {
+                  window.activeSpeechRecognition.abort();
+                }
+                if (window.activeReactMediaRecorder && window.activeReactMediaRecorder.state === 'recording') {
+                  window.activeReactMediaRecorder.onstop = null; // abort upload
+                  window.activeReactMediaRecorder.stop();
+                }
+              }}
+              style={{
+                background: '#f1f5f9',
+                border: 'none',
+                color: '#475569',
+                padding: '10px 24px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

@@ -67,9 +67,12 @@ try {
         <meta property="og:url" content="<?= htmlspecialchars($og_url) ?>" />
     <?php endif; ?>
     <meta property="og:type" content="website" />
-    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=1.3">
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=<?= time() ?>">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS and JS for map explorer -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
         const EnteangadiConfig = {
             baseUrl: '<?= $base_url ?>',
@@ -443,13 +446,307 @@ try {
                 </div>
 
                 <div class="search-container-header" style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                    <form action="<?= $base_url ?>/index.php" method="GET" style="display: flex; flex: 1;">
-                        <input type="text" name="search" placeholder="<?= __('search_placeholder') ?>"
-                            value="<?= htmlspecialchars($_GET['search'] ?? '') ?>">
+                    <form action="<?= $base_url ?>/index.php" method="GET" style="display: flex; flex: 1; align-items: center; position: relative;">
+                        <input type="text" name="search" id="header-search-input" placeholder="<?= __('search_placeholder') ?>"
+                            value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" style="padding-right: 36px;">
+                        <button type="button" id="header-search-mic-btn" style="position: absolute; right: 40px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; width: 30px;" onclick="startVoiceSearch(event)"><i class="fa fa-microphone"></i></button>
                         <button type="submit"><i class="fa fa-search"></i></button>
                     </form>
+                </div>
 
-                    <?php if (isset($_SESSION['user_id'])): ?>
+                <!-- Premium Listening pulsing modal overlay -->
+                <div id="voice-search-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(8px); z-index: 10000; align-items: center; justify-content: center; font-family: 'Inter', sans-serif;">
+                    <div style="background: var(--white, #fff); padding: 40px; border-radius: 24px; box-shadow: var(--shadow-lg); text-align: center; max-width: 320px; width: 90%;">
+                        <div style="position: relative; width: 90px; height: 90px; margin: 0 auto 24px;">
+                            <div style="position: absolute; width: 100%; height: 100%; background: rgba(46, 125, 50, 0.2); border-radius: 50%; animation: voicePulse 2s infinite;"></div>
+                            <div style="position: absolute; width: 100%; height: 100%; background: rgba(46, 125, 50, 0.15); border-radius: 50%; animation: voicePulse 2s infinite 0.6s;"></div>
+                            <div style="position: absolute; width: 70px; height: 70px; top: 10px; left: 10px; background: var(--primary-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 28px; box-shadow: 0 4px 10px rgba(46,125,50,0.3);">
+                                <i class="fa fa-microphone"></i>
+                            </div>
+                        </div>
+                        <h3 id="voice-status-text" style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; color: var(--text-dark);">Listening...</h3>
+                        <p id="voice-sub-text" style="margin: 0 0 24px 0; font-size: 13px; color: var(--text-muted);">Speak matching keywords</p>
+                        <button type="button" onclick="stopOrCancelVoiceSearch()" style="background: var(--primary-green); border: none; color: white; padding: 10px 24px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.2s; margin-right: 8px;">Done</button>
+                        <button type="button" onclick="cancelVoiceSearch()" style="background: #f1f5f9; border: none; color: #475569; padding: 10px 24px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.2s;">Cancel</button>
+                    </div>
+                </div>
+
+                <style>
+                @keyframes voicePulse {
+                    0% { transform: scale(0.8); opacity: 0.5; }
+                    50% { transform: scale(1.3); opacity: 0.8; }
+                    100% { transform: scale(1.6); opacity: 0; }
+                }
+                </style>
+
+                <script>
+                    let currentRecognition = null;
+                    let originalPlaceholder = '';
+
+                    function startVoiceSearch(e) {
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        // Clear any previous active speech sessions first to reset microphone capture channels
+                        cancelVoiceSearch();
+                        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                        if (!SpeechRecognition) {
+                            alert("Your browser does not support Speech Recognition. Please try using Chrome or Safari.");
+                            return;
+                        }
+
+                        let recognition;
+                        try {
+                            recognition = new SpeechRecognition();
+                        } catch (err) {
+                            console.error("Failed to initialize Speech Recognition:", err);
+                            alert("Failed to initialize Speech Recognition. Please verify browser microphone permissions or security settings.");
+                            return;
+                        }
+
+                        recognition.lang = navigator.language || 'en-US';
+                        recognition.interimResults = false;
+                        recognition.maxAlternatives = 1;
+                        currentRecognition = recognition;
+
+                        const modal = document.getElementById('voice-search-modal');
+                        const statusText = document.getElementById('voice-status-text');
+                        const subText = document.getElementById('voice-sub-text');
+                        const isMalayalam = '<?= $_SESSION['lang'] ?? 'en' ?>' === 'ml';
+
+                        const searchInput = document.getElementById('header-search-input');
+                        if (searchInput) {
+                            if (!originalPlaceholder) {
+                                originalPlaceholder = searchInput.placeholder;
+                            }
+                            searchInput.value = '';
+                            searchInput.placeholder = isMalayalam ? 'കേൾക്കുന്നു...' : 'Listening...';
+                        }
+
+                        statusText.innerText = isMalayalam ? 'കേൾക്കുന്നു...' : 'Listening...';
+                        subText.innerText = isMalayalam ? 'സംസാരിക്കൂ...' : 'Speak now...';
+                        modal.style.display = 'flex';
+
+                        recognition.onstart = () => {
+                            console.log("Speech recognition started...");
+                        };
+
+                        recognition.onerror = async (e) => {
+                            console.error("Speech recognition error:", e);
+                            // Silence native browser errors and redirect to backend transcription recorder
+                            startAudioRecorderFallback();
+                        };
+
+                        recognition.onend = () => {
+                            setTimeout(() => {
+                                if (modal.style.display === 'flex') {
+                                    modal.style.display = 'none';
+                                }
+                            }, 2000);
+                        };
+
+                        recognition.onresult = (event) => {
+                            const transcript = event.results[0][0].transcript.trim(); // Trim spaces!
+                            statusText.innerText = transcript;
+                            subText.innerText = isMalayalam ? 'സെർച്ച് ചെയ്യുന്നു...' : 'Searching...';
+                            
+                            const searchInput = document.getElementById('header-search-input');
+                            if (searchInput) {
+                                searchInput.value = transcript;
+                                searchInput.placeholder = isMalayalam ? 'സെർച്ച് ചെയ്യുന്നു...' : 'Searching...';
+                                const micBtn = document.getElementById('header-search-mic-btn');
+                                if (micBtn) {
+                                    micBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+                                }
+                                setTimeout(() => {
+                                    modal.style.display = 'none';
+                                    searchInput.form.submit();
+                                }, 1000);
+                            } else {
+                                modal.style.display = 'none';
+                            }
+                        };
+
+                        try {
+                            recognition.start();
+                        } catch (err) {
+                            console.error("Failed to start speech recognition:", err);
+                            modal.style.display = 'none';
+                            alert("Microphone is currently unavailable or in use by another application.");
+                        }
+                    }
+
+                    let mediaRecorderInstance = null;
+                    let audioChunks = [];
+
+                    async function startAudioRecorderFallback() {
+                        const modal = document.getElementById('voice-search-modal');
+                        const statusText = document.getElementById('voice-status-text');
+                        const subText = document.getElementById('voice-sub-text');
+                        const isMalayalam = '<?= $_SESSION['lang'] ?? 'en' ?>' === 'ml';
+
+                        try {
+                            const stream = await navigator.mediaDevices.getUserMedia({
+                                audio: {
+                                    echoCancellation: true,
+                                    noiseSuppression: true,
+                                    autoGainControl: true
+                                }
+                            });
+                            
+                            let recType = 'audio/webm;codecs=opus';
+                            let ext = 'webm';
+                            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                                recType = 'audio/webm;codecs=opus';
+                                ext = 'webm';
+                            } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+                                recType = 'audio/webm';
+                                ext = 'webm';
+                                } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+                                    recType = 'audio/ogg';
+                                    ext = 'ogg';
+                                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                                    recType = 'audio/mp4';
+                                    ext = 'mp4';
+                                } else {
+                                    recType = 'audio/wav';
+                                    ext = 'wav';
+                            }
+
+                            mediaRecorderInstance = new MediaRecorder(stream, { mimeType: recType });
+                            audioChunks = [];
+                            mediaRecorderInstance.ondataavailable = (event) => {
+                                if (event.data.size > 0) {
+                                    audioChunks.push(event.data);
+                                }
+                            };
+
+                            mediaRecorderInstance.onstop = async () => {
+                                const audioBlob = new Blob(audioChunks, { type: recType });
+                                stream.getTracks().forEach(t => t.stop());
+
+                                statusText.innerText = isMalayalam ? 'പ്രൊസസ്സ് ചെയ്യുന്നു...' : 'Transcribing...';
+                                subText.innerText = isMalayalam ? 'ദയവായി കാത്തിരിക്കൂ...' : 'Processing audio...';
+
+                                const searchInput = document.getElementById('header-search-input');
+                                if (searchInput) {
+                                    searchInput.placeholder = isMalayalam ? 'പ്രൊസസ്സ് ചെയ്യുന്നു...' : 'Transcribing...';
+                                }
+                                const micBtn = document.getElementById('header-search-mic-btn');
+                                if (micBtn) {
+                                    micBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+                                }
+
+                                const formData = new FormData();
+                                formData.append('audio', audioBlob, `speech.${ext}`);
+
+                                try {
+                                    const response = await fetch('<?= $base_url ?>/api/transcribe.php', {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+                                    const result = await response.json();
+
+                                    if (result.success && result.transcript) {
+                                        const cleanTranscript = result.transcript.trim(); // Trim spaces!
+                                        statusText.innerText = cleanTranscript;
+                                        subText.innerText = isMalayalam ? 'സെർച്ച് ചെയ്യുന്നു...' : 'Searching...';
+                                        if (searchInput) {
+                                            searchInput.value = cleanTranscript;
+                                            searchInput.placeholder = isMalayalam ? 'സെർച്ച് ചെയ്യുന്നു...' : 'Searching...';
+                                            setTimeout(() => {
+                                                modal.style.display = 'none';
+                                                searchInput.form.submit();
+                                            }, 1000);
+                                        } else {
+                                            modal.style.display = 'none';
+                                        }
+                                    } else {
+                                        statusText.innerText = isMalayalam ? 'തടസ്സം നേരിട്ടു' : 'Failed to transcribe';
+                                        if (result.error === 'API_KEY_NOT_CONFIGURED') {
+                                            const isBrave = (navigator.brave && typeof navigator.brave.isBrave === 'function')
+                                                ? await navigator.brave.isBrave()
+                                                : false;
+                                            if (isBrave) {
+                                                subText.innerHTML = isMalayalam
+                                                    ? 'Brave-ൽ വോയ്‌സ് വർക്ക് ചെയ്യാൻ Settings -> Privacy-ൽ "Use Google Services for Web Speech API" ഓൺ ചെയ്യുക'
+                                                    : 'Brave blocks voice. Enable "Use Google Services for Web Speech API" in Brave Settings -> Privacy.';
+                                            } else {
+                                                subText.innerText = isMalayalam
+                                                    ? 'കോൺഫിഗറേഷനിൽ ഗൂഗിൾ/ഗ്രോക്ക് എപിഐ കീ നൽകുക'
+                                                    : 'Speech API key is not configured in config.php';
+                                            }
+                                        } else {
+                                            subText.innerText = result.message || 'Error transcribing voice';
+                                        }
+                                        setTimeout(() => {
+                                            modal.style.display = 'none';
+                                        }, 8000);
+                                    }
+                                } catch (err) {
+                                    console.error("Transcription endpoint error:", err);
+                                    statusText.innerText = isMalayalam ? 'എറർ' : 'Error';
+                                    subText.innerText = 'Server communication failed.';
+                                    setTimeout(() => {
+                                        modal.style.display = 'none';
+                                    }, 2500);
+                                }
+                            };
+
+                            mediaRecorderInstance.start();
+
+                            statusText.innerText = isMalayalam ? 'ബാക്കപ്പ് എഞ്ചിൻ...' : 'Using backup engine...';
+                            subText.innerText = isMalayalam ? 'സംസാരിക്കൂ (പരമാവധി 7 സെക്കൻഡ്)...' : 'Speak now (max 7s)...';
+
+                            setTimeout(() => {
+                                if (mediaRecorderInstance && mediaRecorderInstance.state === 'recording') {
+                                    mediaRecorderInstance.stop();
+                                }
+                            }, 7000);
+
+                        } catch (err) {
+                            console.error("Microphone capture failed:", err);
+                            statusText.innerText = isMalayalam ? 'തടസ്സം നേരിട്ടു' : 'Failed to record';
+                            subText.innerText = isMalayalam ? 'മൈക്രോഫോൺ പെർമിഷൻ നൽകുക' : 'Microphone permissions denied.';
+                            setTimeout(() => {
+                                modal.style.display = 'none';
+                            }, 2500);
+                        }
+                    }
+
+                    function stopOrCancelVoiceSearch() {
+                        if (mediaRecorderInstance && mediaRecorderInstance.state === 'recording') {
+                            mediaRecorderInstance.stop();
+                        } else if (currentRecognition) {
+                            currentRecognition.stop();
+                        }
+                    }
+
+                    function cancelVoiceSearch() {
+                        if (currentRecognition) {
+                            currentRecognition.abort();
+                        }
+                        if (mediaRecorderInstance && mediaRecorderInstance.state === 'recording') {
+                            // Abort clean without triggering onstop upload
+                            mediaRecorderInstance.onstop = null;
+                            mediaRecorderInstance.stop();
+                            mediaRecorderInstance = null;
+                        }
+                        const searchInput = document.getElementById('header-search-input');
+                        if (searchInput && originalPlaceholder) {
+                            searchInput.placeholder = originalPlaceholder;
+                        }
+                        const micBtn = document.getElementById('header-search-mic-btn');
+                        if (micBtn) {
+                            micBtn.innerHTML = '<i class="fa fa-microphone"></i>';
+                        }
+                        const modal = document.getElementById('voice-search-modal');
+                        if (modal) {
+                            modal.style.display = 'none';
+                        }
+                    }
+                </script>      <?php if (isset($_SESSION['user_id'])): ?>
                         <div class="notification-wrapper mobile-only" style="position: relative;">
                             <a href="javascript:void(0)" onclick="toggleNotifications()" title="Notifications"
                                 style="text-decoration: none; font-size: 18px; color: var(--text-dark); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--background); border-radius: 50%; border: 1px solid var(--border-color);">

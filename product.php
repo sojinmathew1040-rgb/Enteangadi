@@ -22,6 +22,48 @@ try {
         exit;
     }
 
+    // Save Rating Submission
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'submit_rating') {
+        if (!isset($_SESSION['user_id'])) {
+            header("Location: login.php");
+            exit;
+        }
+        
+        $rating = intval($_POST['rating'] ?? 0);
+        $comment = trim($_POST['comment'] ?? '');
+        $reviewer_id = $_SESSION['user_id'];
+        $reviewee_id = $product['user_id'];
+        
+        if ($reviewer_id == $reviewee_id) {
+            $rating_error = "You cannot rate yourself.";
+        } elseif ($rating < 1 || $rating > 5) {
+            $rating_error = "Please select a rating between 1 and 5 stars.";
+        } else {
+            try {
+                $ins_stmt = $pdo->prepare("INSERT INTO user_ratings (reviewer_id, reviewee_id, rating, comment) 
+                    VALUES (?, ?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE rating = ?, comment = ?");
+                $ins_stmt->execute([$reviewer_id, $reviewee_id, $rating, $comment, $rating, $comment]);
+                header("Location: product.php?id=" . $product_id . "&rating_success=1");
+                exit;
+            } catch (Exception $e) {
+                $rating_error = "An error occurred while saving your rating.";
+            }
+        }
+    }
+
+    // Fetch Reviews
+    $reviews = [];
+    try {
+        $rev_stmt = $pdo->prepare("SELECT r.*, u.username, u.profile_picture 
+            FROM user_ratings r 
+            JOIN users u ON r.reviewer_id = u.id 
+            WHERE r.reviewee_id = ? 
+            ORDER BY r.created_at DESC");
+        $rev_stmt->execute([$product['user_id']]);
+        $reviews = $rev_stmt->fetchAll();
+    } catch (Exception $e) {}
+
     // [AD ANALYTICS] Increment View Count
     $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
     $update_views->execute([$product_id]);
@@ -380,6 +422,89 @@ require_once 'includes/header.php';
                             <?= nl2br(htmlspecialchars($product['description'])) ?>
                         </div>
                     </div>
+
+                    <!-- Seller Reviews & Ratings -->
+                    <div class="seller-reviews-card-premium" style="margin-top: 24px; padding: 24px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--white); box-shadow: var(--shadow-sm);">
+                        <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+                            <i class="fa fa-star" style="color: #facc15;"></i> Seller Ratings & Reviews
+                        </h3>
+                        
+                        <?php if (empty($reviews)): ?>
+                            <p style="color: var(--text-muted); font-size: 13px; margin: 0 0 20px 0;">No reviews yet for this seller. Be the first one to rate them!</p>
+                        <?php else: ?>
+                            <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+                                <?php foreach ($reviews as $rev): ?>
+                                    <div style="display: flex; gap: 12px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;">
+                                        <?php if (!empty($rev['profile_picture'])): ?>
+                                            <img src="<?= htmlspecialchars($rev['profile_picture']) ?>" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">
+                                        <?php else: ?>
+                                            <div style="width: 36px; height: 36px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #64748b;">
+                                                <?= strtoupper(substr($rev['username'], 0, 1)) ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div style="flex: 1;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                <strong style="font-size: 13px; color: var(--text-dark);"><?= htmlspecialchars($rev['username']) ?></strong>
+                                                <span style="font-size: 11px; color: var(--text-muted);"><?= date('M d, Y', strtotime($rev['created_at'])) ?></span>
+                                            </div>
+                                            <div style="color: #facc15; font-size: 11px; margin: 2px 0;">
+                                                <?php for ($i = 1; $i <= 5; $i++) {
+                                                    echo $i <= $rev['rating'] ? '<i class="fa fa-star"></i>' : '<i class="far fa-star"></i>';
+                                                } ?>
+                                            </div>
+                                            <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-dark); line-height: 1.4;"><?= htmlspecialchars($rev['comment']) ?></p>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Review Submission Form -->
+                        <?php if (isset($_SESSION['user_id'])): ?>
+                            <?php if ($_SESSION['user_id'] != $product['user_id']): ?>
+                                <form action="" method="POST" style="border-top: 1.5px solid #f1f5f9; padding-top: 20px;">
+                                    <input type="hidden" name="action" value="submit_rating">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: var(--text-dark);">Rate this Seller</h4>
+                                    <?php if (isset($rating_error)): ?>
+                                        <div style="color: #ef4444; font-size: 12px; margin-bottom: 10px; font-weight: 600;"><?= $rating_error ?></div>
+                                    <?php endif; ?>
+                                    <?php if (isset($_GET['rating_success'])): ?>
+                                        <div style="color: #22c55e; font-size: 12px; margin-bottom: 10px; font-weight: 600;">Rating submitted successfully!</div>
+                                    <?php endif; ?>
+                                    <div style="display: flex; gap: 8px; font-size: 20px; color: #cbd5e1; cursor: pointer; margin-bottom: 12px;" id="star-rating-selector">
+                                        <i class="far fa-star" data-value="1" onclick="setFormRating(1)"></i>
+                                        <i class="far fa-star" data-value="2" onclick="setFormRating(2)"></i>
+                                        <i class="far fa-star" data-value="3" onclick="setFormRating(3)"></i>
+                                        <i class="far fa-star" data-value="4" onclick="setFormRating(4)"></i>
+                                        <i class="far fa-star" data-value="5" onclick="setFormRating(5)"></i>
+                                    </div>
+                                    <input type="hidden" name="rating" id="selected-rating" value="0">
+                                    <textarea name="comment" placeholder="Write a review about your experience with this seller..." style="width: 100%; height: 85px; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); outline: none; font-size: 13px; font-family: inherit; box-sizing: border-box; resize: none; margin-bottom: 12px;" required></textarea>
+                                    <button type="submit" class="btn-primary" style="padding: 10px 20px; font-size: 13px; font-weight: 700; border-radius: 12px;">Submit Review</button>
+                                </form>
+                                <script>
+                                    function setFormRating(val) {
+                                        document.getElementById('selected-rating').value = val;
+                                        const stars = document.querySelectorAll('#star-rating-selector i');
+                                        stars.forEach((star, index) => {
+                                            if (index < val) {
+                                                star.className = 'fas fa-star';
+                                                star.style.color = '#facc15';
+                                            } else {
+                                                star.className = 'far fa-star';
+                                                star.style.color = '#cbd5e1';
+                                            }
+                                        });
+                                    }
+                                </script>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <div style="background: #f8fafc; padding: 16px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; margin-top: 16px;">
+                                <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px;">Please login to write a review for this seller.</span>
+                                <a href="login.php" class="btn-primary" style="display: inline-block; text-decoration: none; padding: 6px 16px; font-size: 12px; font-weight: 700; border-radius: 8px;">Login</a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
@@ -556,6 +681,6 @@ require_once 'includes/header.php';
     const playStoreUrl = '<?= !empty($app_settings['play_store_url']) ? htmlspecialchars($app_settings['play_store_url'], ENT_QUOTES) : 'https://play.google.com/store/apps/details?id=com.enteangadi.app' ?>';
     const appStoreUrl = '<?= !empty($app_settings['app_store_url']) ? htmlspecialchars($app_settings['app_store_url'], ENT_QUOTES) : 'https://apps.apple.com/app/enteangadi' ?>';
 </script>
-<script src="assets/js/product.js"></script>
+<script src="assets/js/product.js?v=<?= time() ?>"></script>
 
 <?php require_once 'includes/footer.php'; ?>

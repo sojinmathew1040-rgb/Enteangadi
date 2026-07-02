@@ -70,6 +70,13 @@ if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
     $params[] = $ad_type;
 }
 
+$spec = $_GET['spec'] ?? null;
+if ($spec) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
+    $params[] = '%' . $spec . '%';
+    $params[] = '%' . $spec . '%';
+}
+
 $radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
 if ($radius && $user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
     $lat = floatval($user_location['lat']);

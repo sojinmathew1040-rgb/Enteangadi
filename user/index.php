@@ -36,6 +36,13 @@ function renderProductCard($product, $baseUrl, $isGuest = false) {
     $catName = htmlspecialchars($product['category_name'] ?? 'Uncategorized');
     $dateStr = date('M d', strtotime($product['created_at']));
     
+    $distanceHtml = '';
+    if (isset($product['distance']) && $product['distance'] !== null) {
+        $dist = floatval($product['distance']);
+        $distText = $dist < 1 ? round($dist * 1000) . ' m' : number_format($dist, 1) . ' km';
+        $distanceHtml = '<span style="font-size: 11px; font-weight: 700; color: var(--primary-green); margin-left: auto;">🚴 ' . $distText . '</span>';
+    }
+    
     return '
         <a href="' . $detailLink . '" class="product-card">
             ' . $typeBadge . '
@@ -43,9 +50,10 @@ function renderProductCard($product, $baseUrl, $isGuest = false) {
             <div class="product-card-content">
                 <div class="product-card-price">₹' . $priceVal . '</div>
                 <div class="product-card-title">' . $titleHtml . '</div>
-                <div class="product-card-meta">
+                <div class="product-card-meta" style="display: flex; align-items: center; width: 100%;">
                     <span>' . $catName . '</span>
-                    <span>' . $dateStr . '</span>
+                    <span style="margin-left: 8px;">' . $dateStr . '</span>
+                    ' . $distanceHtml . '
                 </div>
             </div>
         </a>
@@ -91,6 +99,8 @@ if (isset($_COOKIE['recently_viewed'])) {
 }
 
 $category_filter = $_GET['category_id'] ?? null;
+$search_query = $_GET['search'] ?? null;
+$active_spec = $_GET['spec'] ?? null;
 $where_clause = "WHERE p.status = 'active'";
 $params = [];
 
@@ -100,8 +110,57 @@ if ($category_filter) {
     $params[] = $category_filter;
 }
 
+if ($search_query) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
+    $params[] = '%' . $search_query . '%';
+    $params[] = '%' . $search_query . '%';
+}
+
+if ($active_spec) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
+    $params[] = '%' . $active_spec . '%';
+    $params[] = '%' . $active_spec . '%';
+}
+
+function isOrUnderCategory($categoryId, $targetParentId, $pdo) {
+    if (!$categoryId) return false;
+    if ($categoryId == $targetParentId) return true;
+    try {
+        $stmt = $pdo->prepare("SELECT parent_id FROM categories WHERE id = ?");
+        $stmt->execute([$categoryId]);
+        $cat = $stmt->fetch();
+        return ($cat && $cat['parent_id'] == $targetParentId);
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+$is_cars = isOrUnderCategory($category_filter, 25, $pdo);
+$is_mobiles = isOrUnderCategory($category_filter, 11, $pdo);
+$is_properties = isOrUnderCategory($category_filter, 32, $pdo);
+
 $user_location = $_SESSION['user_location'] ?? null;
 $radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
+$sort_by = $_GET['sort_by'] ?? null;
+
+$select_fields = "p.*, c.name as category_name, pi.image_path as main_image";
+$distance_select = "";
+$order_by = "p.created_at DESC";
+
+if ($user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
+    $lat = floatval($user_location['lat']);
+    $lng = floatval($user_location['lng']);
+    $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
+}
+
+if ($sort_by === 'price_asc') {
+    $order_by = "p.price ASC";
+} elseif ($sort_by === 'price_desc') {
+    $order_by = "p.price DESC";
+} elseif ($sort_by === 'distance' && !empty($distance_select)) {
+    $order_by = "distance ASC";
+}
+
 if ($radius && $user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
     $lat = floatval($user_location['lat']);
     $lng = floatval($user_location['lng']);
@@ -110,6 +169,7 @@ if ($radius && $user_location && isset($user_location['lat']) && isset($user_loc
 }
 
 $post_type = $_GET['post_type'] ?? null;
+$is_filtered_view = ($post_type || $search_query || $category_filter || $radius || $active_spec);
 $products = [];
 $sell_products = [];
 $rent_products = [];
@@ -118,8 +178,15 @@ $fresh_products = [];
 
 // Fetch products
 try {
-    if ($post_type && in_array($post_type, ['sell', 'buy', 'rent'])) {
-        $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
+    if ($is_filtered_view) {
+        $type_where = "";
+        $type_params = [];
+        if ($post_type && in_array($post_type, ['sell', 'buy', 'rent'])) {
+            $type_where = " AND p.type = ?";
+            $type_params = [$post_type];
+        }
+
+        $stmt = $pdo->prepare("SELECT $select_fields $distance_select 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN (
@@ -128,13 +195,13 @@ try {
                 GROUP BY product_id
             ) pim ON p.id = pim.product_id
             LEFT JOIN product_images pi ON pim.min_img_id = pi.id
-            $where_clause AND p.type = ?
-            ORDER BY p.created_at DESC");
-        $stmt->execute(array_merge($params, [$post_type]));
+            $where_clause $type_where
+            ORDER BY $order_by");
+        $stmt->execute(array_merge($params, $type_params));
         $products = $stmt->fetchAll();
     } else {
         // Fetch Sell items (limit 4)
-        $stmt_sell = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
+        $stmt_sell = $pdo->prepare("SELECT $select_fields $distance_select 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN (
@@ -144,12 +211,12 @@ try {
             ) pim ON p.id = pim.product_id
             LEFT JOIN product_images pi ON pim.min_img_id = pi.id
             $where_clause AND p.type = 'sell'
-            ORDER BY p.created_at DESC LIMIT 4");
+            ORDER BY $order_by LIMIT 4");
         $stmt_sell->execute($params);
         $sell_products = $stmt_sell->fetchAll();
 
         // Fetch Rent items (limit 4)
-        $stmt_rent = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
+        $stmt_rent = $pdo->prepare("SELECT $select_fields $distance_select 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN (
@@ -159,12 +226,12 @@ try {
             ) pim ON p.id = pim.product_id
             LEFT JOIN product_images pi ON pim.min_img_id = pi.id
             $where_clause AND p.type = 'rent'
-            ORDER BY p.created_at DESC LIMIT 4");
+            ORDER BY $order_by LIMIT 4");
         $stmt_rent->execute($params);
         $rent_products = $stmt_rent->fetchAll();
 
         // Fetch Buy (Looking for) items (limit 4)
-        $stmt_buy = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
+        $stmt_buy = $pdo->prepare("SELECT $select_fields $distance_select 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN (
@@ -174,12 +241,12 @@ try {
             ) pim ON p.id = pim.product_id
             LEFT JOIN product_images pi ON pim.min_img_id = pi.id
             $where_clause AND p.type = 'buy'
-            ORDER BY p.created_at DESC LIMIT 4");
+            ORDER BY $order_by LIMIT 4");
         $stmt_buy->execute($params);
         $buy_products = $stmt_buy->fetchAll();
 
         // Fetch Fresh Recommendations items (limit 8)
-        $stmt_fresh = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
+        $stmt_fresh = $pdo->prepare("SELECT $select_fields $distance_select 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN (
@@ -189,7 +256,7 @@ try {
             ) pim ON p.id = pim.product_id
             LEFT JOIN product_images pi ON pim.min_img_id = pi.id
             $where_clause 
-            ORDER BY p.created_at DESC LIMIT 8");
+            ORDER BY $order_by LIMIT 8");
         $stmt_fresh->execute($params);
         $fresh_products = $stmt_fresh->fetchAll();
     }
@@ -225,6 +292,7 @@ require_once '../includes/header.php';
 ?>
 
 <div class="container">
+    <?php if (!$is_filtered_view): ?>
     <!-- Browse Categories section -->
     <div style="margin-bottom: 32px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -324,6 +392,7 @@ require_once '../includes/header.php';
         }
         </style>
     <?php endif; ?>
+    <?php endif; ?>
 
 
 
@@ -341,6 +410,17 @@ require_once '../includes/header.php';
             <div style="display: flex; align-items: center; gap: 16px;">
                 <input type="range" id="proximity-slider" min="0" max="100" step="5" value="<?= $radius ?? 0 ?>" style="flex: 1; accent-color: var(--primary-green); height: 6px; cursor: pointer;">
                 <button onclick="applyRadiusFilter()" class="btn-primary" style="padding: 8px 18px; font-size: 13px; border-radius: 16px; font-weight: 700;">Apply</button>
+            </div>
+            <div style="display: flex; gap: 16px; margin-top: 16px; align-items: center; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <div style="display: flex; flex-direction: column; flex: 1;">
+                    <label style="font-size: 12px; font-weight: 800; color: var(--text-dark); margin-bottom: 6px;">Sort By</label>
+                    <select id="sort-by-select" style="padding: 10px 14px; font-size: 13px; border-radius: 12px; border: 1px solid var(--border-color); color: var(--text-dark); font-weight: 600; cursor: pointer; outline: none;" onchange="applySortBy(this.value)">
+                        <option value="" <?= empty($sort_by) ? 'selected' : '' ?>>Newest Listings</option>
+                        <option value="price_asc" <?= $sort_by === 'price_asc' ? 'selected' : '' ?>>Price: Low to High</option>
+                        <option value="price_desc" <?= $sort_by === 'price_desc' ? 'selected' : '' ?>>Price: High to Low</option>
+                        <option value="distance" <?= $sort_by === 'distance' ? 'selected' : '' ?>>Nearest First</option>
+                    </select>
+                </div>
             </div>
             <p style="margin: 8px 0 0 0; font-size: 11px; color: var(--text-muted);">
                 Centred on <strong><?= htmlspecialchars($user_location['name'] ?? 'Your Location') ?></strong>
@@ -363,21 +443,208 @@ require_once '../includes/header.php';
                 }
                 window.location.href = url.toString();
             }
+            function applySortBy(val) {
+                const url = new URL(window.location.href);
+                if (!val) {
+                    url.searchParams.delete('sort_by');
+                } else {
+                    url.searchParams.set('sort_by', val);
+                }
+                window.location.href = url.toString();
+            }
         </script>
     <?php endif; ?>
 
-    <?php if ($post_type): ?>
-        <!-- Full listing of a specific type (Filtered View) -->
-        <div class="section-header-premium" style="margin-top: 16px;">
-            <h2 class="section-title-premium">
+    <?php if ($is_cars || $is_mobiles || $is_properties): ?>
+        <div class="glass-card" style="padding: 20px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--white); margin-bottom: 32px; box-shadow: var(--shadow-sm);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px;">
+                    <i class="fa fa-sliders-h" style="color: var(--primary-green);"></i> Specific Filters
+                </h3>
+                <?php if ($active_spec): ?>
+                    <a href="index.php?category_id=<?= $category_filter ?><?= $post_type ? '&post_type=' . $post_type : '' ?><?= $radius ? '&radius=' . $radius : '' ?>" style="font-size: 11px; font-weight: 700; color: var(--primary-green); text-decoration: none; background: #f0fdf4; padding: 4px 10px; border-radius: 8px;">Clear Filters</a>
+                <?php endif; ?>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
                 <?php 
-                    if ($post_type === 'sell') echo "I Want to Sell - Recommendations";
-                    elseif ($post_type === 'rent') echo "I Want to Rent - Recommendations";
-                    else echo "I am Looking For - Recommendations";
-                ?>
-            </h2>
-            <a href="index.php<?= $category_filter ? '?category_id=' . $category_filter : '' ?>" class="section-view-all-btn" style="background: #f1f5f9; color: #475569;"><i class="fa fa-arrow-left"></i> Back to Home</a>
+                $filter_groups = [];
+                if ($is_cars) {
+                    $filter_groups = [
+                        'Popular Brands' => ['Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Mahindra'],
+                        'Body Types' => ['Sedan', 'SUV', 'Hatchback'],
+                        'Fuel Types' => ['Petrol', 'Diesel', 'Electric', 'CNG']
+                    ];
+                } elseif ($is_mobiles) {
+                    $filter_groups = [
+                        'Brands' => ['Apple', 'Samsung', 'OnePlus', 'Xiaomi', 'Realme'],
+                        'Storage Capacity' => ['64 GB', '128 GB', '256 GB', '512 GB']
+                    ];
+                } elseif ($is_properties) {
+                    $filter_groups = [
+                        'Properties Type' => ['House', 'Apartment', 'Villa', 'Plot'],
+                        'Size / Layout' => ['1 BHK', '2 BHK', '3 BHK', '4 BHK']
+                    ];
+                }
+
+                foreach ($filter_groups as $group_title => $opts): ?>
+                    <div>
+                        <span style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;"><?= $group_title ?></span>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <?php foreach ($opts as $opt): 
+                                $isSelected = ($active_spec === $opt);
+                                if ($isSelected) {
+                                    $targetUrl = "index.php?category_id=" . $category_filter . ($post_type ? "&post_type=" . $post_type : "") . ($radius ? "&radius=" . $radius : "");
+                                } else {
+                                    $targetUrl = "index.php?category_id=" . $category_filter . ($post_type ? "&post_type=" . $post_type : "") . ($radius ? "&radius=" . $radius : "") . "&spec=" . urlencode($opt);
+                                }
+                            ?>
+                                <a href="<?= $targetUrl ?>" style="display: inline-block; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 12px; border: 1px solid <?= $isSelected ? 'var(--primary-green)' : 'var(--border-color)' ?>; background: <?= $isSelected ? '#f0fdf4' : 'var(--white)' ?>; color: <?= $isSelected ? 'var(--primary-green-dark)' : 'var(--text-dark)' ?>; text-decoration: none; transition: all 0.2s ease;">
+                                    <?= htmlspecialchars($opt) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
+    <?php endif; ?>
+
+    <!-- Global Map Explorer Controls -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; width: 100%;">
+        <h2 class="section-title-premium" style="margin: 0; font-size: 20px; font-weight: 800; color: var(--text-dark);">
+            <?= $is_filtered_view ? 'Search Results' : 'Local Recommendations' ?>
+        </h2>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button id="map-toggle-btn" class="section-view-all-btn" style="background: var(--primary-green); color: white; display: flex; align-items: center; gap: 6px; cursor: pointer; border: none; font-size: 13px; font-weight: 700; border-radius: 12px; padding: 8px 16px;" onclick="toggleMapView()">
+                <i class="fa fa-map"></i> Show Map
+            </button>
+            <?php if ($is_filtered_view): ?>
+                <a href="index.php" class="section-view-all-btn" style="background: #f1f5f9; color: #475569;"><i class="fa fa-arrow-left"></i> Back to Home</a>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Toggleable Bounding-Box Map Explorer Container -->
+    <div id="map-explorer-container" style="display: none; width: 100%; height: 500px; border-radius: 20px; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 24px; box-shadow: var(--shadow-md); position: relative; z-index: 10;">
+        <div id="map-canvas" style="width: 100%; height: 100%;"></div>
+    </div>
+
+    <script>
+        let explorerMap = null;
+        let markersLayer = null;
+        let mapViewActive = false;
+
+        function toggleMapView() {
+            const mapContainer = document.getElementById('map-explorer-container');
+            const listingsContainer = document.getElementById('home-listings-container');
+            const btn = document.getElementById('map-toggle-btn');
+
+            mapViewActive = !mapViewActive;
+
+            if (mapViewActive) {
+                mapContainer.style.display = 'block';
+                if (listingsContainer) listingsContainer.style.display = 'none';
+                btn.innerHTML = '<i class="fa fa-th"></i> Show List';
+                btn.style.background = '#475569';
+                
+                // Initialize Map if not done
+                initMapExplorer();
+            } else {
+                mapContainer.style.display = 'none';
+                if (listingsContainer) listingsContainer.style.display = '';
+                btn.innerHTML = '<i class="fa fa-map"></i> Show Map';
+                btn.style.background = 'var(--primary-green)';
+            }
+        }
+
+        function initMapExplorer() {
+            if (explorerMap) {
+                explorerMap.invalidateSize();
+                return;
+            }
+
+            // Default center to user location or Kochi coordinates
+            const defaultLat = EnteangadiConfig.location ? parseFloat(EnteangadiConfig.location.lat) : 9.94;
+            const defaultLng = EnteangadiConfig.location ? parseFloat(EnteangadiConfig.location.lng) : 76.27;
+
+            explorerMap = L.map('map-canvas').setView([defaultLat, defaultLng], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(explorerMap);
+
+            markersLayer = L.layerGroup().addTo(explorerMap);
+
+            // Load markers when map moves/zooms
+            explorerMap.on('moveend', function() {
+                loadMapMarkers();
+            });
+
+            // Load markers initially
+            loadMapMarkers();
+        }
+
+        async function loadMapMarkers() {
+            if (!explorerMap || !markersLayer) return;
+
+            const bounds = explorerMap.getBounds();
+            const minLat = bounds.getSouth();
+            const maxLat = bounds.getNorth();
+            const minLng = bounds.getWest();
+            const maxLng = bounds.getEast();
+
+            // Get other search params
+            const urlParams = new URLSearchParams(window.location.search);
+            const categoryId = urlParams.get('category_id') || '';
+            const searchVal = urlParams.get('search') || '';
+
+            try {
+                const response = await fetch(`../api/map_listings.php?min_lat=${minLat}&max_lat=${maxLat}&min_lng=${minLng}&max_lng=${maxLng}&category_id=${categoryId}&search=${encodeURIComponent(searchVal)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    markersLayer.clearLayers();
+                    const listings = result.products || [];
+                    
+                    listings.forEach(p => {
+                        if (!p.latitude || !p.longitude) return;
+                        
+                        const priceFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.price);
+                        const imgHtml = p.main_image 
+                            ? `<img src="../${p.main_image}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
+                            : `<div style="width: 100%; height: 80px; display: flex; align-items: center; justify-content: center; background: #e2e8f0; border-radius: 8px; margin-bottom: 6px;"><i class="fa fa-image" style="color: #94a3b8;"></i></div>`;
+                        
+                        const popupContent = `
+                            <div style="width: 150px; font-family: sans-serif;">
+                                ${imgHtml}
+                                <div style="font-weight: 800; color: var(--primary-green-dark); margin-bottom: 2px;">${priceFormatted}</div>
+                                <div style="font-size: 11px; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">${p.title}</div>
+                                <a href="../product.php?id=${p.id}" style="display: block; text-align: center; background: var(--primary-green); color: white; text-decoration: none; font-size: 11px; font-weight: bold; padding: 4px; border-radius: 6px;">View Details</a>
+                            </div>
+                        `;
+                        
+                        const customIcon = L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div style="background: var(--primary-green); color: white; font-weight: 800; font-size: 10px; padding: 4px 8px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; border: 1.5px solid white;">₹${Math.round(p.price).toLocaleString('en-IN')}</div>`,
+                            iconSize: [60, 20],
+                            iconAnchor: [30, 10]
+                        });
+
+                        const marker = L.marker([parseFloat(p.latitude), parseFloat(p.longitude)], { icon: customIcon })
+                            .bindPopup(popupContent)
+                            .addTo(markersLayer);
+                    });
+                }
+            } catch (e) {
+                console.error("Map markers fetch failed:", e);
+            }
+        }
+    </script>
+
+    <!-- Content Feeds Wrapper -->
+    <div id="home-listings-container">
+    <?php if ($is_filtered_view): ?>
+        <!-- Full listing of a specific type (Filtered View) -->
         
         <?php if (empty($products)): ?>
             <div style="text-align: center; padding: 40px 20px; background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);">
@@ -457,6 +724,7 @@ require_once '../includes/header.php';
         <?php endif; ?>
 
     <?php endif; ?>
+    </div> <!-- Close home-listings-container -->
 </div>
 
 <?php require_once '../includes/footer.php'; ?>

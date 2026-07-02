@@ -30,6 +30,17 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 session_start();
 
+// Load local configuration (untracked by git) for local secrets like API keys
+if (file_exists(__DIR__ . '/config_local.php')) {
+    include_once __DIR__ . '/config_local.php';
+}
+
+// Groq API Key for browser-independent Speech-to-Text (e.g. Brave, Firefox fallbacks)
+// Get your free key from https://console.groq.com/
+if (!defined('GROQ_API_KEY')) {
+    define('GROQ_API_KEY', '');
+}
+
 // Set base URL dynamically
 if (!isset($base_url)) {
     $current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));

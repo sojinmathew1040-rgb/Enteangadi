@@ -98,6 +98,13 @@ require_once 'includes/header.php';
             Don't have an account? <a href="register.php"
                 style="color: var(--primary-green); font-weight: 600; text-decoration: none;">Sign up here</a>
         </p>
+
+        <div style="text-align: center; margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+            <span style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 12px;">Or log in instantly via WhatsApp</span>
+            <a href="whatsapp_verify.php" class="btn-primary" style="background: #25d366; border-color: #25d366; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; text-decoration: none;">
+                <i class="fab fa-whatsapp" style="font-size: 18px;"></i> Login via WhatsApp OTP
+            </a>
+        </div>
     </div>
 </div>
 
