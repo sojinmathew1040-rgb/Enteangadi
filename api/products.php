@@ -3,6 +3,30 @@ require_once '../config.php';
 
 header('Content-Type: application/json');
 
+if (isset($_GET['action']) && $_GET['action'] === 'view') {
+    $product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+    if ($product_id) {
+        try {
+            // Update total views
+            $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
+            $update_views->execute([$product_id]);
+            
+            // Increment daily analytics view count
+            $stmt_an = $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) 
+                                     VALUES (?, 'view', CURRENT_DATE, 1) 
+                                     ON DUPLICATE KEY UPDATE click_count = click_count + 1");
+            $stmt_an->execute([$product_id]);
+            
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Invalid ID']);
+    }
+    exit;
+}
+
 $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 $limit = 12;
 $offset = ($page - 1) * $limit;
@@ -46,12 +70,20 @@ if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
     $params[] = $ad_type;
 }
 
+$radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
+if ($radius && $user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
+    $lat = floatval($user_location['lat']);
+    $lng = floatval($user_location['lng']);
+    $where_clause .= " AND (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) <= ?";
+    $params[] = $radius;
+}
+
 $distance_select = "";
 $order_by = "p.created_at DESC";
 
 if ($user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
-    $lat = $user_location['lat'];
-    $lng = $user_location['lng'];
+    $lat = floatval($user_location['lat']);
+    $lng = floatval($user_location['lng']);
     $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
 }
 
@@ -70,11 +102,14 @@ if ($sort_by === 'price_asc') {
 }
 
 try {
-    $sql = "SELECT p.*, c.name as category_name, 
-            (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as main_image 
+    $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
+            (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as main_image,
+            COALESCE((SELECT ROUND(AVG(rating), 1) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id), 0) as seller_rating,
+            (SELECT COUNT(*) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id) as seller_reviews_count
             $distance_select
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
+            JOIN users u ON p.user_id = u.id
             $where_clause 
             ORDER BY $order_by
             LIMIT $limit OFFSET $offset";

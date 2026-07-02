@@ -26,9 +26,11 @@ $stmt->execute([$other_user_id]);
 $other_user = $stmt->fetch();
 
 $stmt2 = $pdo->prepare("
-    SELECT p.title, p.price, p.status, p.updated_at, p.created_at, 
+    SELECT p.title, p.price, p.status, p.updated_at, p.created_at, p.category_id,
+    c.parent_id as parent_category_id,
     (SELECT image_path FROM product_images WHERE product_id = p.id ORDER BY id ASC LIMIT 1) as thumbnail 
     FROM products p 
+    LEFT JOIN categories c ON p.category_id = c.id
     WHERE p.id = ?
 ");
 $stmt2->execute([$product_id]);
@@ -37,6 +39,58 @@ $product = $stmt2->fetch();
 if (!$other_user || !$product) {
     header("Location: inbox.php");
     exit;
+}
+
+$category_id = $product ? (int)$product['category_id'] : 0;
+$parent_id = $product ? (int)$product['parent_category_id'] : 0;
+
+$quick_replies = [
+    "Is this still available?",
+    "I am interested. What is your final price?",
+    "Where is your location to inspect this?"
+];
+
+// Context/Category specific quick replies suggestions
+if ($category_id == 25 || $parent_id == 25 || $category_id == 27 || $parent_id == 27 || $category_id == 61 || $parent_id == 61) {
+    // Vehicles
+    $quick_replies = [
+        "Is the insurance still active?",
+        "Are the registration documents (RC) clear?",
+        "How many kilometers has it run?",
+        "Can I come for a test drive?"
+    ];
+} elseif ($category_id == 32 || $parent_id == 32) {
+    // Properties
+    $quick_replies = [
+        "What is the security deposit amount?",
+        "Is there water and electricity backup?",
+        "Are bachelor tenants allowed?",
+        "When can I visit the property?"
+    ];
+} elseif ($category_id == 39 || $parent_id == 39) {
+    // Jobs
+    $quick_replies = [
+        "What are the working hours?",
+        "Is this a full-time or part-time position?",
+        "Where is the office located?",
+        "What are the salary and benefits?"
+    ];
+} elseif ($category_id == 11 || $parent_id == 11 || $category_id == 52 || $parent_id == 52) {
+    // Mobiles, Electronics
+    $quick_replies = [
+        "Is the warranty still valid?",
+        "Does it include the original bill and box?",
+        "Are there any scratches or functional defects?",
+        "What is the battery health percentage?"
+    ];
+} elseif ($category_id == 80 || $parent_id == 80) {
+    // Pets
+    $quick_replies = [
+        "Are the vaccinations up to date?",
+        "What is the age and breed?",
+        "Is the price negotiable?",
+        "Can you send more photos/videos?"
+    ];
 }
 
 $days_left = 15;
@@ -150,6 +204,35 @@ require_once '../includes/header.php';
                         <span><?= $blocked_by_me ? 'You have blocked this user. Unblock to send messages.' : 'You cannot send messages to this user.' ?></span>
                     </div>
                 <?php else: ?>
+                    <!-- Quick Replies Container -->
+                    <div class="quick-replies-container" style="display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid var(--border-color); -webkit-overflow-scrolling: touch; scrollbar-width: none; width: 100%; box-sizing: border-box;">
+                        <?php foreach ($quick_replies as $reply): ?>
+                            <button onclick="sendQuickReply(<?= htmlspecialchars(json_encode($reply)) ?>)" class="quick-reply-chip" style="flex-shrink: 0; background: var(--white); border: 1px solid var(--border-color); padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--text-dark); cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow-sm); outline: none;">
+                                <?= htmlspecialchars($reply) ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <style>
+                        .quick-replies-container::-webkit-scrollbar {
+                            display: none;
+                        }
+                        .quick-reply-chip:hover {
+                            border-color: var(--primary-green);
+                            color: var(--primary-green);
+                            background: #f0fdf4;
+                            transform: translateY(-1px);
+                        }
+                    </style>
+                    <script>
+                        function sendQuickReply(text) {
+                            const input = document.getElementById('message-input');
+                            if (input) {
+                                input.value = text;
+                                sendMessage();
+                            }
+                        }
+                    </script>
+
                     <div class="input-wrapper-premium">
                         <div id="recording-status" class="recording-status-premium" style="display: none;">
                             <span class="recording-dot animate-pulse"></span>

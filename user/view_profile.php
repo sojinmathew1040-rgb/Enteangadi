@@ -43,6 +43,31 @@ $count_sold = $pdo->prepare("SELECT COUNT(*) FROM products WHERE user_id = ? AND
 $count_sold->execute([$view_user_id]);
 $total_sold_ads = $count_sold->fetchColumn();
 
+// Fetch trust metrics
+require_once '../includes/helpers.php';
+$metrics = getUserTrustMetrics($view_user_id);
+
+// Fetch reviews
+$reviews_stmt = $pdo->prepare("
+    SELECT r.*, u.username as reviewer_name, u.profile_picture as reviewer_pic
+    FROM user_ratings r
+    JOIN users u ON r.reviewer_id = u.id
+    WHERE r.reviewee_id = ?
+    ORDER BY r.created_at DESC
+");
+$reviews_stmt->execute([$view_user_id]);
+$reviews = $reviews_stmt->fetchAll();
+
+// Check review eligibility
+$can_review = false;
+$existing_rating = null;
+if (isset($_SESSION['user_id']) && $_SESSION['user_id'] != $view_user_id) {
+    $can_review = true;
+    $check_r = $pdo->prepare("SELECT rating, comment FROM user_ratings WHERE reviewer_id = ? AND reviewee_id = ?");
+    $check_r->execute([$_SESSION['user_id'], $view_user_id]);
+    $existing_rating = $check_r->fetch();
+}
+
 require_once '../includes/header.php';
 ?>
 
@@ -68,10 +93,42 @@ require_once '../includes/header.php';
                 </div>
 
                 <div class="profile-titles-view">
-                    <h1><?= htmlspecialchars($view_user['username']) ?></h1>
-                    <p class="member-since"><i class="fa fa-calendar-alt"></i> Member since <?= date('F Y', strtotime($view_user['created_at'])) ?></p>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <h1 style="margin: 0; font-size: 32px; font-weight: 800;"><?= htmlspecialchars($view_user['username']) ?></h1>
+                        <?php if ($metrics['phone_verified'] || $metrics['email_verified']): ?>
+                            <div class="verified-badge-pill" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); padding: 4px 10px; border-radius: 20px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: white;">
+                                <i class="fa fa-check-circle" style="color: #4ade80;"></i> Verified
+                            </div>
+                        <?php endif; ?>
+                    </div>
                     
-                    <div class="profile-stats-row-view">
+                    <p class="member-since" style="margin: 6px 0 0 0;"><i class="fa fa-calendar-alt"></i> Member since <?= htmlspecialchars($metrics['member_since']) ?></p>
+                    
+                    <!-- Star Rating Row -->
+                    <div class="profile-rating-stars-row" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                        <div style="color: #facc15; font-size: 15px;">
+                            <?php
+                            $stars = round($metrics['avg_rating']);
+                            for ($i = 1; $i <= 5; $i++) {
+                                if ($i <= $stars) {
+                                    echo '<i class="fa fa-star"></i>';
+                                } else {
+                                    echo '<i class="far fa-star"></i>';
+                                }
+                            }
+                            ?>
+                        </div>
+                        <span style="font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.95);">
+                            <?= number_format($metrics['avg_rating'], 1) ?> (<?= $metrics['review_count'] ?> <?= $metrics['review_count'] == 1 ? 'review' : 'reviews' ?>)
+                        </span>
+                    </div>
+
+                    <!-- Responsiveness Row -->
+                    <div style="margin-top: 8px; font-size: 13px; color: rgba(255,255,255,0.9); font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-comments" style="font-size: 12px; opacity: 0.85;"></i> <?= htmlspecialchars($metrics['response_time']) ?>
+                    </div>
+                    
+                    <div class="profile-stats-row-view" style="margin-top: 20px;">
                         <div class="stat-box-view">
                             <span class="stat-number"><?= $total_active_ads ?></span>
                             <span class="stat-label">Active Ads</span>
@@ -134,6 +191,126 @@ require_once '../includes/header.php';
             </div>
         <?php endif; ?>
     </div>
+
+    <!-- Reviews and Ratings Section -->
+    <div class="container active-listings-container" style="margin-top: 50px; border-top: 1px solid var(--border-color); padding-top: 40px; margin-bottom: 40px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+            <div class="section-header-premium" style="margin: 0;">
+                <h2>Seller Reviews</h2>
+                <p>Read opinions and feedback from other buyers</p>
+            </div>
+            <?php if ($can_review): ?>
+                <button onclick="document.getElementById('review-modal').style.display='flex'" class="btn-primary" style="padding: 10px 20px; font-size: 14px; border-radius: 24px;">
+                    <i class="fa fa-pen"></i> Write a Review
+                </button>
+            <?php endif; ?>
+        </div>
+
+        <?php if (empty($reviews)): ?>
+            <div class="empty-state-view-profile" style="padding: 40px 20px;">
+                <div class="empty-illustration">
+                    <i class="fa fa-star-half-alt"></i>
+                </div>
+                <h3>No Reviews Yet</h3>
+                <p>This seller hasn't received any reviews yet. Be the first to leave feedback!</p>
+            </div>
+        <?php else: ?>
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <?php foreach ($reviews as $rev): ?>
+                    <div style="background: var(--white); padding: 20px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); display: flex; gap: 16px; align-items: flex-start;">
+                        <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; background: #e2e8f0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1.5px solid var(--border-color);">
+                            <?php if (!empty($rev['reviewer_pic'])): ?>
+                                <img src="<?= $base_url . '/' . htmlspecialchars($rev['reviewer_pic']) ?>" style="width:100%; height:100%; object-fit:cover;">
+                            <?php else: ?>
+                                <span style="font-weight: 700; color: #475569; font-size: 18px;"><?= strtoupper(substr($rev['reviewer_name'], 0, 1)) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <h4 style="margin: 0; font-size: 15px; color: var(--text-dark); font-weight: 700;"><?= htmlspecialchars($rev['reviewer_name']) ?></h4>
+                                <span style="font-size: 11px; color: var(--text-muted);"><?= date('M d, Y', strtotime($rev['created_at'])) ?></span>
+                            </div>
+                            <div style="color: #facc15; font-size: 12px; margin-bottom: 8px;">
+                                <?php
+                                for ($i = 1; $i <= 5; $i++) {
+                                    echo $i <= $rev['rating'] ? '<i class="fa fa-star"></i>' : '<i class="far fa-star"></i>';
+                                }
+                                ?>
+                            </div>
+                            <p style="margin: 0; font-size: 13.5px; color: var(--text-dark); line-height: 1.5;"><?= nl2br(htmlspecialchars($rev['comment'])) ?></p>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Review Submission Modal -->
+    <?php if ($can_review): ?>
+        <div id="review-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center; z-index: 9999;">
+            <div class="modal-content" style="max-width: 500px; width: 90%; border-radius: 24px; padding: 24px; box-shadow: var(--shadow-lg); background: var(--white);">
+                <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin:0; font-weight:800; color: var(--text-dark);">Rate & Review Seller</h3>
+                    <button class="close-modal" onclick="document.getElementById('review-modal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color: var(--text-dark);">&times;</button>
+                </div>
+                <form id="review-form" method="POST">
+                    <input type="hidden" name="reviewee_id" value="<?= $view_user_id ?>">
+                    
+                    <div style="margin-bottom: 20px; text-align: center;">
+                        <label style="display:block; font-weight:700; margin-bottom: 8px; color: var(--text-dark);">Your Rating</label>
+                        <div class="star-rating-select" style="display: inline-flex; flex-direction: row-reverse; gap: 8px; font-size: 32px;">
+                            <input type="radio" id="star5" name="rating" value="5" <?= ($existing_rating && $existing_rating['rating'] == 5) ? 'checked' : '' ?> style="display:none;" />
+                            <label for="star5" class="fa fa-star" style="color: #cbd5e1; cursor:pointer; transition:color 0.2s;"></label>
+                            <input type="radio" id="star4" name="rating" value="4" <?= ($existing_rating && $existing_rating['rating'] == 4) ? 'checked' : '' ?> style="display:none;" />
+                            <label for="star4" class="fa fa-star" style="color: #cbd5e1; cursor:pointer; transition:color 0.2s;"></label>
+                            <input type="radio" id="star3" name="rating" value="3" <?= ($existing_rating && $existing_rating['rating'] == 3) ? 'checked' : '' ?> style="display:none;" />
+                            <label for="star3" class="fa fa-star" style="color: #cbd5e1; cursor:pointer; transition:color 0.2s;"></label>
+                            <input type="radio" id="star2" name="rating" value="2" <?= ($existing_rating && $existing_rating['rating'] == 2) ? 'checked' : '' ?> style="display:none;" />
+                            <label for="star2" class="fa fa-star" style="color: #cbd5e1; cursor:pointer; transition:color 0.2s;"></label>
+                            <input type="radio" id="star1" name="rating" value="1" <?= ($existing_rating && $existing_rating['rating'] == 1) ? 'checked' : '' ?> style="display:none;" />
+                            <label for="star1" class="fa fa-star" style="color: #cbd5e1; cursor:pointer; transition:color 0.2s;"></label>
+                        </div>
+                        <style>
+                            .star-rating-select input:checked ~ label,
+                            .star-rating-select label:hover,
+                            .star-rating-select label:hover ~ label {
+                                color: #facc15 !important;
+                            }
+                        </style>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="display:block; font-weight:700; margin-bottom: 6px; color: var(--text-dark);">Write a Comment (Optional)</label>
+                        <textarea name="comment" rows="4" class="form-control" placeholder="Share your experience trading with this seller..." style="resize:none; padding:12px; border-radius:12px; font-size:14px; width:100%; box-sizing:border-box; background: var(--background); color: var(--text-dark); border: 1px solid var(--border-color);"><?= $existing_rating ? htmlspecialchars($existing_rating['comment']) : '' ?></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width: 100%; padding: 14px; border-radius: 14px; font-weight: 700;">Submit Feedback</button>
+                </form>
+            </div>
+        </div>
+        
+        <script>
+            document.getElementById('review-form').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                try {
+                    const response = await fetch('api_add_review.php', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert(data.message || 'Error submitting review');
+                    }
+                } catch(err) {
+                    alert('Submission failed. Please try again.');
+                }
+            });
+        </script>
+    <?php endif; ?>
 </div>
 
 <style>

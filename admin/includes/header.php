@@ -36,6 +36,9 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
             <a href="reports.php" class="<?= $current_page === 'reports.php' ? 'active' : '' ?>"><i
                     class="fa fa-flag"></i> Reports</a>
 
+            <a href="verifications.php" class="<?= $current_page === 'verifications.php' ? 'active' : '' ?>"><i
+                    class="fa fa-id-card"></i> Verifications</a>
+
             <?php if (has_permission('manage_categories')): ?>
                 <a href="categories.php" class="<?= $current_page === 'categories.php' ? 'active' : '' ?>"><i
                         class="fa fa-list"></i> Categories</a>

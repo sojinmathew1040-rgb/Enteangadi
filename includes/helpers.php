@@ -355,3 +355,88 @@ if (!function_exists('isImageNSFWLocal')) {
     }
 }
 
+if (!function_exists('getUserTrustMetrics')) {
+    /**
+     * Calculates trust metrics for a given user (average rating, review count, response time, verified flags)
+     * 
+     * @param int $user_id The ID of the user
+     * @return array Trust metrics metadata
+     */
+    function getUserTrustMetrics($user_id)
+    {
+        global $pdo;
+        
+        // 1. Fetch ratings metrics
+        $stmt_r = $pdo->prepare("SELECT COALESCE(AVG(rating), 0) as avg_rating, COUNT(*) as review_count FROM user_ratings WHERE reviewee_id = ?");
+        $stmt_r->execute([$user_id]);
+        $rating_data = $stmt_r->fetch();
+        
+        $avg_rating = round(floatval($rating_data['avg_rating']), 1);
+        $review_count = intval($rating_data['review_count']);
+        
+        // 2. Fetch joined/member since date and verification flag
+        $stmt_u = $pdo->prepare("SELECT created_at, email, phone_number, is_verified FROM users WHERE id = ?");
+        $stmt_u->execute([$user_id]);
+        $user_data = $stmt_u->fetch();
+        
+        $member_since = $user_data ? date('F Y', strtotime($user_data['created_at'])) : 'Unknown';
+        
+        // 3. Verification flag from admin approval
+        $is_verified = $user_data ? (bool)$user_data['is_verified'] : false;
+        
+        // Map both phone and email verified status to is_verified column for compatibility
+        $email_verified = $is_verified;
+        $phone_verified = $is_verified;
+        
+        // 4. Calculate response time:
+        // Query chat messages where receiver_id is the user and find the subsequent reply by sender_id (which is this user)
+        $stmt_msgs = $pdo->prepare("
+            SELECT m1.created_at as received_at, MIN(m2.created_at) as replied_at
+            FROM messages m1
+            JOIN messages m2 ON m1.product_id = m2.product_id 
+                            AND m1.sender_id = m2.receiver_id 
+                            AND m1.receiver_id = m2.sender_id 
+                            AND m2.created_at > m1.created_at
+            WHERE m1.receiver_id = ?
+            GROUP BY m1.id
+        ");
+        $stmt_msgs->execute([$user_id]);
+        $pairs = $stmt_msgs->fetchAll();
+        
+        $total_seconds = 0;
+        $reply_count = 0;
+        foreach ($pairs as $p) {
+            $diff = strtotime($p['replied_at']) - strtotime($p['received_at']);
+            // Only count replies within 24 hours to prevent out-of-context delays
+            if ($diff > 0 && $diff < 86400) {
+                $total_seconds += $diff;
+                $reply_count++;
+            }
+        }
+        
+        $response_time = "Replies within a few hours";
+        if ($reply_count > 0) {
+            $avg_seconds = $total_seconds / $reply_count;
+            if ($avg_seconds < 1800) {
+                $response_time = "Replies in minutes";
+            } elseif ($avg_seconds < 3600) {
+                $response_time = "Replies in 1 hour";
+            } elseif ($avg_seconds < 7200) {
+                $response_time = "Replies in 2 hours";
+            } elseif ($avg_seconds < 86400) {
+                $hours = round($avg_seconds / 3600);
+                $response_time = "Replies in $hours hours";
+            }
+        }
+        
+        return [
+            'avg_rating' => $avg_rating,
+            'review_count' => $review_count,
+            'member_since' => $member_since,
+            'email_verified' => $email_verified,
+            'phone_verified' => $phone_verified,
+            'response_time' => $response_time
+        ];
+    }
+}
+

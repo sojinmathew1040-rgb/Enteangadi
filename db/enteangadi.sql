@@ -343,6 +343,7 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `role` enum('user','admin') DEFAULT 'user',
   `is_admin` tinyint(1) DEFAULT 0,
+  `is_verified` tinyint(1) DEFAULT 0,
   `permissions` text DEFAULT NULL,
   `session_token` varchar(255) DEFAULT NULL,
   `last_activity` timestamp NULL DEFAULT NULL,
@@ -394,7 +395,60 @@ CREATE TABLE `wishlist` (
 LOCK TABLES `wishlist` WRITE;
 /*!40000 ALTER TABLE `wishlist` DISABLE KEYS */;
 /*!40000 ALTER TABLE `wishlist` ENABLE KEYS */;
-UNLOCK TABLES;
+--
+-- Table structure for table `user_ratings`
+--
+
+DROP TABLE IF EXISTS `user_ratings`;
+CREATE TABLE `user_ratings` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `reviewer_id` int(11) NOT NULL,
+  `reviewee_id` int(11) NOT NULL,
+  `rating` tinyint(4) NOT NULL,
+  `comment` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_reviewer_reviewee` (`reviewer_id`,`reviewee_id`),
+  KEY `reviewee_id` (`reviewee_id`),
+  CONSTRAINT `user_ratings_ibfk_1` FOREIGN KEY (`reviewer_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `user_ratings_ibfk_2` FOREIGN KEY (`reviewee_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `analytics_clicks`
+--
+
+DROP TABLE IF EXISTS `analytics_clicks`;
+CREATE TABLE `analytics_clicks` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `product_id` int(11) NOT NULL,
+  `click_type` enum('view','favorite','chat') NOT NULL,
+  `click_date` date NOT NULL,
+  `click_count` int(11) DEFAULT 1,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_product_type_date` (`product_id`,`click_type`,`click_date`),
+  CONSTRAINT `analytics_clicks_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `verification_requests`
+--
+
+DROP TABLE IF EXISTS `verification_requests`;
+CREATE TABLE `verification_requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `id_type` varchar(100) NOT NULL,
+  `id_photo` varchar(255) NOT NULL,
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `rejection_reason` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `verification_requests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

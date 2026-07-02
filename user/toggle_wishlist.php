@@ -31,6 +31,15 @@ try {
         // Add to wishlist
         $stmt = $pdo->prepare("INSERT INTO wishlist (user_id, product_id) VALUES (?, ?)");
         $stmt->execute([$user_id, $product_id]);
+
+        // Increment daily analytics wishlist saves
+        try {
+            $stmt_an = $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) 
+                                     VALUES (?, 'favorite', CURRENT_DATE, 1) 
+                                     ON DUPLICATE KEY UPDATE click_count = click_count + 1");
+            $stmt_an->execute([$product_id]);
+        } catch (Exception $e) {}
+
         echo json_encode(['status' => 'success', 'action' => 'added']);
     }
 } catch (PDOException $e) {

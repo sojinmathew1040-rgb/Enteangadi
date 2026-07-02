@@ -1,16 +1,13 @@
 package com.enteangadi.app;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.app.AlarmManager;
-import android.os.SystemClock;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.os.Build;
-import android.os.IBinder;
 import android.webkit.CookieManager;
 import android.media.RingtoneManager;
 import androidx.core.app.NotificationCompat;
@@ -20,112 +17,25 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
-public class BackgroundNotificationService extends Service {
-    private ScheduledExecutorService scheduler;
+public class BackgroundNotificationService extends BroadcastReceiver {
 
     @Override
-    public void onCreate() {
-        super.onCreate();
-        scheduler = Executors.newSingleThreadScheduledExecutor();
-        // Poll every 30 seconds for new messages to prevent battery drain
-        scheduler.scheduleAtFixedRate(this::pollUnreadMessages, 10, 30, TimeUnit.SECONDS);
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        createForegroundNotificationChannel();
-
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "foreground_service_channel")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setContentTitle("Enteangadi Background Checker")
-            .setContentText("Checking for new messages...")
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE);
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(2002, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-            } else {
-                startForeground(2002, builder.build());
+    public void onReceive(Context context, Intent intent) {
+        final PendingResult pendingResult = goAsync();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    pollUnreadMessages(context);
+                } finally {
+                    pendingResult.finish();
+                }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return START_STICKY;
+        }).start();
     }
 
-    private void createForegroundNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CharSequence name = "Background Service";
-            String description = "Ensures message checks run continuously";
-            int importance = NotificationManager.IMPORTANCE_MIN;
-            NotificationChannel channel = new NotificationChannel("foreground_service_channel", name, importance);
-            channel.setDescription(description);
-            channel.setShowBadge(false);
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(channel);
-            }
-        }
-    }
-
-    @Override
-    public void onDestroy() {
-        if (scheduler != null) {
-            scheduler.shutdown();
-        }
-        super.onDestroy();
-    }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-
-    @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        Intent restartServiceIntent = new Intent(getApplicationContext(), this.getClass());
-        restartServiceIntent.setPackage(getPackageName());
-
-        PendingIntent restartServicePendingIntent;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            restartServicePendingIntent = PendingIntent.getForegroundService(
-                getApplicationContext(), 
-                1, 
-                restartServiceIntent, 
-                PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE
-            );
-        } else {
-            restartServicePendingIntent = PendingIntent.getService(
-                getApplicationContext(), 
-                1, 
-                restartServiceIntent, 
-                PendingIntent.FLAG_ONE_SHOT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-            );
-        }
-
-        AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
-        if (alarmService != null) {
-            try {
-                alarmService.set(
-                    AlarmManager.ELAPSED_REALTIME,
-                    SystemClock.elapsedRealtime() + 1000,
-                    restartServicePendingIntent
-                );
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        super.onTaskRemoved(rootIntent);
-    }
-
-    private void createNotificationChannel() {
+    private void createNotificationChannel(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = "New Messages";
             String description = "Notifications for new chat messages";
@@ -136,29 +46,29 @@ public class BackgroundNotificationService extends Service {
             channel.enableVibration(true);
             channel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
             channel.enableLights(true);
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
             if (notificationManager != null) {
                 notificationManager.createNotificationChannel(channel);
             }
         }
     }
 
-    private void showNotification(String senderName, String messageText, int unreadCount, int senderId, int productId) {
-        createNotificationChannel();
+    private void showNotification(Context context, String senderName, String messageText, int unreadCount, int senderId, int productId) {
+        createNotificationChannel(context);
 
-        Intent intent = new Intent(this, MainActivity.class);
+        Intent intent = new Intent(context, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         intent.putExtra("user_id", senderId);
         intent.putExtra("product_id", productId);
         PendingIntent pendingIntent = PendingIntent.getActivity(
-            this,
+            context,
             (int) System.currentTimeMillis(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "new_messages_channel")
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "new_messages_channel")
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Enteangadi - " + senderName)
             .setContentText(messageText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -169,15 +79,15 @@ public class BackgroundNotificationService extends Service {
             .setNumber(unreadCount)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
-        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (notificationManager != null) {
             notificationManager.notify((int) System.currentTimeMillis(), builder.build());
         }
     }
 
-    private void pollUnreadMessages() {
+    private void pollUnreadMessages(Context context) {
         try {
-            SharedPreferences prefs = getSharedPreferences("EnteangadiPrefs", MODE_PRIVATE);
+            SharedPreferences prefs = context.getSharedPreferences("EnteangadiPrefs", Context.MODE_PRIVATE);
             String serverUrl = prefs.getString("server_url", null);
             if (serverUrl == null || serverUrl.isEmpty()) {
                 return;
@@ -233,7 +143,7 @@ public class BackgroundNotificationService extends Service {
 
                                 int senderId = msg.optInt("sender_id", 0);
                                 int productId = msg.optInt("product_id", 0);
-                                showNotification(senderName, messageText, unreadCount, senderId, productId);
+                                showNotification(context, senderName, messageText, unreadCount, senderId, productId);
                                 if (msgId > maxId) {
                                     maxId = msgId;
                                 }

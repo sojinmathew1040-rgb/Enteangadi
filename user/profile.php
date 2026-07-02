@@ -187,6 +187,22 @@ require_once '../includes/header.php';
                     <i class="fa fa-chevron-right"></i>
                 </a>
 
+                <a href="analytics.php" class="menu-link">
+                    <div class="menu-link-content">
+                        <div class="menu-icon"><i class="fa fa-chart-line"></i></div>
+                        <span>Seller Analytics</span>
+                    </div>
+                    <i class="fa fa-chevron-right"></i>
+                </a>
+
+                <a href="verification.php" class="menu-link">
+                    <div class="menu-link-content">
+                        <div class="menu-icon"><i class="fa fa-id-card"></i></div>
+                        <span>Verify Profile</span>
+                    </div>
+                    <i class="fa fa-chevron-right"></i>
+                </a>
+
                 <a href="wishlist.php" class="menu-link">
                     <div class="menu-link-content">
                         <div class="menu-icon"><i class="fa fa-heart"></i></div>

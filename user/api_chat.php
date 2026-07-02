@@ -39,6 +39,20 @@ if (in_array($action, ['send', 'send_audio', 'send_image'])) {
     }
 }
 
+function logChatSession($pdo, $my_id, $receiver_id, $product_id) {
+    try {
+        $check_stmt = $pdo->prepare("SELECT COUNT(*) FROM messages WHERE sender_id = ? AND receiver_id = ? AND product_id = ?");
+        $check_stmt->execute([$my_id, $receiver_id, $product_id]);
+        $msg_count = $check_stmt->fetchColumn();
+        if ($msg_count == 1) {
+            $stmt_an = $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) 
+                                     VALUES (?, 'chat', CURRENT_DATE, 1) 
+                                     ON DUPLICATE KEY UPDATE click_count = click_count + 1");
+            $stmt_an->execute([$product_id]);
+        }
+    } catch (Exception $e) {}
+}
+
 if ($action === 'send') {
     $receiver_id = $_POST['receiver_id'] ?? 0;
     $product_id = $_POST['product_id'] ?? 0;
@@ -54,6 +68,7 @@ if ($action === 'send') {
         try {
             $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
             $stmt->execute([$my_id, $receiver_id, $product_id, $message]);
+            logChatSession($pdo, $my_id, $receiver_id, $product_id);
             echo json_encode(['success' => true]);
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'error' => 'Database error']);
@@ -81,6 +96,7 @@ if ($action === 'send') {
 
                 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$my_id, $receiver_id, $product_id, $db_path]);
+                logChatSession($pdo, $my_id, $receiver_id, $product_id);
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Failed to save audio file']);
@@ -119,6 +135,7 @@ if ($action === 'send') {
 
                 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, product_id, message_text) VALUES (?, ?, ?, ?)");
                 $stmt->execute([$my_id, $receiver_id, $product_id, $db_path]);
+                logChatSession($pdo, $my_id, $receiver_id, $product_id);
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Failed to save image file']);

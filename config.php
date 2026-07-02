@@ -526,6 +526,49 @@ try {
     $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['app_store_url', 'https://apps.apple.com/app/enteangadi']);
     $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['adult_content_check', '1']);
 
+    // [TRUST & ANALYTICS SYSTEMS] Auto-create user_ratings and analytics_clicks tables
+    $pdo->exec("CREATE TABLE IF NOT EXISTS user_ratings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        reviewer_id INT NOT NULL,
+        reviewee_id INT NOT NULL,
+        rating TINYINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        comment TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (reviewee_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_reviewer_reviewee (reviewer_id, reviewee_id)
+    )");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS analytics_clicks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        click_type ENUM('view', 'favorite', 'chat') NOT NULL,
+        click_date DATE NOT NULL,
+        click_count INT DEFAULT 1,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_product_type_date (product_id, click_type, click_date)
+    )");
+
+    // Add is_verified column to users table if not exists
+    try {
+        $pdo->query("SELECT is_verified FROM users LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN is_verified TINYINT(1) DEFAULT 0");
+    }
+
+    // Auto-create verification_requests table
+    $pdo->exec("CREATE TABLE IF NOT EXISTS verification_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        id_type VARCHAR(100) NOT NULL,
+        id_photo VARCHAR(255) NOT NULL,
+        status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+        rejection_reason TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )");
+
     // [SESSION TIMEOUT] Auto-add last_activity to users
     try {
         $pdo->query("SELECT last_activity FROM users LIMIT 1");

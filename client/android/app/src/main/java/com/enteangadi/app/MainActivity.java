@@ -3,6 +3,10 @@ package com.enteangadi.app;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.os.SystemClock;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -37,13 +41,24 @@ public class MainActivity extends BridgeActivity {
             e.printStackTrace();
         }
 
-        // Start optimized background notification polling service
+        // Start optimized background notification polling alarm
         try {
-            Intent serviceIntent = new Intent(this, BackgroundNotificationService.class);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent);
-            } else {
-                startService(serviceIntent);
+            Intent alarmIntent = new Intent(this, BackgroundNotificationService.class);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this, 
+                0, 
+                alarmIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null) {
+                // Poll every 30 seconds
+                alarmManager.setRepeating(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + 5000,
+                    30000,
+                    pendingIntent
+                );
             }
         } catch (Exception e) {
             e.printStackTrace();

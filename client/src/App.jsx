@@ -23,6 +23,7 @@ function App() {
   const [adTypeFilter, setAdTypeFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [radius, setRadius] = useState('');
   const [categories, setCategories] = useState([]);
 
   // Selected product for detailed modal view
@@ -620,6 +621,88 @@ function App() {
     }
   };
 
+  const getQuickReplies = (product) => {
+    if (!product) return [];
+    const catId = parseInt(product.category_id);
+    const parentId = parseInt(product.parent_category_id || 0);
+
+    const defaultReplies = [
+      "Is this still available?",
+      "I am interested. What is your final price?",
+      "Where is your location to inspect this?"
+    ];
+
+    if (catId === 25 || parentId === 25 || catId === 27 || parentId === 27 || catId === 61 || parentId === 61) {
+      return [
+        "Is the insurance still active?",
+        "Are the registration documents (RC) clear?",
+        "How many kilometers has it run?",
+        "Can I come for a test drive?"
+      ];
+    } else if (catId === 32 || parentId === 32) {
+      return [
+        "What is the security deposit amount?",
+        "Is there water and electricity backup?",
+        "Are bachelor tenants allowed?",
+        "When can I visit the property?"
+      ];
+    } else if (catId === 39 || parentId === 39) {
+      return [
+        "What are the working hours?",
+        "Is this a full-time or part-time position?",
+        "Where is the office located?",
+        "What are the salary and benefits?"
+      ];
+    } else if (catId === 11 || parentId === 11 || catId === 52 || parentId === 52) {
+      return [
+        "Is the warranty still valid?",
+        "Does it include the original bill and box?",
+        "Are there any scratches or functional defects?",
+        "What is the battery health percentage?"
+      ];
+    } else if (catId === 80 || parentId === 80) {
+      return [
+        "Are the vaccinations up to date?",
+        "What is the age and breed?",
+        "Is the price negotiable?",
+        "Can you send more photos/videos?"
+      ];
+    }
+
+    return defaultReplies;
+  };
+
+  const sendQuickReplyMessage = async (text) => {
+    if (!text || !selectedProduct) return;
+
+    const effectiveMyId = myId;
+    const buyerId = (effectiveMyId === selectedProduct.user_id)
+      ? (selectedProduct.user_id == 1 ? 2 : 1)
+      : effectiveMyId;
+
+    const formData = new FormData();
+    formData.append('action', 'send');
+    formData.append('receiver_id', selectedProduct.user_id);
+    formData.append('product_id', selectedProduct.id);
+    formData.append('message', text);
+
+    try {
+      const response = await fetch(`${backendUrl}/user/api_chat.php`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      const result = await response.json();
+      if (result.success) {
+        fetchChatMessages(buyerId);
+      } else {
+        alert(result.error || "Failed to send quick reply");
+      }
+    } catch (err) {
+      console.error("Failed to send quick reply:", err);
+    }
+  };
+
   // Play audio voice note
   const playVoiceNote = (url) => {
     if (activeAudio) {
@@ -797,6 +880,7 @@ function App() {
       if (adTypeFilter) params.append('ad_type', adTypeFilter);
       if (minPrice) params.append('min_price', minPrice);
       if (maxPrice) params.append('max_price', maxPrice);
+      if (radius) params.append('radius', radius);
 
       const queryString = params.toString() ? `?${params.toString()}` : '';
       const response = await apiFetch(`/api/products.php${queryString}`);
@@ -845,6 +929,7 @@ function App() {
     setAdTypeFilter('');
     setMinPrice('');
     setMaxPrice('');
+    setRadius('');
     fetchProducts();
   };
 
@@ -975,6 +1060,34 @@ function App() {
               </div>
             </div>
 
+            {locationCoords && (
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-dark)' }}>
+                  <span style={{ fontWeight: 'bold' }}>Distance Radius</span>
+                  <span style={{ color: 'var(--primary-green)', fontWeight: 'bold' }}>
+                    {radius ? `${radius} km` : 'All Kerala'}
+                  </span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={radius || 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setRadius(val === 0 ? '' : val);
+                    }}
+                    style={{ flex: 1, accentColor: 'var(--primary-green)', cursor: 'pointer' }}
+                  />
+                </div>
+                <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '6px' }}>
+                  Centred on: {locationActive || 'Detected location'}
+                </small>
+              </div>
+            )}
+
             <div className="filter-actions">
               <button type="button" onClick={fetchProducts} className="apply-btn">
                 Apply Filters
@@ -1013,7 +1126,10 @@ function App() {
                 <div
                   key={product.id}
                   className="product-card"
-                  onClick={() => setSelectedProduct(product)}
+                  onClick={() => {
+                    setSelectedProduct(product);
+                    apiFetch(`/api/products.php?action=view&id=${product.id}`).catch(() => {});
+                  }}
                 >
                   <div className="card-image-wrapper">
                     {product.main_image ? (
@@ -1090,6 +1206,32 @@ function App() {
 
                   <h2 className="modal-title">{selectedProduct.title}</h2>
                   <div className="modal-price">{formatPrice(selectedProduct.price)}</div>
+
+                  <div className="modal-seller-card" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#f8fafc', borderRadius: '16px', border: '1px solid var(--border-color)', margin: '16px 0' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', background: '#cbd5e1', display: 'flex', alignItems: 'center', justify: 'center' }}>
+                      {selectedProduct.seller_picture ? (
+                        <img src={`${backendUrl}/${selectedProduct.seller_picture}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontWeight: 'bold', color: '#475569' }}>{selectedProduct.seller_username ? selectedProduct.seller_username.charAt(0).toUpperCase() : 'S'}</span>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--text-dark)' }}>{selectedProduct.seller_username || 'Seller'}</span>
+                        {selectedProduct.seller_verified && (
+                          <i className="fa fa-check-circle" style={{ color: '#22c55e', fontSize: '13px' }} title="Verified Seller"></i>
+                        )}
+                        {(selectedProduct.seller_rating > 0) && (
+                          <span style={{ fontSize: '11px', color: '#facc15', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            ⭐ {selectedProduct.seller_rating}
+                          </span>
+                        )}
+                      </div>
+                      <small style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>
+                        {selectedProduct.seller_verified ? 'Verified Seller' : 'Registered Peer'} ({selectedProduct.seller_reviews_count || 0} reviews)
+                      </small>
+                    </div>
+                  </div>
 
                   <hr className="divider" />
 
@@ -1210,7 +1352,20 @@ function App() {
                       ⚠️ This product has been deleted by the seller.
                     </div>
                   ) : (
-                    <div className="chat-input-row">
+                    <>
+                      {/* Context/Category Quick Replies Chips */}
+                      <div className="react-quick-replies" style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '8px 12px 12px', background: '#f8fafc', borderBottom: '1px solid var(--border-color)', width: '100%', boxSizing: 'border-box', WebkitOverflowScrolling: 'touch' }}>
+                        {getQuickReplies(selectedProduct).map((reply, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => sendQuickReplyMessage(reply)}
+                            style={{ flexShrink: 0, background: '#fff', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 'bold', color: 'var(--text-dark)', cursor: 'pointer', boxShadow: 'var(--shadow-sm)' }}
+                          >
+                            {reply}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="chat-input-row">
                       {isRecording ? (
                         <div className="recording-status">
                           <span className="recording-dot"></span>
@@ -1269,7 +1424,7 @@ function App() {
                         </button>
                       )}
                     </div>
-                  )}
+                  </>)}
                 </div>
               )}
             </div>

@@ -62,6 +62,15 @@ if ($category_filter) {
     $params[] = $category_filter;
 }
 
+$user_location = $_SESSION['user_location'] ?? null;
+$radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
+if ($radius && $user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
+    $lat = floatval($user_location['lat']);
+    $lng = floatval($user_location['lng']);
+    $where_clause .= " AND (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) <= ?";
+    $params[] = $radius;
+}
+
 // Fetch products
 try {
     $stmt = $pdo->prepare("SELECT p.*, c.name as category_name, pi.image_path as main_image 
@@ -211,6 +220,45 @@ if ($category_filter) {
     <div style="margin-bottom: 32px; display: flex; justify-content: space-between; align-items: center;">
         <h2 style="color: var(--primary-green-dark); font-size: 28px; font-weight: 700;">Fresh Recommendations</h2>
     </div>
+
+    <!-- Premium Proximity Slider -->
+    <?php if ($user_location && isset($user_location['lat'])): ?>
+        <div class="glass-card" style="padding: 20px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--white); margin-bottom: 32px; box-shadow: var(--shadow-sm);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px;">
+                    <i class="fa fa-map-marker-alt" style="color: var(--primary-green);"></i> Distance Range
+                </h3>
+                <span style="font-size: 13px; font-weight: 600; color: var(--primary-green-dark);" id="radius-val-label">
+                    <?= $radius ? $radius . ' km' : 'All Kerala' ?>
+                </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <input type="range" id="proximity-slider" min="0" max="100" step="5" value="<?= $radius ?? 0 ?>" style="flex: 1; accent-color: var(--primary-green); height: 6px; cursor: pointer;">
+                <button onclick="applyRadiusFilter()" class="btn-primary" style="padding: 8px 18px; font-size: 13px; border-radius: 16px; font-weight: 700;">Apply</button>
+            </div>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: var(--text-muted);">
+                Centred on <strong><?= htmlspecialchars($user_location['name'] ?? 'Your Location') ?></strong>
+            </p>
+        </div>
+        <script>
+            const slider = document.getElementById('proximity-slider');
+            const label = document.getElementById('radius-val-label');
+            slider.addEventListener('input', function() {
+                const val = parseInt(this.value);
+                label.innerText = val === 0 ? 'All Kerala' : val + ' km';
+            });
+            function applyRadiusFilter() {
+                const val = parseInt(slider.value);
+                const url = new URL(window.location.href);
+                if (val === 0) {
+                    url.searchParams.delete('radius');
+                } else {
+                    url.searchParams.set('radius', val);
+                }
+                window.location.href = url.toString();
+            }
+        </script>
+    <?php endif; ?>
 
     <?php if (empty($products)): ?>
         <div

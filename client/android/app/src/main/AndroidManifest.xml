@@ -35,11 +35,10 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <service
+        <receiver
             android:name=".BackgroundNotificationService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"

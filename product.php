@@ -26,6 +26,14 @@ try {
     $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
     $update_views->execute([$product_id]);
 
+    // Increment daily analytics view count
+    try {
+        $stmt_an = $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) 
+                                 VALUES (?, 'view', CURRENT_DATE, 1) 
+                                 ON DUPLICATE KEY UPDATE click_count = click_count + 1");
+        $stmt_an->execute([$product_id]);
+    } catch (Exception $e) {}
+
     // Track recently viewed products in cookies
     $recently_viewed = [];
     if (isset($_COOKIE['recently_viewed'])) {
@@ -80,6 +88,11 @@ try {
 
 } catch (PDOException $e) {
     $product = null;
+}
+
+if ($product) {
+    require_once 'includes/helpers.php';
+    $metrics = getUserTrustMetrics($product['user_id']);
 }
 
 require_once 'includes/header.php';
@@ -219,9 +232,34 @@ require_once 'includes/header.php';
                                     <div class="seller-avatar-placeholder"><?= strtoupper(substr($product['username'], 0, 1)) ?>
                                     </div>
                                 <?php endif; ?>
-                                <div class="seller-names">
-                                    <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-dark);"><?= htmlspecialchars($product['username']) ?></h4>
-                                    <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">Member since <?= date('Y', strtotime($product['created_at'])) ?></p>
+                                <div class="seller-names" style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-dark);"><?= htmlspecialchars($product['username']) ?></h4>
+                                        <?php if ($metrics['phone_verified'] || $metrics['email_verified']): ?>
+                                            <i class="fa fa-check-circle" style="color: #22c55e; font-size: 14px;" title="Verified Seller"></i>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-muted);">Member since <?= htmlspecialchars(date('Y', strtotime($product['created_at']))) ?></p>
+                                    
+                                    <!-- Star Ratings -->
+                                    <div style="display: flex; align-items: center; gap: 4px; margin-top: 4px; color: #facc15; font-size: 11px;">
+                                        <span>
+                                            <?php
+                                            $stars = round($metrics['avg_rating']);
+                                            for ($i = 1; $i <= 5; $i++) {
+                                                echo $i <= $stars ? '<i class="fa fa-star"></i>' : '<i class="far fa-star"></i>';
+                                            }
+                                            ?>
+                                        </span>
+                                        <span style="color: var(--text-muted); font-size: 11px; font-weight: 600;">
+                                            (<?= $metrics['review_count'] ?>)
+                                        </span>
+                                    </div>
+
+                                    <!-- Responsiveness indicator -->
+                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= htmlspecialchars($metrics['response_time']) ?>">
+                                        <i class="fa fa-reply" style="font-size: 10px;"></i> <?= htmlspecialchars($metrics['response_time']) ?>
+                                    </div>
                                 </div>
                             </a>
 
