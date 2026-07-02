@@ -104,9 +104,25 @@ $active_spec = $_GET['spec'] ?? null;
 $where_clause = "WHERE p.status = 'active'";
 $params = [];
 
+// Determine if the category filter is an L2 category (subcategory)
+$is_l2_filter = false;
+$parent_id = null;
 if ($category_filter) {
-    $where_clause .= " AND (p.category_id = ? OR c.parent_id = ?)";
-    $params[] = $category_filter;
+    $cat_stmt = $pdo->prepare("SELECT parent_id FROM categories WHERE id = ?");
+    $cat_stmt->execute([$category_filter]);
+    $cat_info = $cat_stmt->fetch();
+    if ($cat_info) {
+        if ($cat_info['parent_id'] !== null) {
+            $is_l2_filter = true; // It has a parent, so it's a subcategory (L2)
+            $parent_id = $cat_info['parent_id'];
+        } else {
+            $parent_id = $category_filter; // It is a parent category (L1)
+        }
+    }
+}
+
+if ($is_l2_filter) {
+    $where_clause .= " AND p.category_id = ?";
     $params[] = $category_filter;
 }
 
@@ -169,7 +185,7 @@ if ($radius && $user_location && isset($user_location['lat']) && isset($user_loc
 }
 
 $post_type = $_GET['post_type'] ?? null;
-$is_filtered_view = ($post_type || $search_query || $category_filter || $radius || $active_spec);
+$is_filtered_view = ($post_type || $search_query || $is_l2_filter || $radius || $active_spec);
 $products = [];
 $sell_products = [];
 $rent_products = [];
