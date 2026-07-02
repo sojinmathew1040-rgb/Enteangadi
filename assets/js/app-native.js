@@ -191,7 +191,7 @@ window.EnteangadiMobile = {
     /**
      * Trigger a native or standard web notification
      */
-    showLocalNotification: function (senderName, messageText) {
+    showLocalNotification: function (senderName, messageText, senderId, productId) {
         // App logo resolution (fallback to logo_1778137117.jpg if app_logo setting not specified)
         let logoUrl = '/Enteangadi/uploads/logo/logo_1778137117.jpg';
         if (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.baseUrl !== undefined) {
@@ -209,6 +209,11 @@ window.EnteangadiMobile = {
 
         if (this.isRunningInMobile() && window.Capacitor.Plugins.LocalNotifications) {
             try {
+                if (senderId && productId) {
+                    const isMuted = localStorage.getItem('muted_chat_' + senderId + '_' + productId) === 'true';
+                    if (isMuted) return;
+                }
+
                 window.Capacitor.Plugins.LocalNotifications.schedule({
                     notifications: [{
                         title: "Enteangadi - " + senderName,
@@ -217,7 +222,12 @@ window.EnteangadiMobile = {
                         schedule: { at: new Date(Date.now() + 100) },
                         sound: "default",
                         smallIcon: "res://ic_stat_logo",
-                        largeIcon: "res://ic_launcher"
+                        largeIcon: "res://ic_launcher",
+                        actionTypeId: 'CHAT_MSG_ACTIONS',
+                        extra: {
+                            sender_id: senderId,
+                            product_id: productId
+                        }
                     }]
                 });
                 console.log("Capacitor local notification scheduled successfully.");
@@ -972,6 +982,80 @@ document.addEventListener('click', (e) => {
                 convertPhoneInput(input);
             }
         });
+    }
+
+    // Setup interactive notification action types and action handlers for native builds
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        try {
+            window.Capacitor.Plugins.LocalNotifications.registerActionTypes({
+                types: [
+                    {
+                        id: 'CHAT_MSG_ACTIONS',
+                        actions: [
+                            {
+                                id: 'reply',
+                                title: 'Reply',
+                                input: true,
+                                inputPlaceholder: 'Type a message...'
+                            },
+                            {
+                                id: 'read',
+                                title: 'Mark as read',
+                                foreground: false
+                            },
+                            {
+                                id: 'mute',
+                                title: 'Mute',
+                                foreground: false
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            window.Capacitor.Plugins.LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+                console.log("Web native-bridge localNotificationActionPerformed:", action);
+                const extra = action.notification.extra;
+                if (!extra || !extra.sender_id || !extra.product_id) return;
+
+                const senderId = extra.sender_id;
+                const productId = extra.product_id;
+                const baseUrl = (typeof EnteangadiConfig !== 'undefined' && EnteangadiConfig.baseUrl) ? EnteangadiConfig.baseUrl : '';
+
+                if (action.actionId === 'reply' && action.inputValue) {
+                    const text = action.inputValue.trim();
+                    if (text) {
+                        const formData = new FormData();
+                        formData.append('action', 'send');
+                        formData.append('receiver_id', senderId);
+                        formData.append('product_id', productId);
+                        formData.append('message', text);
+
+                        fetch(baseUrl + '/user/api_chat.php', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(res => res.json())
+                        .then(resData => {
+                            console.log("Web native-bridge interactive reply response:", resData);
+                            if (typeof fetchMessages === 'function') fetchMessages();
+                        });
+                    }
+                } else if (action.actionId === 'read') {
+                    fetch(baseUrl + '/user/api_chat.php?action=fetch&other_id=' + senderId + '&product_id=' + productId)
+                    .then(res => res.json())
+                    .then(resData => {
+                        console.log("Web native-bridge interactive mark-read response:", resData);
+                        if (typeof fetchMessages === 'function') fetchMessages();
+                    });
+                } else if (action.actionId === 'mute') {
+                    localStorage.setItem('muted_chat_' + senderId + '_' + productId, 'true');
+                    console.log("Web native-bridge chat muted:", senderId, productId);
+                }
+            });
+        } catch (e) {
+            console.warn("Web native-bridge LocalNotifications init failed:", e);
+        }
     }
 
     if (document.readyState === 'loading') {

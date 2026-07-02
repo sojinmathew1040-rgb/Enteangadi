@@ -84,7 +84,7 @@ CREATE TABLE `app_settings` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `setting_key` (`setting_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=46777 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=47101 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -200,6 +200,7 @@ CREATE TABLE `messages` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `deleted_by_sender` tinyint(1) DEFAULT 0,
   `deleted_by_receiver` tinyint(1) DEFAULT 0,
+  `is_delivered` int(11) DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `sender_id` (`sender_id`),
   KEY `receiver_id` (`receiver_id`),
@@ -216,7 +217,7 @@ CREATE TABLE `messages` (
 
 LOCK TABLES `messages` WRITE;
 /*!40000 ALTER TABLE `messages` DISABLE KEYS */;
-INSERT INTO `messages` VALUES (34,9,8,10,'Are there any scratches or functional defects?',1,'2026-07-02 09:01:25',0,0),(35,9,8,10,'Does it include the original bill and box?',1,'2026-07-02 09:01:26',0,0),(40,8,9,10,'Does it include the original bill and box?',1,'2026-07-02 09:28:15',0,0);
+INSERT INTO `messages` VALUES (34,9,8,10,'Are there any scratches or functional defects?',1,'2026-07-02 09:01:25',0,0,0),(35,9,8,10,'Does it include the original bill and box?',1,'2026-07-02 09:01:26',0,0,0),(40,8,9,10,'Does it include the original bill and box?',1,'2026-07-02 09:28:15',0,0,0);
 /*!40000 ALTER TABLE `messages` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -500,4 +501,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-07-02 15:49:18
+-- Dump completed on 2026-07-02 16:09:09

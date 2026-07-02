@@ -198,7 +198,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 if (!isChatPage) {
                                     // Trigger native/Capacitor notification
                                     if (window.EnteangadiMobile && typeof window.EnteangadiMobile.showLocalNotification === 'function') {
-                                        window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'User', msg.message_text);
+                                         window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'User', msg.message_text, msg.sender_id, msg.product_id);
                                     }
                                     showToast("New message from " + (msg.sender_name || "User"));
                                 }

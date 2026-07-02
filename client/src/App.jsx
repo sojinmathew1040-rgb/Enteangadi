@@ -136,7 +136,7 @@ function App() {
           }
           return false;
         },
-        showLocalNotification: function (senderName, messageText) {
+        showLocalNotification: function (senderName, messageText, senderId, productId) {
           let logoUrl = `${backendUrl}/uploads/logo/logo_1778137117.jpg`;
           let bodyText = messageText || '';
           if (bodyText.startsWith('[AUDIO]:')) {
@@ -147,6 +147,11 @@ function App() {
 
           if (this.isRunningInMobile() && window.Capacitor.Plugins.LocalNotifications) {
             try {
+              if (senderId && productId) {
+                const isMuted = localStorage.getItem(`muted_chat_${senderId}_${productId}`) === 'true';
+                if (isMuted) return;
+              }
+
               window.Capacitor.Plugins.LocalNotifications.schedule({
                 notifications: [{
                   title: "Enteangadi - " + senderName,
@@ -155,7 +160,12 @@ function App() {
                   schedule: { at: new Date(Date.now() + 100) },
                   sound: "default",
                   smallIcon: "res://ic_stat_logo",
-                  largeIcon: "res://ic_launcher"
+                  largeIcon: "res://ic_launcher",
+                  actionTypeId: 'CHAT_MSG_ACTIONS',
+                  extra: {
+                    sender_id: senderId,
+                    product_id: productId
+                  }
                 }]
               });
               console.log("Capacitor local notification scheduled successfully inside React app.");
@@ -398,6 +408,83 @@ function App() {
     const timer = setTimeout(() => {
       if (window.EnteangadiMobile && typeof window.EnteangadiMobile.requestNotificationPermission === 'function') {
         window.EnteangadiMobile.requestNotificationPermission();
+      }
+
+      // Set up LocalNotification Action types and action listeners
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        try {
+          window.Capacitor.Plugins.LocalNotifications.registerActionTypes({
+            types: [
+              {
+                id: 'CHAT_MSG_ACTIONS',
+                actions: [
+                  {
+                    id: 'reply',
+                    title: 'Reply',
+                    input: true,
+                    inputPlaceholder: 'Type a message...'
+                  },
+                  {
+                    id: 'read',
+                    title: 'Mark as read',
+                    foreground: false
+                  },
+                  {
+                    id: 'mute',
+                    title: 'Mute',
+                    foreground: false
+                  }
+                ]
+              }
+            ]
+          });
+
+          // Listen for actions
+          window.Capacitor.Plugins.LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+            console.log("React app localNotificationActionPerformed:", action);
+            const extra = action.notification.extra;
+            if (!extra || !extra.sender_id || !extra.product_id) return;
+
+            const senderId = extra.sender_id;
+            const productId = extra.product_id;
+
+            if (action.actionId === 'reply' && action.inputValue) {
+              const text = action.inputValue.trim();
+              if (text) {
+                const formData = new FormData();
+                formData.append('action', 'send');
+                formData.append('receiver_id', senderId);
+                formData.append('product_id', productId);
+                formData.append('message', text);
+
+                fetch(`${backendUrl}/user/api_chat.php`, {
+                  method: 'POST',
+                  body: formData,
+                  credentials: 'include'
+                })
+                .then(res => res.json())
+                .then(resData => {
+                  console.log("React interactive reply response:", resData);
+                  fetchChatMessages();
+                });
+              }
+            } else if (action.actionId === 'read') {
+              fetch(`${backendUrl}/user/api_chat.php?action=fetch&other_id=${senderId}&product_id=${productId}`, {
+                credentials: 'include'
+              })
+              .then(res => res.json())
+              .then(resData => {
+                console.log("React interactive mark-read response:", resData);
+                fetchChatMessages();
+              });
+            } else if (action.actionId === 'mute') {
+              localStorage.setItem(`muted_chat_${senderId}_${productId}`, 'true');
+              console.log("React chat muted:", senderId, productId);
+            }
+          });
+        } catch (e) {
+          console.warn("React LocalNotifications configuration failed:", e);
+        }
       }
     }, 2500);
 
@@ -1411,7 +1498,18 @@ function App() {
                                 onTouchMove={() => cancelLongPress(lastImageMsg.id)}
                               >
                                 {renderImageGroup(group)}
-                                <span className="msg-time">{time}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '4px', opacity: 0.8 }}>
+                                  <span className="msg-time" style={{ fontSize: '10px', fontWeight: 600 }}>{time}</span>
+                                  {group.isMe && (
+                                    lastImageMsg.is_read == 1 ? (
+                                      <span className="msg-status seen" style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 'bold' }}>✓✓</span>
+                                    ) : lastImageMsg.is_delivered == 1 ? (
+                                      <span className="msg-status delivered" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.9)' }}>✓✓</span>
+                                    ) : (
+                                      <span className="msg-status sent" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)' }}>✓</span>
+                                    )
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -1440,7 +1538,18 @@ function App() {
                                 ) : (
                                   <div className="message-text">{msg.message_text}</div>
                                 )}
-                                <span className="msg-time">{time}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '4px', opacity: 0.8 }}>
+                                  <span className="msg-time" style={{ fontSize: '10px', fontWeight: 600 }}>{time}</span>
+                                  {isMe && (
+                                    msg.is_read == 1 ? (
+                                      <span className="msg-status seen" style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 'bold' }}>✓✓</span>
+                                    ) : msg.is_delivered == 1 ? (
+                                      <span className="msg-status delivered" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.9)' }}>✓✓</span>
+                                    ) : (
+                                      <span className="msg-status sent" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)' }}>✓</span>
+                                    )
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );

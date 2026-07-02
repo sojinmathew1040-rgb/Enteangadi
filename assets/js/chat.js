@@ -229,6 +229,16 @@ function fetchMessages() {
         });
 }
 
+function getMsgStatusIcon(msg) {
+    if (msg.is_read == 1) {
+        return '<i class="fa fa-check-double msg-status seen" style="color: #38bdf8; font-weight: 900;" title="Read"></i>';
+    } else if (msg.is_delivered == 1) {
+        return '<i class="fa fa-check-double msg-status delivered" style="color: rgba(255,255,255,0.9);" title="Delivered"></i>';
+    } else {
+        return '<i class="fa fa-check msg-status sent" style="color: rgba(255,255,255,0.6);" title="Sent"></i>';
+    }
+}
+
 function renderMessages(messages) {
     const chatBox = document.getElementById('chat-box');
     if (!chatBox) return;
@@ -251,7 +261,7 @@ function renderMessages(messages) {
         newMessages.forEach(msg => {
             const isMe = typeof myId !== 'undefined' && msg.sender_id == myId;
             if (!isMe && window.EnteangadiMobile && typeof window.EnteangadiMobile.showLocalNotification === 'function') {
-                window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'Buyer/Seller', msg.message_text);
+                window.EnteangadiMobile.showLocalNotification(msg.sender_name || 'Buyer/Seller', msg.message_text, msg.sender_id, msg.product_id);
             }
         });
     }
@@ -273,7 +283,7 @@ function renderMessages(messages) {
                         ${renderImageGroupHTML(group)}
                         <div class="message-meta">
                             <span class="msg-time">${time}</span>
-                            ${isMe ? '<i class="fa fa-check-double msg-status"></i>' : ''}
+                            ${isMe ? getMsgStatusIcon(lastImageMsg) : ''}
                         </div>
                     </div>
                 </div>
@@ -310,7 +320,7 @@ function renderMessages(messages) {
                         ${messageContent}
                         <div class="message-meta">
                             <span class="msg-time">${time}</span>
-                            ${isMe ? '<i class="fa fa-check-double msg-status"></i>' : ''}
+                            ${isMe ? getMsgStatusIcon(msg) : ''}
                         </div>
                     </div>
                 </div>

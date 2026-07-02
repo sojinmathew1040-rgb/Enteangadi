@@ -152,8 +152,8 @@ if ($action === 'send') {
 
     if ($other_id && $product_id) {
         try {
-            // Mark messages as read
-            $update_stmt = $pdo->prepare("UPDATE messages SET is_read = 1 WHERE receiver_id = ? AND sender_id = ? AND product_id = ? AND is_read = 0 AND deleted_by_receiver = 0");
+            // Mark messages as read and delivered
+            $update_stmt = $pdo->prepare("UPDATE messages SET is_read = 1, is_delivered = 1 WHERE receiver_id = ? AND sender_id = ? AND product_id = ? AND is_read = 0 AND deleted_by_receiver = 0");
             $update_stmt->execute([$my_id, $other_id, $product_id]);
 
             // Fetch messages (only those not deleted by the current user)

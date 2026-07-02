@@ -25,6 +25,13 @@ try {
     $stmt->execute([$my_id]);
     $unread_messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    if (!empty($unread_messages)) {
+        $unread_ids = array_column($unread_messages, 'id');
+        $placeholders = implode(',', array_fill(0, count($unread_ids), '?'));
+        $upd_stmt = $pdo->prepare("UPDATE messages SET is_delivered = 1 WHERE id IN ($placeholders) AND is_delivered = 0");
+        $upd_stmt->execute($unread_ids);
+    }
+
     echo json_encode(['success' => true, 'messages' => $unread_messages]);
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'messages' => []]);
