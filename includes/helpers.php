@@ -134,6 +134,20 @@ if (!function_exists('isTextInappropriate')) {
      */
     function isTextInappropriate($text)
     {
+        global $pdo;
+        if (isset($pdo)) {
+            try {
+                $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'adult_content_check'");
+                $stmt->execute();
+                $check = $stmt->fetchColumn();
+                if ($check === '0') {
+                    return false;
+                }
+            } catch (Exception $e) {
+                // Fail silently
+            }
+        }
+
         if (empty($text)) {
             return false;
         }
@@ -185,6 +199,20 @@ if (!function_exists('isImageNSFW')) {
      */
     function isImageNSFW($tmpFilePath)
     {
+        global $pdo;
+        if (isset($pdo)) {
+            try {
+                $stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'adult_content_check'");
+                $stmt->execute();
+                $check = $stmt->fetchColumn();
+                if ($check === '0') {
+                    return false;
+                }
+            } catch (Exception $e) {
+                // Fail silently
+            }
+        }
+
         if (empty($tmpFilePath) || !file_exists($tmpFilePath)) {
             return false;
         }

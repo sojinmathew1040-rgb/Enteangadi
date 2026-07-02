@@ -26,6 +26,20 @@ try {
         perm_label VARCHAR(100) NOT NULL
     )");
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        setting_key VARCHAR(50) UNIQUE NOT NULL,
+        setting_value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )");
+
+    $pdo->exec("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES 
+        ('app_logo', ''),
+        ('app_name', 'Enteangadi'),
+        ('app_tagline', 'Your Local Marketplace'),
+        ('announcement_poster', ''),
+        ('adult_content_check', '1')");
+
     // Check count and seed if zero
     $count = $pdo->query("SELECT COUNT(*) FROM staff_permissions_list")->fetchColumn();
     if ($count == 0) {
@@ -47,21 +61,6 @@ try {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'branding') {
-        // Ensure table exists
-        $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            setting_key VARCHAR(50) UNIQUE NOT NULL,
-            setting_value TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )");
-
-        // Ensure default keys exist
-        $pdo->exec("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES 
-            ('app_logo', ''),
-            ('app_name', 'Enteangadi'),
-            ('app_tagline', 'Your Local Marketplace'),
-            ('announcement_poster', '')");
-
         $tagline = $_POST['app_tagline'] ?? '';
 
         // Update tagline
@@ -112,6 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'app_name'");
         $stmt->execute([$app_name]);
         $success = "General settings updated successfully.";
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'adult_content') {
+        $check = isset($_POST['adult_content_check']) ? '1' : '0';
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('adult_content_check', ?) 
+                             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->execute([$check]);
+        $success = "Adult content settings updated successfully.";
     } elseif (isset($_POST['action']) && $_POST['action'] === 'contact') {
         $fields = [
             'support_email',
@@ -1086,6 +1091,14 @@ require_once 'includes/header.php';
                         <p>Site name and global info</p>
                     </div>
                 </div>
+
+                <div class="settings-card" onclick="showSection('adult_content')">
+                    <i class="fa fa-ban" style="color: #ef4444;"></i>
+                    <div>
+                        <h3>Adult Content</h3>
+                        <p>Toggle verification logic</p>
+                    </div>
+                </div>
             <?php endif; ?>
 
             <?php if (has_permission('manage_contact')): ?>
@@ -1647,6 +1660,50 @@ require_once 'includes/header.php';
 
                 <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save
                     General Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Adult Content Section -->
+    <div id="section-adult_content"
+        class="settings-section <?= (isset($_POST['action']) && $_POST['action'] === 'adult_content') ? 'active' : '' ?>">
+        <button class="back-btn" onclick="showSection('grid')">
+            <i class="fa fa-arrow-left"></i> Back to Dashboard
+        </button>
+
+        <div class="settings-form-wrapper">
+            <div class="section-header">
+                <h2>Adult Content Settings</h2>
+            </div>
+
+            <form method="POST" action="settings.php">
+                <input type="hidden" name="action" value="adult_content">
+
+                <div style="background: #fff8f8; padding: 24px; border-radius: 20px; border: 1.5px solid #fee2e2; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 16px;">
+                    <i class="fa fa-exclamation-triangle" style="font-size: 24px; color: #ef4444; margin-top: 2px;"></i>
+                    <div>
+                        <h4 style="margin: 0 0 6px 0; color: #991b1b; font-weight: 800; font-size: 16px;">Moderation Policy</h4>
+                        <p style="margin: 0; color: #7f1d1d; font-size: 13px; line-height: 1.5;">
+                            When enabled, Enteangadi automatically scans ad titles, descriptions, and uploaded images/profile pictures for inappropriate keywords and NSFW content before allowing them to be published.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-group"
+                    style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                    <div>
+                        <label
+                            style="font-weight: 700; margin-bottom: 2px; display: block; cursor: pointer; font-size: 13px;">Enable Adult Content Check</label>
+                        <span style="font-size: 11px; color: var(--text-muted);">Enable 18+ keyword scans and image verification.</span>
+                    </div>
+                    <label class="switch" style="transform: scale(0.9);">
+                        <input type="checkbox" name="adult_content_check" value="1"
+                            <?= ($app_settings['adult_content_check'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save Settings</button>
             </form>
         </div>
     </div>
