@@ -589,9 +589,21 @@ require_once '../includes/header.php';
             });
     }
 
+    function getMediaStream() {
+        const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
+        if (isMobile && typeof window.EnteangadiMobile.requestAllPermissions === 'function') {
+            return window.EnteangadiMobile.requestAllPermissions()
+                .then(function() {
+                    return navigator.mediaDevices.getUserMedia({ audio: true });
+                });
+        } else {
+            return navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+    }
+
     function establishPeerJSCall() {
         const statusLabel = document.getElementById('callStatusLabel');
-        navigator.mediaDevices.getUserMedia({ audio: true })
+        getMediaStream()
             .then(function(stream) {
                 localAudioStream = stream;
                 const receiverPeerId = `enteangadi-user-${otherId}`;
@@ -625,7 +637,7 @@ require_once '../includes/header.php';
                 document.getElementById('declineCallBtn').style.display = 'none';
                 document.getElementById('acceptCallBtn').style.display = 'none';
                 
-                return navigator.mediaDevices.getUserMedia({ audio: true });
+                return getMediaStream();
             })
             .then(function(stream) {
                 localAudioStream = stream;
