@@ -12,6 +12,7 @@ return [
     'wanted' => 'Looking For',
     'for_sale' => 'For Sale',
     'for_rent' => 'For Rent',
+    'recently_viewed' => 'Recently viewed items',
     'expires_today' => 'Expires Today',
     'expiring_soon' => 'Expiring Soon',
     'no_products' => 'No products found',

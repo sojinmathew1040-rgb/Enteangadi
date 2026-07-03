@@ -54,8 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         // 2. Server-side video file exclusion
         elseif (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
-            foreach ($_FILES['images']['type'] as $type) {
-                if (strpos($type, 'video/') === 0) {
+            foreach ($_FILES['images']['type'] as $img_type) {
+                if (strpos($img_type, 'video/') === 0) {
                     $error = "Videos are not allowed on ad postings.";
                     break;
                 }

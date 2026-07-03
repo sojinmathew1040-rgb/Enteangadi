@@ -363,13 +363,20 @@ if ($category_filter) {
         </style>
     </div>
 
-    <?php if (!empty($recently_viewed_products)): ?>
-        <!-- Recently Viewed Items Horizontal Scroll Section -->
-        <div style="margin-bottom: 32px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="color: var(--text-dark, #1e293b); font-size: 20px; font-weight: 700; margin: 0;">Recently viewed items</h2>
+    <!-- Recently Viewed Items Horizontal Scroll Section -->
+    <div style="margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="color: var(--text-dark, #1e293b); font-size: 20px; font-weight: 700; margin: 0;"><?= htmlspecialchars(__('recently_viewed')) ?></h2>
+            <?php if (!empty($recently_viewed_products)): ?>
                 <a href="../user/recently_viewed.php" style="font-size: 14px; color: var(--primary-green, #1B5E20); text-decoration: none; font-weight: 700;">View All</a>
+            <?php endif; ?>
+        </div>
+        <?php if (empty($recently_viewed_products)): ?>
+            <div style="padding: 24px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa fa-history" style="color: var(--text-muted); font-size: 16px;"></i>
+                <span style="color: var(--text-muted); font-size: 13px; font-weight: 500;">No recently viewed items yet.</span>
             </div>
+        <?php else: ?>
             <div class="recently-viewed-scroll-container" style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 12px; scrollbar-width: none; -ms-overflow-style: none; scroll-behavior: smooth;">
                 <?php foreach ($recently_viewed_products as $rv_p): ?>
                     <a href="product.php?id=<?= $rv_p['id'] ?>" class="recently-viewed-card" style="text-decoration: none; flex: 0 0 auto; width: 150px; background: var(--white, #fff); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color, #e2e8f0); box-shadow: var(--shadow-sm); display: flex; flex-direction: column; transition: all 0.3s ease;">
@@ -398,19 +405,19 @@ if ($category_filter) {
                     </a>
                 <?php endforeach; ?>
             </div>
-        </div>
-        
-        <style>
-        .recently-viewed-scroll-container::-webkit-scrollbar {
-            display: none;
-        }
-        .recently-viewed-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
-            border-color: var(--primary-green-light, #a5d6a7) !important;
-        }
-        </style>
-    <?php endif; ?>
+        <?php endif; ?>
+    </div>
+    
+    <style>
+    .recently-viewed-scroll-container::-webkit-scrollbar {
+        display: none;
+    }
+    .recently-viewed-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+        border-color: var(--primary-green-light, #a5d6a7) !important;
+    }
+    </style>
     <?php endif; ?>
 
     <!-- Recommendations Header space -->
@@ -682,20 +689,17 @@ if ($category_filter) {
     <?php else: ?>
         <!-- Default Sectioned Homepage Recommendations -->
         
-        <?php if (empty($sell_products) && empty($rent_products) && empty($buy_products) && empty($fresh_products)): ?>
-            <div style="text-align: center; padding: 60px 20px; background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); margin-top: 32px;">
-                <i class="fa fa-box-open" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
-                <h3 style="color: var(--text-dark); margin-bottom: 8px;">No products found</h3>
-                <p style="color: var(--text-muted); margin-bottom: 16px;">Try adjusting your distance range or clearing the filter.</p>
-                <a href="index.php" class="btn-primary" style="display: inline-block;">Clear Filters</a>
-            </div>
-        <?php else: ?>
             <!-- 1. Fresh Recommendations Section -->
-            <?php if (!empty($fresh_products)): ?>
-                <div class="section-header-premium">
-                    <h2 class="section-title-premium"><?= htmlspecialchars(__('fresh_recommendations')) ?></h2>
+            <div class="section-header-premium">
+                <h2 class="section-title-premium"><?= htmlspecialchars(__('fresh_recommendations')) ?></h2>
+            </div>
+            <?php if (empty($fresh_products)): ?>
+                <div style="padding: 24px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;">
+                    <i class="fa fa-sparkles" style="color: var(--text-muted); font-size: 16px;"></i>
+                    <span style="color: var(--text-muted); font-size: 13px; font-weight: 500;">No recommendations available right now.</span>
                 </div>
-                <div class="product-grid">
+            <?php else: ?>
+                <div class="product-grid" style="margin-bottom: 24px;">
                     <?php foreach ($fresh_products as $product) {
                         echo renderProductCard($product, $base_url, true);
                     } ?>
@@ -703,12 +707,19 @@ if ($category_filter) {
             <?php endif; ?>
 
             <!-- 2. For Sale Section -->
-            <?php if (!empty($sell_products)): ?>
-                <div class="section-header-premium">
-                    <h2 class="section-title-premium"><?= htmlspecialchars(__('for_sale')) ?></h2>
+            <div class="section-header-premium">
+                <h2 class="section-title-premium"><?= htmlspecialchars(__('for_sale')) ?></h2>
+                <?php if (!empty($sell_products)): ?>
                     <a href="index.php?post_type=sell<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
+                <?php endif; ?>
+            </div>
+            <?php if (empty($sell_products)): ?>
+                <div style="padding: 24px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;">
+                    <i class="fa fa-tag" style="color: var(--text-muted); font-size: 16px;"></i>
+                    <span style="color: var(--text-muted); font-size: 13px; font-weight: 500;">No items for sale yet. Be the first to post!</span>
                 </div>
-                <div class="product-grid">
+            <?php else: ?>
+                <div class="product-grid" style="margin-bottom: 24px;">
                     <?php foreach ($sell_products as $product) {
                         echo renderProductCard($product, $base_url, true);
                     } ?>
@@ -716,12 +727,19 @@ if ($category_filter) {
             <?php endif; ?>
 
             <!-- 3. Wanted Section -->
-            <?php if (!empty($buy_products)): ?>
-                <div class="section-header-premium">
-                    <h2 class="section-title-premium"><?= htmlspecialchars(__('wanted')) ?></h2>
+            <div class="section-header-premium">
+                <h2 class="section-title-premium"><?= htmlspecialchars(__('wanted')) ?></h2>
+                <?php if (!empty($buy_products)): ?>
                     <a href="index.php?post_type=buy<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
+                <?php endif; ?>
+            </div>
+            <?php if (empty($buy_products)): ?>
+                <div style="padding: 24px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;">
+                    <i class="fa fa-search" style="color: var(--text-muted); font-size: 16px;"></i>
+                    <span style="color: var(--text-muted); font-size: 13px; font-weight: 500;">No looking-for requests yet. Be the first to post!</span>
                 </div>
-                <div class="product-grid">
+            <?php else: ?>
+                <div class="product-grid" style="margin-bottom: 24px;">
                     <?php foreach ($buy_products as $product) {
                         echo renderProductCard($product, $base_url, true);
                     } ?>
@@ -729,18 +747,24 @@ if ($category_filter) {
             <?php endif; ?>
 
             <!-- 4. For Rent Section -->
-            <?php if (!empty($rent_products)): ?>
-                <div class="section-header-premium">
-                    <h2 class="section-title-premium"><?= htmlspecialchars(__('for_rent')) ?></h2>
+            <div class="section-header-premium">
+                <h2 class="section-title-premium"><?= htmlspecialchars(__('for_rent')) ?></h2>
+                <?php if (!empty($rent_products)): ?>
                     <a href="index.php?post_type=rent<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
+                <?php endif; ?>
+            </div>
+            <?php if (empty($rent_products)): ?>
+                <div style="padding: 24px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); border-radius: 16px; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;">
+                    <i class="fa fa-key" style="color: var(--text-muted); font-size: 16px;"></i>
+                    <span style="color: var(--text-muted); font-size: 13px; font-weight: 500;">No rentals listed yet. Be the first to post!</span>
                 </div>
-                <div class="product-grid">
+            <?php else: ?>
+                <div class="product-grid" style="margin-bottom: 24px;">
                     <?php foreach ($rent_products as $product) {
                         echo renderProductCard($product, $base_url, true);
                     } ?>
                 </div>
             <?php endif; ?>
-        <?php endif; ?>
 
     <?php endif; ?>
     </div> <!-- Close home-listings-container -->
