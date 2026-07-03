@@ -463,13 +463,25 @@ try {
                     <i class="fa fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i>
                 </div>
 
-                <div class="search-container-header" style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                    <form action="<?= $base_url ?>/index.php" method="GET" style="display: flex; flex: 1; align-items: center; position: relative;">
-                        <input type="text" name="search" id="header-search-input" placeholder="<?= __('search_placeholder') ?>"
-                            value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" style="padding-right: 36px;">
-                        <button type="button" id="header-search-mic-btn" style="position: absolute; right: 40px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; width: 30px;" onclick="startVoiceSearch(event)"><i class="fa fa-microphone"></i></button>
-                        <button type="submit"><i class="fa fa-search"></i></button>
-                    </form>
+                <div class="search-and-notification-wrapper" style="display: flex; align-items: center; gap: 10px; flex: 1; width: 100%;">
+                    <div class="search-container-header" style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                        <form action="<?= $base_url ?>/index.php" method="GET" style="display: flex; flex: 1; align-items: center; position: relative; margin: 0; width: 100%;">
+                            <input type="text" name="search" id="header-search-input" placeholder="<?= __('search_placeholder') ?>"
+                                value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" style="padding-right: 36px;">
+                            <button type="button" id="header-search-mic-btn" style="position: absolute; right: 40px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; width: 30px;" onclick="startVoiceSearch(event)"><i class="fa fa-microphone"></i></button>
+                            <button type="submit"><i class="fa fa-search"></i></button>
+                        </form>
+                    </div>
+                    <?php if (isset($_SESSION['user_id'])): ?>
+                        <div class="notification-wrapper mobile-only" style="position: relative; flex-shrink: 0; margin-left: 4px;">
+                            <a href="javascript:void(0)" onclick="toggleNotifications()" title="Notifications"
+                                style="text-decoration: none; font-size: 18px; color: var(--text-dark); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--background); border-radius: 50%; border: 1px solid var(--border-color);">
+                                <i class="fa fa-bell"></i>
+                                <span class="notification-badge-mobile" id="notification-badge-mobile"
+                                    style="display: none; position: absolute; top: 0; right: 0; background: var(--danger); color: white; border-radius: 50%; padding: 2px 4px; font-size: 8px; font-weight: bold; line-height: 1;">0</span>
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Premium Listening pulsing modal overlay -->
@@ -764,17 +776,7 @@ try {
                             modal.style.display = 'none';
                         }
                     }
-                </script>      <?php if (isset($_SESSION['user_id'])): ?>
-                        <div class="notification-wrapper mobile-only" style="position: relative;">
-                            <a href="javascript:void(0)" onclick="toggleNotifications()" title="Notifications"
-                                style="text-decoration: none; font-size: 18px; color: var(--text-dark); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--background); border-radius: 50%; border: 1px solid var(--border-color);">
-                                <i class="fa fa-bell"></i>
-                                <span class="notification-badge-mobile" id="notification-badge-mobile"
-                                    style="display: none; position: absolute; top: 0; right: 0; background: var(--danger); color: white; border-radius: 50%; padding: 2px 4px; font-size: 8px; font-weight: bold; line-height: 1;">0</span>
-                            </a>
-                        </div>
-                    <?php endif; ?>
-                </div>
+                </script>                </div>
             </div>
         </div>
     </div>

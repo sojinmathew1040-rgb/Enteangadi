@@ -13,23 +13,11 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             try {
-                Intent alarmIntent = new Intent(context, BackgroundNotificationService.class);
-                PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                    context, 
-                    0, 
-                    alarmIntent, 
-                    PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-                );
-                AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-                if (alarmManager != null) {
-                    // Schedule first check after 10 seconds and repeat every 30 seconds
-                    alarmManager.setRepeating(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        SystemClock.elapsedRealtime() + 10000,
-                        30000,
-                        pendingIntent
-                    );
-                }
+                android.content.SharedPreferences prefs = context.getSharedPreferences("EnteangadiPrefs", Context.MODE_PRIVATE);
+                boolean bgActive = prefs.getBoolean("bg_active", true);
+                long bgInterval = prefs.getLong("bg_interval", 30);
+                
+                BackgroundNotificationService.updateAlarm(context, bgActive, bgInterval);
             } catch (Exception e) {
                 e.printStackTrace();
             }

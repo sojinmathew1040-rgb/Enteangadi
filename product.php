@@ -379,11 +379,11 @@ require_once 'includes/header.php';
                                                 <i class="fab fa-whatsapp"></i>
                                             </a>
                                         <?php endif; ?>
-                                        <?php if (!empty($product['product_phone'])): ?>
-                                            <a href="tel:<?= $product['product_phone'] ?>" class="btn-phone">
-                                                <i class="fa fa-phone"></i>
-                                            </a>
-                                        <?php endif; ?>
+                                         <?php if (!empty($product['product_phone']) && ($app_settings['call_feature_active'] ?? '1') === '1'): ?>
+                                             <a href="tel:<?= $product['product_phone'] ?>" class="btn-phone">
+                                                 <i class="fa fa-phone"></i>
+                                             </a>
+                                         <?php endif; ?>
                                     </div>
                                 <?php else: ?>
                                     <a href="user/edit_ad.php?id=<?= $product['id'] ?>" class="btn-edit-ad">

@@ -33,7 +33,23 @@ try {
         $upd_stmt->execute($unread_ids);
     }
 
-    echo json_encode(['success' => true, 'messages' => $unread_messages]);
+    // Fetch sync settings
+    try {
+        $stmt_set = $pdo->query("SELECT * FROM app_settings WHERE setting_key IN ('bg_notification_active', 'bg_notification_interval')");
+        $sync_settings = [];
+        while ($row = $stmt_set->fetch(PDO::FETCH_ASSOC)) {
+            $sync_settings[$row['setting_key']] = $row['setting_value'];
+        }
+    } catch (Exception $e) {
+        $sync_settings = [];
+    }
+
+    echo json_encode([
+        'success' => true,
+        'messages' => $unread_messages,
+        'bg_notification_active' => $sync_settings['bg_notification_active'] ?? '1',
+        'bg_notification_interval' => $sync_settings['bg_notification_interval'] ?? '30'
+    ]);
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'messages' => []]);
 }

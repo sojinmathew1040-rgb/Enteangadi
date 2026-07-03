@@ -101,23 +101,11 @@ public class MainActivity extends BridgeActivity {
 
         // Start optimized background notification polling alarm
         try {
-            Intent alarmIntent = new Intent(this, BackgroundNotificationService.class);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this, 
-                0, 
-                alarmIntent, 
-                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
-            );
-            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-            if (alarmManager != null) {
-                // Poll every 30 seconds
-                alarmManager.setRepeating(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime() + 5000,
-                    30000,
-                    pendingIntent
-                );
-            }
+            android.content.SharedPreferences prefs = getSharedPreferences("EnteangadiPrefs", MODE_PRIVATE);
+            boolean bgActive = prefs.getBoolean("bg_active", true);
+            long bgInterval = prefs.getLong("bg_interval", 30);
+            
+            BackgroundNotificationService.updateAlarm(this, bgActive, bgInterval);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -117,6 +117,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
         $stmt->execute([$check]);
         $success = "Adult content settings updated successfully.";
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'app_features') {
+        $call_active = isset($_POST['call_feature_active']) ? '1' : '0';
+        $bg_active = isset($_POST['bg_notification_active']) ? '1' : '0';
+        $bg_interval = $_POST['bg_notification_interval'] ?? '30';
+
+        $fields = [
+            'call_feature_active' => $call_active,
+            'bg_notification_active' => $bg_active,
+            'bg_notification_interval' => $bg_interval
+        ];
+
+        foreach ($fields as $key => $val) {
+            $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?) 
+                                 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+            $stmt->execute([$key, $val]);
+        }
+        $success = "App feature configurations updated successfully.";
     } elseif (isset($_POST['action']) && $_POST['action'] === 'contact') {
         $fields = [
             'support_email',
@@ -1099,6 +1116,14 @@ require_once 'includes/header.php';
                         <p>Toggle verification logic</p>
                     </div>
                 </div>
+
+                <div class="settings-card" onclick="showSection('app_features')">
+                    <i class="fa fa-sliders-h" style="color: #6366f1;"></i>
+                    <div>
+                        <h3>App Features</h3>
+                        <p>Manage calls & background checks</p>
+                    </div>
+                </div>
             <?php endif; ?>
 
             <?php if (has_permission('manage_contact')): ?>
@@ -1701,6 +1726,64 @@ require_once 'includes/header.php';
                             <?= ($app_settings['adult_content_check'] ?? '1') === '1' ? 'checked' : '' ?>>
                         <span class="slider"></span>
                     </label>
+                </div>
+
+                <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- App Features Section -->
+    <div id="section-app_features"
+        class="settings-section <?= (isset($_POST['action']) && $_POST['action'] === 'app_features') ? 'active' : '' ?>">
+        <button class="back-btn" onclick="showSection('grid')">
+            <i class="fa fa-arrow-left"></i> Back to Dashboard
+        </button>
+
+        <div class="settings-form-wrapper">
+            <div class="section-header">
+                <h2>App Features Config</h2>
+                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Enable or disable mobile functionality and fine-tune intervals.</p>
+            </div>
+
+            <form method="POST" action="settings.php">
+                <input type="hidden" name="action" value="app_features">
+
+                <!-- 1. Phone Call Feature Toggle -->
+                <div class="form-group"
+                    style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                    <div>
+                        <label style="font-weight: 700; margin-bottom: 2px; display: block; cursor: pointer; font-size: 13px;">Enable Call Feature</label>
+                        <span style="font-size: 11px; color: var(--text-muted);">Allow users to make direct phone calls from product pages.</span>
+                    </div>
+                    <label class="switch" style="transform: scale(0.9);">
+                        <input type="checkbox" name="call_feature_active" value="1"
+                            <?= ($app_settings['call_feature_active'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- 2. Background Notification Toggle -->
+                <div class="form-group"
+                    style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                    <div>
+                        <label style="font-weight: 700; margin-bottom: 2px; display: block; cursor: pointer; font-size: 13px;">Enable Background Notification Polling</label>
+                        <span style="font-size: 11px; color: var(--text-muted);">Run background sync intervals to check for new inbox messages.</span>
+                    </div>
+                    <label class="switch" style="transform: scale(0.9);">
+                        <input type="checkbox" name="bg_notification_active" value="1"
+                            <?= ($app_settings['bg_notification_active'] ?? '1') === '1' ? 'checked' : '' ?>>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- 3. Background Notification Interval (Seconds) -->
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="font-size: 13px; font-weight: 700;">Notification Sync Interval (Seconds)</label>
+                    <input type="number" name="bg_notification_interval" class="form-control" min="5" max="86400"
+                        style="padding: 10px;"
+                        value="<?= htmlspecialchars($app_settings['bg_notification_interval'] ?? '30') ?>">
+                    <small style="color: var(--text-muted); display: block; margin-top: 4px; font-size: 11px;">Specify how frequently (in seconds) the background service checks for notifications (e.g. 10 seconds, 3600 seconds for 1 hour).</small>
                 </div>
 
                 <button type="submit" class="btn-primary" style="margin-top: 32px; width: 100%; padding: 14px;">Save Settings</button>

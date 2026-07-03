@@ -8,6 +8,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.os.Build;
+import android.app.AlarmManager;
+import android.os.SystemClock;
 import android.webkit.CookieManager;
 import android.media.RingtoneManager;
 import androidx.core.app.NotificationCompat;
@@ -19,6 +21,33 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class BackgroundNotificationService extends BroadcastReceiver {
+
+    public static void updateAlarm(Context context, boolean active, long intervalSeconds) {
+        try {
+            Intent alarmIntent = new Intent(context, BackgroundNotificationService.class);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context, 
+                0, 
+                alarmIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+            );
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null) {
+                alarmManager.cancel(pendingIntent);
+                if (active) {
+                    long intervalMs = intervalSeconds * 1000;
+                    alarmManager.setRepeating(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        SystemClock.elapsedRealtime() + 5000,
+                        intervalMs,
+                        pendingIntent
+                    );
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -119,6 +148,28 @@ public class BackgroundNotificationService extends BroadcastReceiver {
                 in.close();
 
                 JSONObject data = new JSONObject(response.toString());
+                
+                // Parse and update background sync settings dynamically
+                String bgActiveStr = data.optString("bg_notification_active", "1");
+                long bgInterval = data.optLong("bg_notification_interval", 30);
+                boolean bgActive = "1".equals(bgActiveStr);
+
+                boolean currentActive = prefs.getBoolean("bg_active", true);
+                long currentInterval = prefs.getLong("bg_interval", 30);
+
+                if (bgActive != currentActive || bgInterval != currentInterval) {
+                    prefs.edit()
+                         .putBoolean("bg_active", bgActive)
+                         .putLong("bg_interval", bgInterval)
+                         .apply();
+                    
+                    updateAlarm(context, bgActive, bgInterval);
+                }
+
+                if (!bgActive) {
+                    return;
+                }
+
                 if (data.optBoolean("success", false)) {
                     JSONArray messages = data.optJSONArray("messages");
                     if (messages != null && messages.length() > 0) {
