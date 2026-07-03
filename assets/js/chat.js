@@ -15,7 +15,7 @@ let lightboxIndex = 0;
 
 // MediaRecorder state variables
 let mediaRecorder = null;
-let audioChunks = [];
+let chatAudioChunks = [];
 let recordingTimerInterval = null;
 let recordingSeconds = 0;
 let isRecording = false;
@@ -226,8 +226,29 @@ function fetchMessages() {
         .then(data => {
             if (data.success) {
                 renderMessages(data.messages);
+            } else {
+                handleFetchError(data.error || "Authentication failed.");
             }
+        })
+        .catch(err => {
+            console.error("Fetch messages failed:", err);
+            handleFetchError("Network connection error.");
         });
+}
+
+function handleFetchError(errText) {
+    const chatBox = document.getElementById('chat-box');
+    if (chatBox && isFirstLoad) {
+        chatBox.innerHTML = `
+            <div class="empty-chat-state">
+                <div class="empty-chat-icon" style="color: var(--danger, #ef4444);"><i class="fa fa-exclamation-triangle"></i></div>
+                <h3>Failed to load chat</h3>
+                <p>${escapeHtml(errText)}</p>
+                <button onclick="fetchMessages()" class="btn-primary" style="margin-top: 12px; padding: 8px 16px; font-size: 13px; border-radius: 8px;">Retry</button>
+            </div>
+        `;
+        isFirstLoad = false;
+    }
 }
 
 function getMsgStatusIcon(msg) {
@@ -458,6 +479,8 @@ function sendMessage() {
                 fetchMessages();
                 setTimeout(() => chatBox.scrollTop = chatBox.scrollHeight, 100);
             } else {
+                messageInput.value = text;
+                updateInputButtons();
                 showCustomAlert({
                     title: "Message Failed",
                     message: data.error || "Failed to send message.",
@@ -468,6 +491,8 @@ function sendMessage() {
         })
         .catch(err => {
             console.error("Send message error:", err);
+            messageInput.value = text;
+            updateInputButtons();
             showCustomAlert({
                 title: "Connection Error",
                 message: "Failed to send message due to a connection error.",
@@ -542,15 +567,15 @@ function toggleVoiceRecording() {
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(function(stream) {
                     mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
+                    chatAudioChunks = [];
 
                     mediaRecorder.ondataavailable = function(event) {
-                        audioChunks.push(event.data);
+                        chatAudioChunks.push(event.data);
                     };
 
                     mediaRecorder.onstop = function() {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                        if (audioChunks.length > 0 && recordingSeconds > 0) {
+                        const audioBlob = new Blob(chatAudioChunks, { type: 'audio/wav' });
+                        if (chatAudioChunks.length > 0 && recordingSeconds > 0) {
                             uploadAudioMessage(audioBlob);
                         }
                         stream.getTracks().forEach(function(track) { track.stop(); }); // shut down microhardware
@@ -591,7 +616,7 @@ function stopVoiceRecording(shouldSend) {
     } else {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             if (!shouldSend) {
-                audioChunks = []; // clear chunks
+                chatAudioChunks = []; // clear chunks
             }
             mediaRecorder.stop();
         }

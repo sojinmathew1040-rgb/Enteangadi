@@ -658,6 +658,41 @@ try {
         }
     }
 
+    // Token-Based Header Auto-Login for hybrid/mobile WebView clients
+    if (!isset($_SESSION['user_id'])) {
+        $header_user_id = $_SERVER['HTTP_X_USER_ID'] ?? '';
+        $header_token = $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '';
+        if (empty($header_user_id) && isset($_SERVER['REDIRECT_HTTP_X_USER_ID'])) {
+            $header_user_id = $_SERVER['REDIRECT_HTTP_X_USER_ID'];
+        }
+        if (empty($header_token) && isset($_SERVER['REDIRECT_HTTP_X_SESSION_TOKEN'])) {
+            $header_token = $_SERVER['REDIRECT_HTTP_X_SESSION_TOKEN'];
+        }
+
+        if (!empty($header_user_id) && !empty($header_token)) {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND session_token = ?");
+            $stmt->execute([$header_user_id, $header_token]);
+            $user = $stmt->fetch();
+
+            if ($user) {
+                // Check if user is active (has activity in the last 30 days)
+                $last_act = $user['last_activity'] ? strtotime($user['last_activity']) : strtotime($user['created_at']);
+                if ((time() - $last_act) <= (30 * 24 * 60 * 60)) {
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_role'] = $user['role'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['session_token'] = $user['session_token'];
+
+                    // Update last activity if needed
+                    if (!$user['last_activity'] || (time() - strtotime($user['last_activity'])) > 900) {
+                        $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
+                        $upd->execute([$user['id']]);
+                    }
+                }
+            }
+        }
+    }
+
     // Cookie-Based Server-Side Auto-Login
     if (!isset($_SESSION['user_id']) && isset($_COOKIE['enteangadi_remember_user']) && isset($_COOKIE['enteangadi_remember_token'])) {
         $cookie_user = $_COOKIE['enteangadi_remember_user'];

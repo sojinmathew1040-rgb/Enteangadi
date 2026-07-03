@@ -96,6 +96,24 @@ try {
                 }
                 if (isLocal) {
                     init.credentials = 'include';
+                    
+                    // Inject local storage credentials for WebView/mobile token authentication fallback
+                    const savedUserId = localStorage.getItem('enteangadi_user_id');
+                    const savedToken = localStorage.getItem('enteangadi_session_token');
+                    if (savedUserId && savedToken) {
+                        init.headers = init.headers || {};
+                        if (init.headers instanceof Headers) {
+                            init.headers.set('X-User-Id', savedUserId);
+                            init.headers.set('X-Session-Token', savedToken);
+                        } else if (Array.isArray(init.headers)) {
+                            init.headers = init.headers.filter(h => h[0].toLowerCase() !== 'x-user-id' && h[0].toLowerCase() !== 'x-session-token');
+                            init.headers.push(['X-User-Id', savedUserId]);
+                            init.headers.push(['X-Session-Token', savedToken]);
+                        } else {
+                            init.headers['X-User-Id'] = savedUserId;
+                            init.headers['X-Session-Token'] = savedToken;
+                        }
+                    }
                 }
                 return originalFetch(resource, init);
             };

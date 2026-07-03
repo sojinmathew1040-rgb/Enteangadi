@@ -765,6 +765,6 @@ require_once '../includes/header.php';
     });
 </script>
 
-<script src="../assets/js/chat.js?v=1.3"></script>
+<script src="../assets/js/chat.js?v=<?= time() ?>"></script>
 
 <?php require_once '../includes/footer.php'; ?>
