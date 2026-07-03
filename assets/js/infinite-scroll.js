@@ -90,8 +90,8 @@ class EnteangadiInfiniteScroll {
     createProductCard(p) {
         const price = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.price);
         const distanceHtml = p.distance ? `<span class="distance-badge">${Math.round(p.distance * 10) / 10} ${this.translations.distance_away}</span>` : '';
-        const badgeClass = p.type === 'buy' ? 'badge-wanted' : 'badge-selling';
-        const badgeText = p.type === 'buy' ? this.translations.wanted : this.translations.for_sale;
+        const badgeClass = p.type === 'buy' ? 'badge-wanted' : (p.type === 'rent' ? 'badge-rent' : 'badge-selling');
+        const badgeText = p.type === 'buy' ? this.translations.wanted : (p.type === 'rent' ? this.translations.for_rent : this.translations.for_sale);
 
         return `
             <a href="product.php?id=${p.id}" class="product-card">

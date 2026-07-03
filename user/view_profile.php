@@ -163,9 +163,11 @@ require_once '../includes/header.php';
                 <?php foreach ($active_ads as $ad): ?>
                     <a href="../product.php?id=<?= $ad['id'] ?>" class="product-card" style="text-decoration: none;">
                         <?php if ($ad['type'] == 'buy'): ?>
-                            <div class="badge-wanted">Wanted</div>
+                            <div class="badge-wanted"><?= htmlspecialchars(__('wanted')) ?></div>
+                        <?php elseif ($ad['type'] == 'rent'): ?>
+                            <div class="badge-rent"><?= htmlspecialchars(__('for_rent')) ?></div>
                         <?php else: ?>
-                            <div class="badge-selling">For Sale</div>
+                            <div class="badge-selling"><?= htmlspecialchars(__('for_sale')) ?></div>
                         <?php endif; ?>
 
                         <?php if ($ad['main_image']): ?>

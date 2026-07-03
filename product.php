@@ -215,7 +215,7 @@ require_once 'includes/header.php';
                     <div class="main-gallery-wrapper">
                         <?php if (!empty($images)): ?>
                             <div class="badge-type status-<?= $product['type'] ?>">
-                                <?= $product['type'] == 'buy' ? 'Wanted' : ($product['type'] == 'rent' ? 'For Rent' : 'For Sale') ?>
+                                <?= $product['type'] == 'buy' ? htmlspecialchars(__('wanted')) : ($product['type'] == 'rent' ? htmlspecialchars(__('for_rent')) : htmlspecialchars(__('for_sale'))) ?>
                             </div>
                             <div class="image-carousel-premium" id="mainCarousel" onscroll="updateSliderCounter(this)">
                                 <?php foreach ($images as $img): ?>

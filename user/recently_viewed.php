@@ -78,9 +78,11 @@ if (isset($_SESSION['user_id'])) {
                 <div class="product-card-wrapper" id="product-card-<?= $rv_p['id'] ?>" style="position: relative;">
                     <a href="../product.php?id=<?= $rv_p['id'] ?>" class="product-card">
                         <?php if ($rv_p['type'] == 'buy'): ?>
-                            <div class="badge-wanted">Wanted</div>
+                            <div class="badge-wanted"><?= htmlspecialchars(__('wanted')) ?></div>
+                        <?php elseif ($rv_p['type'] == 'rent'): ?>
+                            <div class="badge-rent"><?= htmlspecialchars(__('for_rent')) ?></div>
                         <?php else: ?>
-                            <div class="badge-selling">For Sale</div>
+                            <div class="badge-selling"><?= htmlspecialchars(__('for_sale')) ?></div>
                         <?php endif; ?>
                         
                         <?php if (!empty($rv_p['is_verified'])): ?>

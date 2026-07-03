@@ -98,11 +98,15 @@ require_once '../includes/header.php';
                         <?php if ($product['type'] == 'buy'): ?>
                             <div class="badge-wanted"
                                 style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #FFB300 0%, #FF8F00 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
-                                Wanted</div>
+                                <?= htmlspecialchars(__('wanted')) ?></div>
+                        <?php elseif ($product['type'] == 'rent'): ?>
+                            <div class="badge-rent"
+                                style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
+                                <?= htmlspecialchars(__('for_rent')) ?></div>
                         <?php else: ?>
                             <div class="badge-selling"
                                 style="top: 16px; left: 16px; font-size: 12px; padding: 6px 14px; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); color: white; border-radius: 6px; font-weight: 800; position: absolute; z-index: 10;">
-                                For Sale</div>
+                                <?= htmlspecialchars(__('for_sale')) ?></div>
                         <?php endif; ?>
                         <img src="../<?= htmlspecialchars($images[0]) ?>" alt="<?= htmlspecialchars($product['title']) ?>"
                             style="width: 100%; border-radius: var(--border-radius); aspect-ratio: 4/3; object-fit: contain; background: #f0f0f0;">

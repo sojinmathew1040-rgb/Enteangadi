@@ -17,11 +17,11 @@ function renderProductCard($product, $baseUrl, $isGuest = false) {
     
     $typeBadge = '';
     if ($product['type'] == 'buy') {
-        $typeBadge = '<div class="badge-wanted">Wanted</div>';
+        $typeBadge = '<div class="badge-wanted">' . htmlspecialchars(__('wanted')) . '</div>';
     } elseif ($product['type'] == 'rent') {
-        $typeBadge = '<div class="badge-rent">For Rent</div>';
+        $typeBadge = '<div class="badge-rent">' . htmlspecialchars(__('for_rent')) . '</div>';
     } else {
-        $typeBadge = '<div class="badge-selling">For Sale</div>';
+        $typeBadge = '<div class="badge-selling">' . htmlspecialchars(__('for_sale')) . '</div>';
     }
     
     $imgHtml = '';
@@ -690,7 +690,7 @@ require_once '../includes/header.php';
             <!-- 1. Fresh Recommendations Section -->
             <?php if (!empty($fresh_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">Fresh Recommendations</h2>
+                    <h2 class="section-title-premium"><?= htmlspecialchars(__('fresh_recommendations')) ?></h2>
                 </div>
                 <div class="product-grid">
                     <?php foreach ($fresh_products as $product) {
@@ -702,7 +702,7 @@ require_once '../includes/header.php';
             <!-- 2. For Sale Section -->
             <?php if (!empty($sell_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">For Sale</h2>
+                    <h2 class="section-title-premium"><?= htmlspecialchars(__('for_sale')) ?></h2>
                     <a href="index.php?post_type=sell<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
@@ -712,27 +712,27 @@ require_once '../includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- 3. For Rent Section -->
-            <?php if (!empty($rent_products)): ?>
+            <!-- 3. Wanted Section -->
+            <?php if (!empty($buy_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">For Rent</h2>
-                    <a href="index.php?post_type=rent<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
+                    <h2 class="section-title-premium"><?= htmlspecialchars(__('wanted')) ?></h2>
+                    <a href="index.php?post_type=buy<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
-                    <?php foreach ($rent_products as $product) {
+                    <?php foreach ($buy_products as $product) {
                         echo renderProductCard($product, $base_url, false);
                     } ?>
                 </div>
             <?php endif; ?>
 
-            <!-- 4. Wanted Section -->
-            <?php if (!empty($buy_products)): ?>
+            <!-- 4. For Rent Section -->
+            <?php if (!empty($rent_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">Wanted</h2>
-                    <a href="index.php?post_type=buy<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
+                    <h2 class="section-title-premium"><?= htmlspecialchars(__('for_rent')) ?></h2>
+                    <a href="index.php?post_type=rent<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
-                    <?php foreach ($buy_products as $product) {
+                    <?php foreach ($rent_products as $product) {
                         echo renderProductCard($product, $base_url, false);
                     } ?>
                 </div>
