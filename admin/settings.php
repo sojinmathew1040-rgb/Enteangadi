@@ -6,8 +6,97 @@ if (!isset($_SESSION['admin_id']) || $_SESSION['admin_role'] !== 'admin') {
     exit;
 }
 
-$success = '';
-$error = '';
+// AJAX: Search ads by phone
+if (isset($_GET['action']) && $_GET['action'] === 'search_ads_by_phone') {
+    header('Content-Type: application/json');
+    $phone = trim($_GET['phone'] ?? '');
+    
+    if (empty($phone)) {
+        echo json_encode(['success' => false, 'error' => 'Phone number is required.']);
+        exit;
+    }
+    
+    try {
+        // Find user by phone number
+        $stmt_u = $pdo->prepare("SELECT id, username, phone_number, profile_picture FROM users WHERE phone_number = ? OR phone_number LIKE ?");
+        $stmt_u->execute([$phone, "%$phone"]);
+        $user = $stmt_u->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            echo json_encode(['success' => false, 'error' => 'User not found.']);
+            exit;
+        }
+        
+        // Find ads posted by this user
+        $stmt_a = $pdo->prepare("
+            SELECT p.id, p.title, p.price, p.status, p.created_at, p.type,
+            (SELECT image_path FROM product_images WHERE product_id = p.id ORDER BY id ASC LIMIT 1) as thumbnail
+            FROM products p
+            WHERE p.user_id = ?
+            ORDER BY p.created_at DESC
+        ");
+        $stmt_a->execute([$user['id']]);
+        $ads = $stmt_a->fetchAll(PDO::FETCH_ASSOC);
+        
+        echo json_encode([
+            'success' => true,
+            'user' => $user,
+            'ads' => $ads
+        ]);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
+// AJAX: Delete user ads
+if (isset($_POST['action']) && $_POST['action'] === 'delete_user_ads') {
+    header('Content-Type: application/json');
+    $ad_ids = $_POST['ad_ids'] ?? [];
+    
+    if (empty($ad_ids)) {
+        echo json_encode(['success' => false, 'error' => 'No ads selected.']);
+        exit;
+    }
+    
+    try {
+        $placeholders = implode(',', array_fill(0, count($ad_ids), '?'));
+        
+        // 1. Delete product images from disk
+        $stmt_img = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id IN ($placeholders)");
+        $stmt_img->execute($ad_ids);
+        $images = $stmt_img->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($images as $img) {
+            $full_path = '../' . $img;
+            if (is_file($full_path)) {
+                @unlink($full_path);
+            }
+        }
+        
+        // 2. Delete product ratings, clicks, images, and wishlist records from DB
+        $pdo->prepare("DELETE FROM product_images WHERE product_id IN ($placeholders)")->execute($ad_ids);
+        $pdo->prepare("DELETE FROM wishlist WHERE product_id IN ($placeholders)")->execute($ad_ids);
+        $pdo->prepare("DELETE FROM analytics_clicks WHERE product_id IN ($placeholders)")->execute($ad_ids);
+        $pdo->prepare("DELETE FROM user_ratings WHERE reviewee_id IN (SELECT user_id FROM products WHERE id IN ($placeholders))")->execute($ad_ids);
+        
+        // 3. Delete messages for these products
+        $pdo->prepare("DELETE FROM messages WHERE product_id IN ($placeholders)")->execute($ad_ids);
+        
+        // 4. Delete products
+        $pdo->prepare("DELETE FROM products WHERE id IN ($placeholders)")->execute($ad_ids);
+        
+        echo json_encode(['success' => true]);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
+$success = $_SESSION['success_message'] ?? '';
+$error = $_SESSION['error_message'] ?? '';
+unset($_SESSION['success_message'], $_SESSION['error_message']);
 
 // Ensure dynamic SQL tables exist on load
 try {
@@ -196,13 +285,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $success = "Ad rejected and hidden.";
             }
         }
-    } elseif (isset($_POST['action']) && $_POST['action'] === 'toggle_verify') {
-        $product_id = $_POST['product_id'] ?? '';
-        $new_status = ($_POST['current_status'] == 1) ? 0 : 1;
-        if ($product_id) {
-            $stmt = $pdo->prepare("UPDATE products SET is_verified = ? WHERE id = ?");
-            $stmt->execute([$new_status, $product_id]);
-            $success = "Verification status updated.";
+    } elseif (isset($_POST['action']) && in_array($_POST['action'], ['approve_profile_verification', 'reject_profile_verification'])) {
+        $request_id = isset($_POST['request_id']) ? (int)$_POST['request_id'] : 0;
+        $action = $_POST['action'];
+        
+        if ($request_id) {
+            // Fetch request details
+            $stmt_req = $pdo->prepare("SELECT user_id, id_photo FROM verification_requests WHERE id = ?");
+            $stmt_req->execute([$request_id]);
+            $req_data = $stmt_req->fetch();
+            
+            if ($req_data) {
+                $user_id = $req_data['user_id'];
+                
+                if ($action === 'approve_profile_verification') {
+                    try {
+                        $pdo->beginTransaction();
+                        
+                        // Update request status
+                        $stmt_up_req = $pdo->prepare("UPDATE verification_requests SET status = 'approved' WHERE id = ?");
+                        $stmt_up_req->execute([$request_id]);
+                        
+                        // Update user verified flag
+                        $stmt_up_usr = $pdo->prepare("UPDATE users SET is_verified = 1 WHERE id = ?");
+                        $stmt_up_usr->execute([$user_id]);
+                        
+                        $pdo->commit();
+                        $success = "Verification request approved successfully. User badge activated.";
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $error = "Failed to approve request: " . $e->getMessage();
+                    }
+                } elseif ($action === 'reject_profile_verification') {
+                    $reason = trim($_POST['rejection_reason'] ?? 'Document is not clear or does not match profile details.');
+                    
+                    try {
+                        $pdo->beginTransaction();
+                        
+                        // Update request status
+                        $stmt_up_req = $pdo->prepare("UPDATE verification_requests SET status = 'rejected', rejection_reason = ? WHERE id = ?");
+                        $stmt_up_req->execute([$reason, $request_id]);
+                        
+                        // Reset user verified flag if previously verified
+                        $stmt_up_usr = $pdo->prepare("UPDATE users SET is_verified = 0 WHERE id = ?");
+                        $stmt_up_usr->execute([$user_id]);
+                        
+                        $pdo->commit();
+                        $success = "Verification request rejected and user notified.";
+                    } catch (Exception $e) {
+                        $pdo->rollBack();
+                        $error = "Failed to reject request: " . $e->getMessage();
+                    }
+                }
+                
+                // Redirect to keep profile_verifications active and prevent form resubmission
+                if (empty($error)) {
+                    $_SESSION['success_message'] = $success;
+                    header("Location: settings.php#profile_verifications");
+                    exit;
+                }
+            } else {
+                $error = "Request details not found.";
+            }
         }
     } elseif (isset($_POST['action']) && $_POST['action'] === 'announcement') {
         if (!has_permission('manage_announcements')) {
@@ -441,6 +585,42 @@ $account_feedback_stmt = $pdo->query("
     LIMIT 100
 ");
 $account_feedback = $account_feedback_stmt->fetchAll();
+
+// Fetch Profile Verification requests (pending, approved, rejected)
+$pending_verifications = [];
+$approved_verifications = [];
+$rejected_verifications = [];
+try {
+    $stmt_p = $pdo->prepare("
+        SELECT vr.*, u.username, u.email, u.phone_number 
+        FROM verification_requests vr
+        JOIN users u ON vr.user_id = u.id
+        WHERE vr.status = 'pending'
+        ORDER BY vr.created_at DESC
+    ");
+    $stmt_p->execute();
+    $pending_verifications = $stmt_p->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt_a = $pdo->prepare("
+        SELECT vr.*, u.username, u.email, u.phone_number 
+        FROM verification_requests vr
+        JOIN users u ON vr.user_id = u.id
+        WHERE vr.status = 'approved'
+        ORDER BY vr.created_at DESC
+    ");
+    $stmt_a->execute();
+    $approved_verifications = $stmt_a->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt_r = $pdo->prepare("
+        SELECT vr.*, u.username, u.email, u.phone_number 
+        FROM verification_requests vr
+        JOIN users u ON vr.user_id = u.id
+        WHERE vr.status = 'rejected'
+        ORDER BY vr.created_at DESC
+    ");
+    $stmt_r->execute();
+    $rejected_verifications = $stmt_r->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
 
 // Fetch all users for Management
 $all_users_stmt = $pdo->query("
@@ -1180,6 +1360,22 @@ require_once 'includes/header.php';
                 </div>
             <?php endif; ?>
 
+            <?php if (has_permission('*')): ?>
+                <div class="settings-card" onclick="showSection('profile_verifications')" style="position: relative;">
+                    <i class="fa fa-id-card" style="color: var(--primary-green);"></i>
+                    <div>
+                        <h3>Profile Verifications</h3>
+                        <p>Approve or reject verification claims</p>
+                    </div>
+                    <?php if (count($pending_verifications) > 0): ?>
+                        <span
+                            style="position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; border: 2px solid white; box-shadow: var(--shadow-sm);">
+                            <?= count($pending_verifications) ?>
+                        </span>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
             <?php if (($_SESSION['admin_permissions'] ?? '') === '*'): ?>
                 <div class="settings-card" onclick="openCreateUserModal()"
                     style="background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%); border-color: #10b981;">
@@ -1213,6 +1409,16 @@ require_once 'includes/header.php';
                             <?= count($closure_feedback) ?>
                         </span>
                     <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if (has_permission('*')): ?>
+                <div class="settings-card" onclick="showSection('search_delete_ads')" style="background: linear-gradient(135deg, #fff5f5 0%, #fff0f0 100%); border-color: var(--danger);">
+                    <i class="fa fa-search-minus" style="color: var(--danger);"></i>
+                    <div>
+                        <h3>Delete Ads by Phone</h3>
+                        <p>Search & bulk delete user ads</p>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
@@ -2267,6 +2473,277 @@ require_once 'includes/header.php';
     </div>
 </div>
 
+<!-- Search & Delete Ads Section -->
+<div id="section-search_delete_ads" class="settings-section">
+    <button class="back-btn" onclick="showSection('grid')">
+        <i class="fa fa-arrow-left"></i> Back to Dashboard
+    </button>
+
+    <div style="background: var(--white); border-radius: 24px; overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); padding: 24px;">
+        <h2 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 800;">Delete Ads by Phone Number</h2>
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 24px;">Search for a user by their registered phone number to manage and delete their active or pending listings.</p>
+
+        <!-- Search Bar -->
+        <div style="display: flex; gap: 12px; margin-bottom: 30px;">
+            <input type="text" id="delete-ads-search-phone" class="form-control" placeholder="Enter user phone number (e.g. 9876543210)" style="max-width: 400px; padding: 12px;">
+            <button onclick="searchUserAds()" class="btn-primary" style="padding: 12px 24px;"><i class="fa fa-search"></i> Search</button>
+        </div>
+
+        <!-- Loader -->
+        <div id="search-ads-loader" style="display: none; text-align: center; padding: 40px; color: var(--text-muted);">
+            <i class="fa fa-spinner fa-spin" style="font-size: 32px; color: var(--primary-green); margin-bottom: 12px; display: block;"></i>
+            Searching user listings...
+        </div>
+
+        <!-- User Info & Results Container -->
+        <div id="search-ads-results" style="display: none;">
+            <div id="delete-ads-user-card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
+                <div style="width: 50px; height: 50px; border-radius: 50%; background: var(--primary-green-light); color: var(--primary-green-dark); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;" id="delete-ads-user-avatar">U</div>
+                <div>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 800;" id="delete-ads-user-name">User Name</h3>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);" id="delete-ads-user-phone">Phone Number</p>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h4 style="margin: 0; font-size: 15px; font-weight: 700;">User Listings</h4>
+                <button id="btn-delete-selected-ads" onclick="deleteSelectedAds()" class="btn-danger" style="padding: 8px 16px; font-size: 13px; display: none; align-items: center; gap: 6px;">
+                    <i class="fa fa-trash-alt"></i> Delete Selected (<span id="delete-selected-count">0</span>)
+                </button>
+            </div>
+
+            <!-- Table of Ads -->
+            <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px; background: white;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 1px solid var(--border-color); text-align: left;">
+                            <th style="padding: 14px 16px; width: 50px;"><input type="checkbox" id="chk-delete-all-ads" onchange="toggleSelectAllAds(this)"></th>
+                            <th style="padding: 14px 16px;">Product Detail</th>
+                            <th style="padding: 14px 16px;">Price</th>
+                            <th style="padding: 14px 16px;">Status</th>
+                            <th style="padding: 14px 16px;">Posted Date</th>
+                            <th style="padding: 14px 16px; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="delete-ads-table-body">
+                        <!-- Dynamic rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="search-ads-empty" style="display: none; text-align: center; padding: 40px; color: var(--text-muted);">
+            <i class="fa fa-info-circle" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+            No active or pending listings found for this user.
+        </div>
+    </div>
+</div>
+
+<!-- Profile Verifications Section -->
+<div id="section-profile_verifications" class="settings-section">
+    <button class="back-btn" onclick="showSection('grid')">
+        <i class="fa fa-arrow-left"></i> Back to Dashboard
+    </button>
+
+    <div style="background: var(--white); border-radius: 24px; overflow: hidden; box-shadow: var(--shadow-md); border: 1px solid var(--border-color);">
+        <div style="padding: 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <h2 style="margin: 0; font-size: 20px; font-weight: 800;">Profile Verifications</h2>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">Approve or reject uploaded user identification documents to award the verified badge.</p>
+            </div>
+            
+            <!-- Tabs inside Settings Section -->
+            <div style="display: flex; background: #f1f5f9; padding: 4px; border-radius: 12px; gap: 4px;">
+                <button onclick="switchVerificationTab('pending')" id="btn-verification-pending"
+                    style="border: none; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.3s; background: white; color: var(--primary-green-dark); box-shadow: var(--shadow-sm);">
+                    Pending (<?= count($pending_verifications) ?>)
+                </button>
+                <button onclick="switchVerificationTab('approved')" id="btn-verification-approved"
+                    style="border: none; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.3s; background: transparent; color: #64748b;">
+                    Approved (<?= count($approved_verifications) ?>)
+                </button>
+                <button onclick="switchVerificationTab('rejected')" id="btn-verification-rejected"
+                    style="border: none; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.3s; background: transparent; color: #64748b;">
+                    Rejected (<?= count($rejected_verifications) ?>)
+                </button>
+            </div>
+        </div>
+
+        <div style="padding: 24px;">
+            <!-- Pending Claims Tab -->
+            <div id="tab-verification-pending">
+                <?php if (empty($pending_verifications)): ?>
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fa fa-id-card" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+                        No pending profile verification claims.
+                    </div>
+                <?php else: ?>
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px;">
+                        <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                            <thead>
+                                <tr style="background: #f8fafc; border-bottom: 1px solid var(--border-color); text-align: left;">
+                                    <th style="padding: 14px 16px;">User Details</th>
+                                    <th style="padding: 14px 16px;">ID Type</th>
+                                    <th style="padding: 14px 16px;">Uploaded ID Photo</th>
+                                    <th style="padding: 14px 16px;">Submitted</th>
+                                    <th style="padding: 14px 16px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pending_verifications as $req): ?>
+                                    <tr style="border-bottom: 1px solid var(--border-color); font-size: 14px;">
+                                        <td style="padding: 16px;">
+                                            <strong style="color: var(--text-dark);"><?= htmlspecialchars($req['username']) ?></strong>
+                                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                                Email: <?= htmlspecialchars($req['email']) ?><br>
+                                                Phone: <?= htmlspecialchars($req['phone_number']) ?>
+                                            </div>
+                                        </td>
+                                        <td style="padding: 16px; font-weight: 600; color: var(--text-dark);">
+                                            <?= htmlspecialchars($req['id_type']) ?>
+                                        </td>
+                                        <td style="padding: 16px;">
+                                            <a href="../<?= htmlspecialchars($req['id_photo']) ?>" target="_blank" title="Click to view full screen">
+                                                <img src="../<?= htmlspecialchars($req['id_photo']) ?>" style="max-width: 100px; max-height: 60px; border-radius: 6px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer;">
+                                            </a>
+                                        </td>
+                                        <td style="padding: 16px; color: var(--text-muted); font-size: 12px;">
+                                            <?= date('M d, Y H:i', strtotime($req['created_at'])) ?>
+                                        </td>
+                                        <td style="padding: 16px; text-align: right;">
+                                            <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                                                <form method="POST" style="display: inline; margin: 0;">
+                                                    <input type="hidden" name="request_id" value="<?= $req['id'] ?>">
+                                                    <input type="hidden" name="action" value="approve_profile_verification">
+                                                    <button type="submit" class="btn-primary" style="font-size: 12px; padding: 6px 12px;"><i class="fa fa-check"></i> Approve</button>
+                                                </form>
+                                                <button type="button" onclick="openProfileRejectModal(<?= $req['id'] ?>)" class="btn-danger" style="font-size: 12px; padding: 6px 12px;"><i class="fa fa-times"></i> Reject</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Approved Claims Tab -->
+            <div id="tab-verification-approved" style="display: none;">
+                <?php if (empty($approved_verifications)): ?>
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fa fa-id-card" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+                        No approved profile claims.
+                    </div>
+                <?php else: ?>
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px;">
+                        <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                            <thead>
+                                <tr style="background: #f8fafc; border-bottom: 1px solid var(--border-color); text-align: left;">
+                                    <th style="padding: 14px 16px;">User Details</th>
+                                    <th style="padding: 14px 16px;">ID Type</th>
+                                    <th style="padding: 14px 16px;">Uploaded ID Photo</th>
+                                    <th style="padding: 14px 16px;">Approved Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($approved_verifications as $req): ?>
+                                    <tr style="border-bottom: 1px solid var(--border-color); font-size: 14px;">
+                                        <td style="padding: 16px;">
+                                            <strong style="color: var(--text-dark);"><?= htmlspecialchars($req['username']) ?></strong>
+                                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                                Email: <?= htmlspecialchars($req['email']) ?><br>
+                                                Phone: <?= htmlspecialchars($req['phone_number']) ?>
+                                            </div>
+                                        </td>
+                                        <td style="padding: 16px; font-weight: 600; color: var(--text-dark);">
+                                            <?= htmlspecialchars($req['id_type']) ?>
+                                        </td>
+                                        <td style="padding: 16px;">
+                                            <a href="../<?= htmlspecialchars($req['id_photo']) ?>" target="_blank" title="Click to view full screen">
+                                                <img src="../<?= htmlspecialchars($req['id_photo']) ?>" style="max-width: 100px; max-height: 60px; border-radius: 6px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer;">
+                                            </a>
+                                        </td>
+                                        <td style="padding: 16px; color: var(--text-muted); font-size: 12px;">
+                                            <?= date('M d, Y H:i', strtotime($req['created_at'])) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Rejected Claims Tab -->
+            <div id="tab-verification-rejected" style="display: none;">
+                <?php if (empty($rejected_verifications)): ?>
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fa fa-id-card" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
+                        No rejected profile claims.
+                    </div>
+                <?php else: ?>
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 16px;">
+                        <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                            <thead>
+                                <tr style="background: #f8fafc; border-bottom: 1px solid var(--border-color); text-align: left;">
+                                    <th style="padding: 14px 16px;">User Details</th>
+                                    <th style="padding: 14px 16px;">ID Type</th>
+                                    <th style="padding: 14px 16px;">Uploaded ID Photo</th>
+                                    <th style="padding: 14px 16px;">Rejection Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($rejected_verifications as $req): ?>
+                                    <tr style="border-bottom: 1px solid var(--border-color); font-size: 14px;">
+                                        <td style="padding: 16px;">
+                                            <strong style="color: var(--text-dark);"><?= htmlspecialchars($req['username']) ?></strong>
+                                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                                Email: <?= htmlspecialchars($req['email']) ?><br>
+                                                Phone: <?= htmlspecialchars($req['phone_number']) ?>
+                                            </div>
+                                        </td>
+                                        <td style="padding: 16px; font-weight: 600; color: var(--text-dark);">
+                                            <?= htmlspecialchars($req['id_type']) ?>
+                                        </td>
+                                        <td style="padding: 16px;">
+                                            <a href="../<?= htmlspecialchars($req['id_photo']) ?>" target="_blank" title="Click to view full screen">
+                                                <img src="../<?= htmlspecialchars($req['id_photo']) ?>" style="max-width: 100px; max-height: 60px; border-radius: 6px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer;">
+                                            </a>
+                                        </td>
+                                        <td style="padding: 16px; color: #991b1b; font-size: 12px; max-width: 250px; word-break: break-word;">
+                                            <?= htmlspecialchars($req['rejection_reason']) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Rejection Modal Overlay -->
+<div id="profileRejectModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 28px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: var(--shadow-lg);">
+        <h3 style="margin-top: 0; margin-bottom: 12px; font-weight: 800; color: #991b1b;">Reject Verification Request</h3>
+        <form method="POST">
+            <input type="hidden" id="profile_reject_req_id" name="request_id">
+            <input type="hidden" name="action" value="reject_profile_verification">
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 13px;">Reason for Rejection</label>
+                <textarea name="rejection_reason" required placeholder="Describe why this ID document was rejected e.g., Photo is blurry, name does not match profile, etc." style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-size: 13px; min-height: 100px; resize: vertical; outline: none;"></textarea>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" onclick="closeProfileRejectModal()" class="btn-secondary" style="font-size: 13px; padding: 8px 16px;">Cancel</button>
+                <button type="submit" class="btn-danger" style="font-size: 13px; padding: 8px 16px;">Confirm Reject</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- User Management Section -->
 <div id="section-users" class="settings-section">
     <button class="back-btn" onclick="showSection('grid')">
@@ -2899,10 +3376,199 @@ require_once 'includes/header.php';
     // Support for deep linking via hash
     window.addEventListener('DOMContentLoaded', () => {
         const hash = window.location.hash.substring(1);
-        if (hash === 'branding' || hash === 'password' || hash === 'general' || hash === 'contact' || hash === 'approval' || hash === 'pending' || hash === 'manage_ads' || hash === 'closure_feedback' || hash === 'users' || hash === 'privileges') {
+        if (hash === 'branding' || hash === 'password' || hash === 'general' || hash === 'contact' || hash === 'approval' || hash === 'pending' || hash === 'manage_ads' || hash === 'closure_feedback' || hash === 'users' || hash === 'privileges' || hash === 'search_delete_ads' || hash === 'profile_verifications') {
             showSection(hash);
         }
     });
+
+    function switchVerificationTab(tab) {
+        // Toggle tabs visibility
+        document.getElementById('tab-verification-pending').style.display = tab === 'pending' ? 'block' : 'none';
+        document.getElementById('tab-verification-approved').style.display = tab === 'approved' ? 'block' : 'none';
+        document.getElementById('tab-verification-rejected').style.display = tab === 'rejected' ? 'block' : 'none';
+
+        // Toggle buttons style
+        const btnPending = document.getElementById('btn-verification-pending');
+        const btnApproved = document.getElementById('btn-verification-approved');
+        const btnRejected = document.getElementById('btn-verification-rejected');
+
+        [btnPending, btnApproved, btnRejected].forEach(btn => {
+            btn.style.background = 'transparent';
+            btn.style.color = '#64748b';
+            btn.style.boxShadow = 'none';
+        });
+
+        const activeBtn = tab === 'pending' ? btnPending : (tab === 'approved' ? btnApproved : btnRejected);
+        activeBtn.style.background = 'white';
+        activeBtn.style.color = 'var(--primary-green-dark)';
+        activeBtn.style.boxShadow = 'var(--shadow-sm)';
+    }
+
+    function openProfileRejectModal(id) {
+        document.getElementById('profile_reject_req_id').value = id;
+        document.getElementById('profileRejectModal').style.display = 'flex';
+    }
+
+    function closeProfileRejectModal() {
+        document.getElementById('profileRejectModal').style.display = 'none';
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    function searchUserAds() {
+        const phone = document.getElementById('delete-ads-search-phone').value.trim();
+        if (!phone) {
+            alert('Please enter a phone number.');
+            return;
+        }
+
+        document.getElementById('search-ads-loader').style.display = 'block';
+        document.getElementById('search-ads-results').style.display = 'none';
+        document.getElementById('search-ads-empty').style.display = 'none';
+
+        fetch('settings.php?action=search_ads_by_phone&phone=' + encodeURIComponent(phone))
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('search-ads-loader').style.display = 'none';
+                if (data.success) {
+                    // Populate user info
+                    document.getElementById('delete-ads-user-name').innerText = data.user.username;
+                    document.getElementById('delete-ads-user-phone').innerText = data.user.phone_number;
+                    if (data.user.profile_picture) {
+                        document.getElementById('delete-ads-user-avatar').innerHTML = `<img src="../${data.user.profile_picture}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                    } else {
+                        document.getElementById('delete-ads-user-avatar').innerHTML = data.user.username.charAt(0).toUpperCase();
+                    }
+
+                    // Populate table
+                    const tbody = document.getElementById('delete-ads-table-body');
+                    tbody.innerHTML = '';
+                    
+                    if (data.ads.length === 0) {
+                        document.getElementById('search-ads-results').style.display = 'none';
+                        document.getElementById('search-ads-empty').style.display = 'block';
+                        return;
+                    }
+
+                    data.ads.forEach(ad => {
+                        const tr = document.createElement('tr');
+                        tr.style.borderBottom = '1px solid var(--border-color)';
+                        
+                        const typeBadge = ad.type === 'buy' ? '<span class="badge-wanted" style="font-size: 8px; padding: 2px 6px; display: inline-block;">Wanted</span>' : (ad.type === 'rent' ? '<span class="badge-rent" style="font-size: 8px; padding: 2px 6px; display: inline-block;">Rent</span>' : '<span class="badge-selling" style="font-size: 8px; padding: 2px 6px; display: inline-block;">Sale</span>');
+                        const thumb = ad.thumbnail ? `<img src="../${ad.thumbnail}" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;">` : '<div style="width: 40px; height: 40px; border-radius: 8px; background: #e2e8f0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="fa fa-image" style="color: #cbd5e1;"></i></div>';
+                        const statusClass = ad.status === 'active' ? 'status-active' : (ad.status === 'pending' ? 'status-pending' : 'status-expired');
+                        
+                        tr.innerHTML = `
+                            <td style="padding: 14px 16px;"><input type="checkbox" class="chk-delete-ad" value="${ad.id}" onchange="updateDeleteSelectedButton()"></td>
+                            <td style="padding: 14px 16px; display: flex; align-items: center; gap: 12px;">
+                                ${thumb}
+                                <div style="min-width: 0;">
+                                    <div style="font-weight: 700; font-size: 13px; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">${escapeHtml(ad.title)}</div>
+                                    <div style="margin-top: 2px;">${typeBadge}</div>
+                                </div>
+                            </td>
+                            <td style="padding: 14px 16px; font-weight: 700; color: var(--primary-green-dark);">₹${parseFloat(ad.price).toLocaleString()}</td>
+                            <td style="padding: 14px 16px;"><span class="status-badge ${statusClass}">${ad.status.toUpperCase()}</span></td>
+                            <td style="padding: 14px 16px; font-size: 12px; color: var(--text-muted);">${new Date(ad.created_at).toLocaleDateString()}</td>
+                            <td style="padding: 14px 16px; text-align: right;">
+                                <button onclick="deleteSingleAd(${ad.id})" class="btn-danger" style="padding: 6px 12px; font-size: 11px;"><i class="fa fa-trash"></i> Delete</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+
+                    document.getElementById('chk-delete-all-ads').checked = false;
+                    updateDeleteSelectedButton();
+                    document.getElementById('search-ads-results').style.display = 'block';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(err => {
+                document.getElementById('search-ads-loader').style.display = 'none';
+                console.error(err);
+                alert('An error occurred during search.');
+            });
+    }
+
+    // Add search listener for Enter key
+    document.getElementById('delete-ads-search-phone').addEventListener('keyup', function(event) {
+        if (event.key === 'Enter') {
+            searchUserAds();
+        }
+    });
+
+    function toggleSelectAllAds(master) {
+        document.querySelectorAll('.chk-delete-ad').forEach(chk => {
+            chk.checked = master.checked;
+        });
+        updateDeleteSelectedButton();
+    }
+
+    function updateDeleteSelectedButton() {
+        const checked = document.querySelectorAll('.chk-delete-ad:checked');
+        const btn = document.getElementById('btn-delete-selected-ads');
+        const countSpan = document.getElementById('delete-selected-count');
+        
+        if (checked.length > 0) {
+            countSpan.innerText = checked.length;
+            btn.style.display = 'inline-flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+
+    function deleteSingleAd(id) {
+        if (!confirm('Are you sure you want to delete this ad? This action cannot be undone.')) {
+            return;
+        }
+        performAdsDeletion([id]);
+    }
+
+    function deleteSelectedAds() {
+        const checked = document.querySelectorAll('.chk-delete-ad:checked');
+        const ids = Array.from(checked).map(chk => chk.value);
+        if (ids.length === 0) return;
+        
+        if (!confirm(`Are you sure you want to delete the ${ids.length} selected ads? This action cannot be undone.`)) {
+            return;
+        }
+        performAdsDeletion(ids);
+    }
+
+    function performAdsDeletion(ids) {
+        const formData = new FormData();
+        formData.append('action', 'delete_user_ads');
+        ids.forEach(id => formData.append('ad_ids[]', id));
+
+        fetch('settings.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Selected ads deleted successfully.');
+                searchUserAds(); // Refresh listings
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('An error occurred during deletion.');
+        });
+    }
 
     function viewAdDetails(product) {
         document.getElementById('modalTitle').innerText = product.title;
