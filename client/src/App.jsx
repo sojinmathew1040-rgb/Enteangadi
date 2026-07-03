@@ -1757,11 +1757,7 @@ function App() {
                     <button className="contact-btn chat-btn" onClick={handleOpenChat}>
                       💬 Chat with Seller
                     </button>
-                    {selectedProduct.phone_number && (
-                      <a href={`tel:${selectedProduct.phone_number}`} className="contact-btn call-btn">
-                        📞 Call Seller ({selectedProduct.phone_number})
-                      </a>
-                    )}
+
                     {selectedProduct.whatsapp_number && (
                       <a
                         href={`https://wa.me/${selectedProduct.whatsapp_number.replace(/\D/g, '')}?text=Hi,%20I'm%20interested%20in%20your%20listing:%20${encodeURIComponent(selectedProduct.title)}`}

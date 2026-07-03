@@ -118,12 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$check]);
         $success = "Adult content settings updated successfully.";
     } elseif (isset($_POST['action']) && $_POST['action'] === 'app_features') {
-        $call_active = isset($_POST['call_feature_active']) ? '1' : '0';
         $bg_active = isset($_POST['bg_notification_active']) ? '1' : '0';
         $bg_interval = $_POST['bg_notification_interval'] ?? '30';
 
         $fields = [
-            'call_feature_active' => $call_active,
             'bg_notification_active' => $bg_active,
             'bg_notification_interval' => $bg_interval
         ];
@@ -1748,20 +1746,6 @@ require_once 'includes/header.php';
 
             <form method="POST" action="settings.php">
                 <input type="hidden" name="action" value="app_features">
-
-                <!-- 1. Phone Call Feature Toggle -->
-                <div class="form-group"
-                    style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 20px;">
-                    <div>
-                        <label style="font-weight: 700; margin-bottom: 2px; display: block; cursor: pointer; font-size: 13px;">Enable Call Feature</label>
-                        <span style="font-size: 11px; color: var(--text-muted);">Allow users to make direct phone calls from product pages.</span>
-                    </div>
-                    <label class="switch" style="transform: scale(0.9);">
-                        <input type="checkbox" name="call_feature_active" value="1"
-                            <?= ($app_settings['call_feature_active'] ?? '1') === '1' ? 'checked' : '' ?>>
-                        <span class="slider"></span>
-                    </label>
-                </div>
 
                 <!-- 2. Background Notification Toggle -->
                 <div class="form-group"

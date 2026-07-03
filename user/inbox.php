@@ -40,6 +40,18 @@ try {
     $stmt->execute(['my_id' => $my_id]);
     $conversations = $stmt->fetchAll();
 
+    // De-duplicate conversations to ensure each chat is displayed as a single entry
+    $unique_conversations = [];
+    $seen_keys = [];
+    foreach ($conversations as $conv) {
+        $key = $conv['product_id'] . '-' . $conv['other_user_id'];
+        if (!in_array($key, $seen_keys)) {
+            $seen_keys[] = $key;
+            $unique_conversations[] = $conv;
+        }
+    }
+    $conversations = $unique_conversations;
+
     foreach ($conversations as &$conv) {
         $msg_stmt = $pdo->prepare("
             SELECT message_text, sender_id 
