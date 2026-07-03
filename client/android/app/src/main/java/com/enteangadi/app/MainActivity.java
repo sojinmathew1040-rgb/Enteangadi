@@ -8,12 +8,70 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.os.SystemClock;
 import com.getcapacitor.BridgeActivity;
+import android.webkit.WebView;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceError;
+import android.view.View;
+import android.widget.RelativeLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.graphics.Color;
 
 public class MainActivity extends BridgeActivity {
+    private RelativeLayout loadingLayout;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MicrophonePermissionPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Initialize fullscreen loading screen layout dynamically
+        try {
+            loadingLayout = new RelativeLayout(this);
+            loadingLayout.setBackgroundColor(Color.parseColor("#ffffff"));
+            loadingLayout.setGravity(android.view.Gravity.CENTER);
+            loadingLayout.setVisibility(View.GONE);
+
+            ProgressBar spinner = new ProgressBar(this);
+            spinner.setId(View.generateViewId());
+            spinner.setIndeterminate(true);
+            RelativeLayout.LayoutParams spinnerParams = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            );
+            spinnerParams.addRule(RelativeLayout.CENTER_IN_PARENT);
+            spinner.setLayoutParams(spinnerParams);
+            loadingLayout.addView(spinner);
+
+            TextView textView = new TextView(this);
+            textView.setText("Connecting to Enteangadi...");
+            textView.setTextColor(Color.parseColor("#2E7D32"));
+            textView.setTextSize(16);
+            textView.setGravity(android.view.Gravity.CENTER);
+            RelativeLayout.LayoutParams textParams = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.WRAP_CONTENT,
+                RelativeLayout.LayoutParams.WRAP_CONTENT
+            );
+            textParams.addRule(RelativeLayout.BELOW, spinner.getId());
+            textParams.topMargin = 40;
+            textParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
+            textView.setLayoutParams(textParams);
+            loadingLayout.addView(textView);
+
+            addContentView(loadingLayout, new android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // Set custom web view client to handle error paths and reconnect loader
+        try {
+            getBridge().setWebViewClient(new CustomWebViewClient(getBridge()));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         // Save server URL from Capacitor config/bridge to SharedPreferences for the background service
         try {
@@ -102,6 +160,79 @@ public class MainActivity extends BridgeActivity {
                             }
                         }
                     }, delay);
+                }
+            }
+        }
+    }
+
+    private void showLoadingScreen() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (loadingLayout != null) {
+                    loadingLayout.setVisibility(View.VISIBLE);
+                }
+            }
+        });
+    }
+
+    private void hideLoadingScreen() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (loadingLayout != null) {
+                    loadingLayout.setVisibility(View.GONE);
+                }
+            }
+        });
+    }
+
+    private class CustomWebViewClient extends com.getcapacitor.BridgeWebViewClient {
+        private boolean hasError = false;
+        private boolean isReloading = false;
+
+        public CustomWebViewClient(com.getcapacitor.Bridge bridge) {
+            super(bridge);
+        }
+
+        @Override
+        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            super.onPageStarted(view, url, favicon);
+            hasError = false;
+        }
+
+        @Override
+        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+            super.onReceivedError(view, errorCode, description, failingUrl);
+            hasError = true;
+            showLoadingScreen();
+        }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            super.onReceivedError(view, request, error);
+            if (request.isForMainFrame()) {
+                hasError = true;
+                showLoadingScreen();
+            }
+        }
+
+        @Override
+        public void onPageFinished(WebView view, String url) {
+            super.onPageFinished(view, url);
+            if (!hasError) {
+                hideLoadingScreen();
+                isReloading = false;
+            } else {
+                if (!isReloading) {
+                    isReloading = true;
+                    view.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            view.reload();
+                            isReloading = false;
+                        }
+                    }, 3000);
                 }
             }
         }
