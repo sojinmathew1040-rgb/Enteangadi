@@ -234,7 +234,7 @@ function compressProductImageLocal($source, $destination, $max_width, $quality)
 
 require_once '../includes/header.php';
 ?>
-<link rel="stylesheet" href="../assets/css/post_ad.css?v=1.3">
+<link rel="stylesheet" href="../assets/css/post_ad.css?v=<?= time() ?>">
 
 <div class="post-ad-page-premium">
     <div class="container">

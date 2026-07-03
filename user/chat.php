@@ -511,7 +511,7 @@ require_once '../includes/header.php';
                     call.answer(localAudioStream);
                     setupCallStreamHandlers(call);
                 } else {
-                    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                    getMediaStream().then(stream => {
                         localAudioStream = stream;
                         call.answer(localAudioStream);
                         setupCallStreamHandlers(call);
@@ -552,16 +552,12 @@ require_once '../includes/header.php';
             return;
         }
 
-        const callId = `enteangadi-call-${myId}-${otherId}-${Date.now()}`;
-        window.callerActiveCallId = callId;
-        window.callConnectingStarted = false;
-
         const modal = document.getElementById('voiceCallModal');
         const statusLabel = document.getElementById('callStatusLabel');
         const userTitle = document.getElementById('callUserTitle');
 
         userTitle.innerText = "<?= htmlspecialchars($other_user['username']) ?>";
-        statusLabel.innerText = "Sending request...";
+        statusLabel.innerText = "Initializing mic...";
         modal.style.display = 'flex';
 
         // Outgoing call only shows End Call while dialing
@@ -570,7 +566,18 @@ require_once '../includes/header.php';
         document.getElementById('muteCallBtn').style.display = 'none';
         document.getElementById('endCallBtn').style.display = 'flex';
 
-        sendSignalMessage(`[CALL_REQUEST]:${callId}`)
+        // Capture mic synchronously in user click gesture to avoid WKWebView/Safari NotAllowedError/Permission Denied
+        getMediaStream()
+            .then(function(stream) {
+                localAudioStream = stream;
+                statusLabel.innerText = "Sending request...";
+
+                const callId = `enteangadi-call-${myId}-${otherId}-${Date.now()}`;
+                window.callerActiveCallId = callId;
+                window.callConnectingStarted = false;
+
+                return sendSignalMessage(`[CALL_REQUEST]:${callId}`);
+            })
             .then(function() {
                 statusLabel.innerText = "Ringing...";
 
@@ -583,8 +590,8 @@ require_once '../includes/header.php';
                 }, 25000);
             })
             .catch(function(err) {
-                console.error("Outgoing call signal failed:", err);
-                statusLabel.innerText = "Call Request Failed";
+                console.error("Outgoing call initialization failed:", err);
+                statusLabel.innerText = "Mic Permission Denied";
                 setTimeout(cleanupCallState, 2000);
             });
     }
@@ -603,45 +610,44 @@ require_once '../includes/header.php';
 
     function establishPeerJSCall() {
         const statusLabel = document.getElementById('callStatusLabel');
-        getMediaStream()
-            .then(function(stream) {
-                localAudioStream = stream;
-                const receiverPeerId = `enteangadi-user-${otherId}`;
-                console.log("PeerJS dialing connection to:", receiverPeerId);
-                
-                const call = peerConnection.call(receiverPeerId, localAudioStream);
-                activeCallInstance = call;
-                
-                document.getElementById('muteCallBtn').style.display = 'flex';
-                document.getElementById('endCallBtn').style.display = 'flex';
-                
-                setupCallStreamHandlers(call);
-            })
-            .catch(function(err) {
-                console.error("Microphone capture failed on outgoing call connection:", err);
-                statusLabel.innerText = "Mic Permission Denied";
-                sendSignalMessage(`[CALL_DECLINE]:${window.callerActiveCallId}`);
-                setTimeout(cleanupCallState, 2500);
-            });
+        if (!localAudioStream) {
+            console.error("No local stream available for calling!");
+            statusLabel.innerText = "Mic Error";
+            setTimeout(cleanupCallState, 2000);
+            return;
+        }
+
+        const receiverPeerId = `enteangadi-user-${otherId}`;
+        console.log("PeerJS dialing connection to:", receiverPeerId);
+        
+        const call = peerConnection.call(receiverPeerId, localAudioStream);
+        activeCallInstance = call;
+        
+        document.getElementById('muteCallBtn').style.display = 'flex';
+        document.getElementById('endCallBtn').style.display = 'flex';
+        
+        setupCallStreamHandlers(call);
     }
 
     function acceptIncomingCall() {
         const callId = window.activeIncomingCallId;
         window.callAcceptedId = callId;
         
-        sendSignalMessage(`[CALL_ACCEPT]:${callId}`)
-            .then(function() {
-                const statusLabel = document.getElementById('callStatusLabel');
-                statusLabel.innerText = "Connecting...";
-                
-                document.getElementById('declineCallBtn').style.display = 'none';
-                document.getElementById('acceptCallBtn').style.display = 'none';
-                
-                return getMediaStream();
-            })
+        const statusLabel = document.getElementById('callStatusLabel');
+        statusLabel.innerText = "Initializing mic...";
+        
+        document.getElementById('declineCallBtn').style.display = 'none';
+        document.getElementById('acceptCallBtn').style.display = 'none';
+        
+        // Capture mic synchronously in user click gesture to avoid WKWebView/Safari NotAllowedError/Permission Denied
+        getMediaStream()
             .then(function(stream) {
                 localAudioStream = stream;
+                statusLabel.innerText = "Connecting...";
                 
+                return sendSignalMessage(`[CALL_ACCEPT]:${callId}`);
+            })
+            .then(function() {
                 document.getElementById('muteCallBtn').style.display = 'flex';
                 document.getElementById('endCallBtn').style.display = 'flex';
                 

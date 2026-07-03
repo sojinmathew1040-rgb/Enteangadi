@@ -183,7 +183,11 @@
 }
 
 .type-btn input {
-    display: none;
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
 }
 
 .type-btn .btn-content {
@@ -318,7 +322,11 @@
 }
 
 .contact-toggle input {
-    display: none;
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
 }
 
 .toggle-box {
