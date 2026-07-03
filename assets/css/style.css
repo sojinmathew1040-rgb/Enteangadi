@@ -3924,6 +3924,7 @@ input[type="checkbox"]:checked+.toggle-btn {
 
 .input-wrapper-premium input {
     flex: 1;
+    min-width: 0;
     border: none;
     background: transparent;
     padding: 12px 0;

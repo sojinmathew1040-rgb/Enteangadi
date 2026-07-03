@@ -488,48 +488,18 @@ function base64ToBlob(base64, mimeType) {
 }
 
 // Start and stop voice recording
-async function toggleVoiceRecording() {
+// Start and stop voice recording
+function toggleVoiceRecording() {
     const micBtn = document.getElementById('micBtn');
     const sendBtn = document.getElementById('sendBtn');
     const msgInput = document.getElementById('message-input');
     const recStatus = document.getElementById('recording-status');
-    const timerEl = recStatus?.querySelector('.recording-timer');
+    const timerEl = recStatus ? recStatus.querySelector('.recording-timer') : null;
 
     if (!micBtn || !msgInput || !recStatus) return;
 
     if (!isRecording) {
-        try {
-            const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
-            if (isMobile) {
-                // Trigger native mobile OS permission requests if in WebView wrapper
-                await window.EnteangadiMobile.requestAllPermissions();
-                await window.EnteangadiMobile.startRecording();
-                isRecording = true;
-            } else {
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("SECURE_CONTEXT_REQUIRED");
-                }
-
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
-                };
-
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    if (audioChunks.length > 0 && recordingSeconds > 0) {
-                        await uploadAudioMessage(audioBlob);
-                    }
-                    stream.getTracks().forEach(track => track.stop()); // shut down microhardware
-                };
-
-                mediaRecorder.start();
-                isRecording = true;
-            }
-
+        const startRecordingFlow = function() {
             // Adjust input UI to show recording pulses
             msgInput.style.display = 'none';
             sendBtn.style.display = 'none';
@@ -541,20 +511,59 @@ async function toggleVoiceRecording() {
             // Initialize counter
             recordingSeconds = 0;
             if (timerEl) timerEl.innerText = '00:00';
-            recordingTimerInterval = setInterval(() => {
+            recordingTimerInterval = setInterval(function() {
                 recordingSeconds++;
                 const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
                 const secs = String(recordingSeconds % 60).padStart(2, '0');
-                if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+                if (timerEl) timerEl.innerText = mins + ':' + secs;
             }, 1000);
+        };
 
-        } catch (err) {
-            console.error("Microphone capture failed:", err);
-            if (err.message === "SECURE_CONTEXT_REQUIRED" || err.name === "TypeError") {
+        const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
+        if (isMobile) {
+            window.EnteangadiMobile.requestAllPermissions()
+                .then(function() {
+                    return window.EnteangadiMobile.startRecording();
+                })
+                .then(function() {
+                    isRecording = true;
+                    startRecordingFlow();
+                })
+                .catch(function(err) {
+                    console.error("Microphone capture failed:", err);
+                    alert("Microphone permission is required to record voice notes.");
+                });
+        } else {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert("Microphone access requires a secure context (HTTPS or localhost).\n\nTo test voice recording on your phone, run 'adb reverse tcp:80 tcp:80' and configure your Capacitor config to load from 'http://localhost/Enteangadi'.");
-            } else {
-                alert("Microphone permission is required to record voice notes.");
+                return;
             }
+
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(stream) {
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = function(event) {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = function() {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        if (audioChunks.length > 0 && recordingSeconds > 0) {
+                            uploadAudioMessage(audioBlob);
+                        }
+                        stream.getTracks().forEach(function(track) { track.stop(); }); // shut down microhardware
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    startRecordingFlow();
+                })
+                .catch(function(err) {
+                    console.error("Microphone capture failed:", err);
+                    alert("Microphone permission is required to record voice notes.");
+                });
         }
     } else {
         stopVoiceRecording(true);
@@ -569,14 +578,16 @@ function stopVoiceRecording(shouldSend) {
 
     const isMobile = window.EnteangadiMobile && window.EnteangadiMobile.isRunningInMobile();
     if (isMobile) {
-        window.EnteangadiMobile.stopRecording().then(async (result) => {
-            if (shouldSend && result && result.base64 && recordingSeconds > 0) {
-                const audioBlob = base64ToBlob(result.base64, result.format || 'audio/mp4');
-                await uploadAudioMessage(audioBlob);
-            }
-        }).catch((err) => {
-            console.error("Native voice recording stop/read failed:", err);
-        });
+        window.EnteangadiMobile.stopRecording()
+            .then(function(result) {
+                if (shouldSend && result && result.base64 && recordingSeconds > 0) {
+                    const audioBlob = base64ToBlob(result.base64, result.format || 'audio/mp4');
+                    return uploadAudioMessage(audioBlob);
+                }
+            })
+            .catch(function(err) {
+                console.error("Native voice recording stop/read failed:", err);
+            });
     } else {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             if (!shouldSend) {
@@ -601,12 +612,13 @@ function stopVoiceRecording(shouldSend) {
     updateInputButtons();
 }
 
-async function uploadAudioMessage(blob) {
-    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
+function uploadAudioMessage(blob) {
+    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return Promise.resolve();
 
     const chatBox = document.getElementById('chat-box');
+    var tempRow = null;
     if (chatBox) {
-        const tempRow = document.createElement('div');
+        tempRow = document.createElement('div');
         tempRow.className = 'message-row msg-me temp-sending-audio';
         tempRow.innerHTML = `
             <div class="message-bubble" style="opacity: 0.7;">
@@ -623,28 +635,34 @@ async function uploadAudioMessage(blob) {
     formData.append('product_id', productId);
     formData.append('audio_data', blob);
 
-    try {
-        const response = await fetch('api_chat.php', { method: 'POST', body: formData });
-        const result = await response.json();
-        if (result.success) {
+    return fetch('api_chat.php', { method: 'POST', body: formData })
+        .then(function(res) {
+            return res.json();
+        })
+        .then(function(result) {
+            if (tempRow) tempRow.remove();
+            if (result.success) {
+                fetchMessages();
+            } else {
+                alert("Failed to upload audio message.");
+                fetchMessages();
+            }
+        })
+        .catch(function(e) {
+            if (tempRow) tempRow.remove();
+            console.error("Audio note upload failed:", e);
             fetchMessages();
-        } else {
-            alert("Failed to upload audio message.");
-            fetchMessages();
-        }
-    } catch (e) {
-        console.error("Audio note upload failed:", e);
-        fetchMessages();
-    }
+        });
 }
 
-async function uploadChatImage(file) {
-    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return;
-    if (!file) return;
+function uploadChatImage(file) {
+    if (typeof otherId === 'undefined' || typeof productId === 'undefined') return Promise.resolve();
+    if (!file) return Promise.resolve();
 
     const chatBox = document.getElementById('chat-box');
+    var tempRow = null;
     if (chatBox) {
-        const tempRow = document.createElement('div');
+        tempRow = document.createElement('div');
         tempRow.className = 'message-row msg-me temp-sending-image';
         tempRow.innerHTML = `
             <div class="message-bubble" style="opacity: 0.7;">
@@ -661,18 +679,39 @@ async function uploadChatImage(file) {
     formData.append('product_id', productId);
     formData.append('image_data', file);
 
-    try {
-        const response = await fetch('api_chat.php', { method: 'POST', body: formData });
-        const result = await response.json();
-        if (result.success) {
+    return fetch('api_chat.php', { method: 'POST', body: formData })
+        .then(function(res) {
+            return res.json();
+        })
+        .then(function(result) {
+            if (tempRow) tempRow.remove();
+            if (result.success) {
+                fetchMessages();
+            } else {
+                alert(result.error || "Failed to upload image.");
+                fetchMessages();
+            }
+        })
+        .catch(function(e) {
+            if (tempRow) tempRow.remove();
+            console.error("Image upload failed:", e);
             fetchMessages();
-        } else {
-            alert(result.error || "Failed to upload image.");
-            fetchMessages();
-        }
-    } catch (e) {
-        console.error("Image upload failed:", e);
-        fetchMessages();
+        });
+}
+
+function handleImageUpload(input) {
+    if (input.files && input.files.length) {
+        var files = Array.from(input.files);
+        var uploadNext = function(index) {
+            if (index < files.length) {
+                uploadChatImage(files[index]).then(function() {
+                    uploadNext(index + 1);
+                });
+            } else {
+                input.value = '';
+            }
+        };
+        uploadNext(0);
     }
 }
 

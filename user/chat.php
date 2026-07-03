@@ -258,7 +258,7 @@ require_once '../includes/header.php';
                         <button type="button" id="imgBtn" class="btn-img-chat" title="Send Image" onclick="document.getElementById('chat-image-input').click()" style="background: transparent; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; transition: all 0.3s;">
                             <i class="fa fa-camera"></i>
                         </button>
-                        <input type="file" id="chat-image-input" accept="image/*" multiple style="display: none;" onchange="(async () => { if (this.files.length) { for (let i = 0; i < this.files.length; i++) { await uploadChatImage(this.files[i]); } this.value = ''; } })()">
+                        <input type="file" id="chat-image-input" accept="image/*" multiple style="display: none;" onchange="handleImageUpload(this)">
                         
                         <button onclick="sendMessage()" id="sendBtn" class="btn-send-chat">
                             <i class="fa fa-paper-plane"></i>
@@ -546,7 +546,7 @@ require_once '../includes/header.php';
         }
     }
 
-    async function startVoiceCall() {
+    function startVoiceCall() {
         if (isBlocked) {
             alert("Cannot call. Chat is blocked.");
             return;
@@ -570,79 +570,92 @@ require_once '../includes/header.php';
         document.getElementById('muteCallBtn').style.display = 'none';
         document.getElementById('endCallBtn').style.display = 'flex';
 
-        try {
-            await sendSignalMessage(`[CALL_REQUEST]:${callId}`);
-            statusLabel.innerText = "Ringing...";
+        sendSignalMessage(`[CALL_REQUEST]:${callId}`)
+            .then(function() {
+                statusLabel.innerText = "Ringing...";
 
-            // Watchdog: cancel call after 25 seconds if unanswered
-            window.callWatchdogTimer = setTimeout(() => {
-                if (!window.callConnectingStarted) {
-                    statusLabel.innerText = "No Answer";
-                    setTimeout(cleanupCallState, 2000);
-                }
-            }, 25000);
-
-        } catch (err) {
-            console.error("Outgoing call signal failed:", err);
-            statusLabel.innerText = "Call Request Failed";
-            setTimeout(cleanupCallState, 2000);
-        }
+                // Watchdog: cancel call after 25 seconds if unanswered
+                window.callWatchdogTimer = setTimeout(function() {
+                    if (!window.callConnectingStarted) {
+                        statusLabel.innerText = "No Answer";
+                        setTimeout(cleanupCallState, 2000);
+                    }
+                }, 25000);
+            })
+            .catch(function(err) {
+                console.error("Outgoing call signal failed:", err);
+                statusLabel.innerText = "Call Request Failed";
+                setTimeout(cleanupCallState, 2000);
+            });
     }
 
-    async function establishPeerJSCall() {
+    function establishPeerJSCall() {
         const statusLabel = document.getElementById('callStatusLabel');
-        try {
-            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const receiverPeerId = `enteangadi-user-${otherId}`;
-            console.log("PeerJS dialing connection to:", receiverPeerId);
-            
-            const call = peerConnection.call(receiverPeerId, localAudioStream);
-            activeCallInstance = call;
-            
-            document.getElementById('muteCallBtn').style.display = 'flex';
-            document.getElementById('endCallBtn').style.display = 'flex';
-            
-            setupCallStreamHandlers(call);
-        } catch (err) {
-            console.error("Microphone capture failed on outgoing call connection:", err);
-            statusLabel.innerText = "Mic Permission Denied";
-            sendSignalMessage(`[CALL_DECLINE]:${window.callerActiveCallId}`);
-            setTimeout(cleanupCallState, 2500);
-        }
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function(stream) {
+                localAudioStream = stream;
+                const receiverPeerId = `enteangadi-user-${otherId}`;
+                console.log("PeerJS dialing connection to:", receiverPeerId);
+                
+                const call = peerConnection.call(receiverPeerId, localAudioStream);
+                activeCallInstance = call;
+                
+                document.getElementById('muteCallBtn').style.display = 'flex';
+                document.getElementById('endCallBtn').style.display = 'flex';
+                
+                setupCallStreamHandlers(call);
+            })
+            .catch(function(err) {
+                console.error("Microphone capture failed on outgoing call connection:", err);
+                statusLabel.innerText = "Mic Permission Denied";
+                sendSignalMessage(`[CALL_DECLINE]:${window.callerActiveCallId}`);
+                setTimeout(cleanupCallState, 2500);
+            });
     }
 
-    async function acceptIncomingCall() {
+    function acceptIncomingCall() {
         const callId = window.activeIncomingCallId;
         window.callAcceptedId = callId;
         
-        await sendSignalMessage(`[CALL_ACCEPT]:${callId}`);
-        
-        const statusLabel = document.getElementById('callStatusLabel');
-        statusLabel.innerText = "Connecting...";
-        
-        document.getElementById('declineCallBtn').style.display = 'none';
-        document.getElementById('acceptCallBtn').style.display = 'none';
-        
-        try {
-            localAudioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            document.getElementById('muteCallBtn').style.display = 'flex';
-            document.getElementById('endCallBtn').style.display = 'flex';
-            
-            // Wait for WebRTC incoming streams...
-        } catch (err) {
-            console.error("Microphone capture failed on accepting call:", err);
-            statusLabel.innerText = "Mic Permission Denied";
-            await sendSignalMessage(`[CALL_DECLINE]:${callId}`);
-            setTimeout(cleanupCallState, 2500);
-        }
+        sendSignalMessage(`[CALL_ACCEPT]:${callId}`)
+            .then(function() {
+                const statusLabel = document.getElementById('callStatusLabel');
+                statusLabel.innerText = "Connecting...";
+                
+                document.getElementById('declineCallBtn').style.display = 'none';
+                document.getElementById('acceptCallBtn').style.display = 'none';
+                
+                return navigator.mediaDevices.getUserMedia({ audio: true });
+            })
+            .then(function(stream) {
+                localAudioStream = stream;
+                
+                document.getElementById('muteCallBtn').style.display = 'flex';
+                document.getElementById('endCallBtn').style.display = 'flex';
+                
+                // Wait for WebRTC incoming streams...
+            })
+            .catch(function(err) {
+                console.error("Microphone capture failed on accepting call:", err);
+                const statusLabel = document.getElementById('callStatusLabel');
+                if (statusLabel) {
+                    statusLabel.innerText = "Mic Permission Denied";
+                }
+                sendSignalMessage(`[CALL_DECLINE]:${callId}`);
+                setTimeout(cleanupCallState, 2500);
+            });
     }
 
-    async function declineIncomingCall() {
+    function declineIncomingCall() {
         const callId = window.activeIncomingCallId;
         window.callDeclinedId = callId;
-        await sendSignalMessage(`[CALL_DECLINE]:${callId}`);
-        cleanupCallState();
+        sendSignalMessage(`[CALL_DECLINE]:${callId}`)
+            .then(function() {
+                cleanupCallState();
+            })
+            .catch(function() {
+                cleanupCallState();
+            });
     }
 
     function setupCallStreamHandlers(call) {
