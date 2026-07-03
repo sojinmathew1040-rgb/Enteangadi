@@ -699,10 +699,10 @@ require_once '../includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- 2. I Want to Sell Section -->
+            <!-- 2. For Sale Section -->
             <?php if (!empty($sell_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">I Want to Sell</h2>
+                    <h2 class="section-title-premium">For Sale</h2>
                     <a href="index.php?post_type=sell<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
@@ -712,10 +712,10 @@ require_once '../includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- 3. I Want to Rent Section -->
+            <!-- 3. For Rent Section -->
             <?php if (!empty($rent_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">I Want to Rent</h2>
+                    <h2 class="section-title-premium">For Rent</h2>
                     <a href="index.php?post_type=rent<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
@@ -725,10 +725,10 @@ require_once '../includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <!-- 4. I am Looking For Section -->
+            <!-- 4. Wanted Section -->
             <?php if (!empty($buy_products)): ?>
                 <div class="section-header-premium">
-                    <h2 class="section-title-premium">I am Looking For</h2>
+                    <h2 class="section-title-premium">Wanted</h2>
                     <a href="index.php?post_type=buy<?= $category_filter ? '&category_id=' . $category_filter : '' ?>" class="section-view-all-btn">View All <i class="fa fa-chevron-right" style="font-size: 10px;"></i></a>
                 </div>
                 <div class="product-grid">
