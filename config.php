@@ -138,7 +138,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 $host = 'localhost';
 $username = 'root';
 $password = '';
-$dbname = 'enteangadi';
+$dbname = 'enteangadi_restored';
 
 
 
