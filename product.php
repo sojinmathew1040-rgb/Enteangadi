@@ -295,7 +295,15 @@ require_once 'includes/header.php';
                                 views</span>
                         </div>
 
-                        <?php if ($product['is_verified']): ?>
+                        <?php if (!empty($product['is_admin_posted'])): ?>
+                            <div class="verified-banner-premium" style="background: #ecfdf5; border: 1px solid #a7f3d0; margin-bottom: 16px;">
+                                <div class="v-icon" style="background: #10b981; color: white;"><i class="fa fa-shield-alt"></i></div>
+                                <div class="v-text">
+                                    <strong style="color: #065f46;">Official Listing &bull; Posted by Admin</strong>
+                                    <span style="color: #047857;">This advertisement was officially posted and verified by the platform administration.</span>
+                                </div>
+                            </div>
+                        <?php elseif ($product['is_verified']): ?>
                             <div class="verified-banner-premium">
                                 <div class="v-icon"><i class="fa fa-check-double"></i></div>
                                 <div class="v-text">

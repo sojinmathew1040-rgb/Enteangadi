@@ -30,6 +30,13 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 session_start();
 
+// Anti-Cache HTTP Headers: Ensure live browser refreshes always load fresh data without stale cache
+if (!headers_sent()) {
+    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
+    header("Pragma: no-cache");
+    header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+}
+
 // Load local configuration (untracked by git) for local secrets like API keys
 if (file_exists(__DIR__ . '/config_local.php')) {
     include_once __DIR__ . '/config_local.php';
@@ -214,6 +221,56 @@ try {
         }
     } catch (Exception $exp_err) {
         // Fail silently
+    }
+
+    // Ensure site_visits table exists for visitor reporting & analytics
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `site_visits` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `visit_date` date NOT NULL,
+                `ip_address` varchar(45) NOT NULL,
+                `user_id` int(11) DEFAULT NULL,
+                `page_url` varchar(255) DEFAULT NULL,
+                `user_agent` varchar(255) DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `idx_visit_date` (`visit_date`),
+                KEY `idx_user_id` (`user_id`),
+                KEY `idx_ip_date` (`ip_address`, `visit_date`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // site_visits table ready (no dummy auto-seeding)
+
+        // Automatic page visit logger for live requests
+        if (!empty($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+            $req_uri = $_SERVER['REQUEST_URI'] ?? '';
+            $is_asset = preg_match('/\.(css|js|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|ttf|map)$/i', $req_uri);
+            $is_cron = (strpos($req_uri, 'cron/') !== false || strpos($req_uri, 'sync_') !== false);
+            $is_admin = (strpos($req_uri, '/admin/') !== false);
+            $is_scratch = (strpos($req_uri, '/scratch/') !== false);
+            $is_api = (strpos($req_uri, '/api/') !== false || strpos($req_uri, 'api_') !== false || strpos($req_uri, '.json') !== false);
+            
+            if (!$is_asset && !$is_cron && !$is_admin && !$is_scratch && !$is_api) {
+                $v_date = date('Y-m-d');
+                $v_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+                if (strpos($v_ip, ',') !== false) {
+                    $v_ip = trim(explode(',', $v_ip)[0]);
+                }
+                $v_uid = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : (isset($_SESSION['admin_id']) ? (int)$_SESSION['admin_id'] : null);
+                $v_page = substr($req_uri, 0, 250);
+                $v_agent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 250);
+
+                if (!isset($_SESSION['last_visit_log']) || (time() - $_SESSION['last_visit_log']) >= 3) {
+                    $_SESSION['last_visit_log'] = time();
+                    $stmt_v = $pdo->prepare("INSERT INTO site_visits (visit_date, ip_address, user_id, page_url, user_agent) VALUES (?, ?, ?, ?, ?)");
+                    $stmt_v->execute([$v_date, $v_ip, $v_uid, $v_page, $v_agent]);
+                }
+            }
+        }
+    } catch (Exception $e_sv) {
+        // Continue silently if DB is busy
     }
 
     // --- HELPER FUNCTIONS ---
@@ -500,6 +557,13 @@ try {
         $pdo->query("SELECT is_verified FROM products LIMIT 1");
     } catch (Exception $e) {
         $pdo->exec("ALTER TABLE products ADD COLUMN is_verified TINYINT(1) DEFAULT 0 AFTER status");
+    }
+
+    // Auto-add is_admin_posted column to products
+    try {
+        $pdo->query("SELECT is_admin_posted FROM products LIMIT 1");
+    } catch (Exception $e) {
+        $pdo->exec("ALTER TABLE products ADD COLUMN is_admin_posted TINYINT(1) DEFAULT 0 AFTER is_verified");
     }
 
     // [AD APPROVAL SYSTEM] Auto-add is_notified to products (for one-time success message)

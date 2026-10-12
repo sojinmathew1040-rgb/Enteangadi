@@ -20,9 +20,21 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enteangadi - Admin Dashboard</title>
-    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css">
+    
+    <!-- Anti-Cache Meta Directives -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=<?= time() ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/admin.css">
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/admin.css?v=<?= time() ?>">
+    <script src="<?= $base_url ?>/assets/js/chart.umd.min.js?v=<?= time() ?>"></script>
+    <script>
+        if (typeof Chart === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');
+        }
+    </script>
 </head>
 
 <body>
@@ -34,7 +46,7 @@ $current_page = basename($_SERVER['SCRIPT_NAME']);
                 Dashboard</a>
 
             <a href="reports.php" class="<?= $current_page === 'reports.php' ? 'active' : '' ?>"><i
-                    class="fa fa-flag"></i> Reports</a>
+                    class="fa fa-chart-line"></i> Reports & Analytics</a>
 
             <?php if (has_permission('manage_categories')): ?>
                 <a href="categories.php" class="<?= $current_page === 'categories.php' ? 'active' : '' ?>"><i

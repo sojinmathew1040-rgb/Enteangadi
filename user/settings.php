@@ -60,15 +60,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'delete_account':
+                $password_input = $_POST['password'] ?? '';
+                // Fetch profile picture and password for security check and logging
+                $user_stmt = $pdo->prepare("SELECT username, email, password, profile_picture FROM users WHERE id = ?");
+                $user_stmt->execute([$user_id]);
+                $user_data = $user_stmt->fetch();
+
+                if (!$user_data || empty($password_input) || !password_verify($password_input, $user_data['password'])) {
+                    $error = "Incorrect password! You must confirm your account password to permanently close your account.";
+                    break;
+                }
+
                 // Fetch all product images first to delete them
                 $img_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id IN (SELECT id FROM products WHERE user_id = ?)");
                 $img_stmt->execute([$user_id]);
                 $images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-                // Fetch profile picture and details for logging
-                $user_stmt = $pdo->prepare("SELECT username, email, profile_picture FROM users WHERE id = ?");
-                $user_stmt->execute([$user_id]);
-                $user_data = $user_stmt->fetch();
                 $profile_pic = $user_data['profile_picture'] ?? null;
 
                 $reason = $_POST['closure_reason'] ?? 'Not specified';
@@ -259,7 +265,15 @@ require_once '../includes/header.php';
                     style="font-size: 14px; border-radius: 12px;"></textarea>
             </div>
 
-            <div style="display: flex; gap: 12px; margin-top: 32px;">
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label
+                    style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; display: block; text-transform: uppercase;">Confirm
+                    Account Password</label>
+                <input type="password" name="password" class="form-control" placeholder="Enter your account password" required autocomplete="current-password"
+                    style="font-size: 14px; border-radius: 12px; padding: 12px; border: 2px solid #e2e8f0;">
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 24px;">
                 <button type="button" onclick="closeClosureModal()" class="btn-secondary"
                     style="flex: 1; padding: 12px; border-radius: 12px; font-weight: 600;">Cancel</button>
                 <button type="submit" class="btn-primary"

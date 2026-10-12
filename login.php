@@ -14,46 +14,59 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $phone_number = $_POST['phone_number'] ?? '';
-    $password = $_POST['password'] ?? '';
-
-    if (!empty($phone_number) && !empty($password)) {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE phone_number = ?");
-        $stmt->execute([$phone_number]);
-        $user = $stmt->fetch();
-
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_role'] = $user['role'];
-            $_SESSION['username'] = $user['username'];
-
-            // Handle session token for multi-device security
-            $token = $user['session_token'];
-            if (empty($token)) {
-                $token = bin2hex(random_bytes(32));
-                $upd = $pdo->prepare("UPDATE users SET session_token = ?, last_activity = NOW() WHERE id = ?");
-                $upd->execute([$token, $user['id']]);
-            } else {
-                $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
-                $upd->execute([$user['id']]);
-            }
-            $_SESSION['session_token'] = $token;
-
-            // Set 30-day persistent cookies
-            enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 24 * 60 * 60);
-            enteangadi_set_cookie('enteangadi_remember_token', $token, time() + 30 * 24 * 60 * 60);
-
-            if ($user['role'] === 'admin') {
-                header("Location: admin/index.php");
-            } else {
-                header("Location: user/index.php"); // Redirect to user index
-            }
-            exit;
-        } else {
-            $error = "Invalid phone number or password.";
-        }
+    $rateStatus = checkRateLimit('user_login', 5, 600);
+    if (!$rateStatus['allowed']) {
+        $minutes = ceil($rateStatus['retry_after'] / 60);
+        $error = "Too many failed login attempts. Please try again in {$minutes} minute(s).";
     } else {
-        $error = "Please fill in all fields.";
+        $phone_number = trim($_POST['phone_number'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (!empty($phone_number) && !empty($password)) {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE phone_number = ?");
+            $stmt->execute([$phone_number]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($password, $user['password'])) {
+                resetRateLimit('user_login');
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['username'] = $user['username'];
+
+                // Handle session token for multi-device security
+                $token = $user['session_token'];
+                if (empty($token)) {
+                    $token = bin2hex(random_bytes(32));
+                    $upd = $pdo->prepare("UPDATE users SET session_token = ?, last_activity = NOW() WHERE id = ?");
+                    $upd->execute([$token, $user['id']]);
+                } else {
+                    $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
+                    $upd->execute([$user['id']]);
+                }
+                $_SESSION['session_token'] = $token;
+
+                // Set 30-day persistent cookies
+                enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 24 * 60 * 60);
+                enteangadi_set_cookie('enteangadi_remember_token', $token, time() + 30 * 24 * 60 * 60);
+
+                if ($user['role'] === 'admin' || !empty($user['is_admin'])) {
+                    $_SESSION['admin_id'] = $user['id'];
+                    $_SESSION['admin_role'] = 'admin';
+                    $_SESSION['admin_username'] = $user['username'];
+                    $_SESSION['admin_permissions'] = $user['permissions'] ?? '';
+                    $_SESSION['is_admin_session'] = true;
+                    header("Location: admin/index.php");
+                } else {
+                    header("Location: user/index.php"); // Redirect to user index
+                }
+                exit;
+            } else {
+                recordRateLimitHit('user_login');
+                $error = "Invalid phone number or password.";
+            }
+        } else {
+            $error = "Please fill in all fields.";
+        }
     }
 }
 
