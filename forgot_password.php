@@ -21,12 +21,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         )");
     }
 
-    $identifier = trim($_POST['identifier'] ?? ''); // Email or Phone
+    $email = trim($_POST['email'] ?? $_POST['identifier'] ?? '');
 
-    if (!empty($identifier)) {
-        // Find user by email or phone
-        $stmt = $pdo->prepare("SELECT id, username, email, phone_number FROM users WHERE email = ? OR phone_number = ?");
-        $stmt->execute([$identifier, $identifier]);
+    if (empty($email)) {
+        $error = "Please enter your email address.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Please enter a valid email address.";
+    } else {
+        // Find user by email
+        $stmt = $pdo->prepare("SELECT id, username, email FROM users WHERE email = ?");
+        $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if ($user) {
@@ -34,39 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
 
             // Store token
-            $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, method, expires_at) VALUES (?, ?, ?, ?)");
-
-            // Determine method based on input or user record
-            $method = (filter_var($identifier, FILTER_VALIDATE_EMAIL)) ? 'email' : 'whatsapp';
-            $stmt->execute([$user['id'], $token, $method, $expires]);
+            $stmt = $pdo->prepare("INSERT INTO password_resets (user_id, token, method, expires_at) VALUES (?, ?, 'email', ?)");
+            $stmt->execute([$user['id'], $token, $expires]);
 
             $reset_link = (isset($_SERVER['HTTPS']) ? "https" : "http") . "://$_SERVER[HTTP_HOST]" . dirname($_SERVER['PHP_SELF']) . "/reset_password.php?token=$token";
 
-            if ($method === 'email' && !empty($user['email'])) {
-                if (sendResetEmail($user['email'], $user['username'], $reset_link)) {
-                    $success = "A reset link has been sent to your email address.";
-                } else {
-                    // Fallback for Localhost/Testing: Show the link if email fails
-                    $success = "<strong>Email server not configured (Localhost).</strong><br>For testing purposes, here is your link: <a href='$reset_link' style='font-weight:bold; color:var(--primary-green);'>Reset Password Now</a>";
-                }
+            if (!empty($user['email']) && sendResetEmail($user['email'], $user['username'], $reset_link)) {
+                $success = "A reset link has been sent to your email address.";
             } else {
-                // Automated WhatsApp attempt
-                if (sendWhatsAppReset($user['phone_number'], $user['username'], $reset_link)) {
-                    $success = "A reset link has been sent to your WhatsApp number.";
-                } else {
-                    // Fallback: Manual WhatsApp Link
-                    $wa_message = "Hi " . $user['username'] . ", click here to reset your Enteangadi password: " . $reset_link;
-                    $wa_url = "https://wa.me/" . preg_replace('/[^0-9]/', '', $user['phone_number']) . "?text=" . urlencode($wa_message);
-
-                    $success = "We've generated a reset link for your WhatsApp. <a href='$wa_url' target='_blank' style='font-weight:bold; color:var(--primary-green);'>Click here to send it</a>.";
-                }
+                // Fallback for Localhost/Testing: Show the link if email fails
+                $success = "<strong>Email server not configured (Localhost).</strong><br>For testing purposes, here is your link: <a href='$reset_link' style='font-weight:bold; color:var(--primary-green);'>Reset Password Now</a>";
             }
         } else {
             // Generic message for security
-            $success = "If that account exists, a reset link has been sent.";
+            $success = "If that account exists, a reset link has been sent to your email address.";
         }
-    } else {
-        $error = "Please enter your email or phone number.";
     }
 }
 
@@ -77,7 +63,7 @@ require_once 'includes/header.php';
     <div class="auth-container">
         <h2 style="text-align: center; margin-bottom: 24px; color: var(--primary-green-dark);">Reset Password</h2>
         <p style="text-align: center; color: var(--text-muted); margin-bottom: 24px; font-size: 14px;">
-            Enter your registered Email or Phone Number and we'll send you a link to reset your password.
+            Enter your registered Email Address and we'll send you a link to reset your password.
         </p>
 
         <?php if ($error): ?>
@@ -94,9 +80,9 @@ require_once 'includes/header.php';
         <?php else: ?>
             <form method="POST" action="forgot_password.php">
                 <div class="form-group">
-                    <label for="identifier">Email or Phone Number</label>
-                    <input type="text" id="identifier" name="identifier" class="form-control" required
-                        placeholder="e.g. john@example.com or 9876543210">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" class="form-control" required
+                        placeholder="e.g. john@example.com" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
                 </div>
 
                 <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">Send Reset Link</button>

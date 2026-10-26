@@ -16,9 +16,10 @@ if ($min_lat === null || $max_lat === null || $min_lng === null || $max_lng === 
 }
 
 try {
-    $query = "SELECT p.*, c.name as category_name, pi.image_path as main_image 
+    $query = "SELECT p.*, c.name as category_name, parent_c.name as parent_category_name, pi.image_path as main_image 
               FROM products p 
               LEFT JOIN categories c ON p.category_id = c.id
+              LEFT JOIN categories parent_c ON c.parent_id = parent_c.id
               LEFT JOIN (
                   SELECT product_id, MIN(id) as min_img_id 
                   FROM product_images 
@@ -38,9 +39,20 @@ try {
     }
 
     if ($search) {
-        $query .= " AND (p.title LIKE ? OR p.description LIKE ?)";
-        $params[] = '%' . $search . '%';
-        $params[] = '%' . $search . '%';
+        $words = array_filter(array_map('trim', explode(' ', $search)));
+        if (!empty($words)) {
+            $word_clauses = [];
+            foreach ($words as $w) {
+                $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
+                $wildcard = "%$w%";
+                $params[] = $wildcard;
+                $params[] = $wildcard;
+                $params[] = $wildcard;
+                $params[] = $wildcard;
+                $params[] = $wildcard;
+            }
+            $query .= " AND (" . implode(" AND ", $word_clauses) . ")";
+        }
     }
 
     $stmt = $pdo->prepare($query);

@@ -50,9 +50,20 @@ if ($category_filter) {
 }
 
 if ($search_query) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
-    $params[] = "%$search_query%";
-    $params[] = "%$search_query%";
+    $words = array_filter(array_map('trim', explode(' ', $search_query)));
+    if (!empty($words)) {
+        $word_clauses = [];
+        foreach ($words as $w) {
+            $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
+            $wildcard = "%$w%";
+            $params[] = $wildcard;
+            $params[] = $wildcard;
+            $params[] = $wildcard;
+            $params[] = $wildcard;
+            $params[] = $wildcard;
+        }
+        $where_clause .= " AND (" . implode(" AND ", $word_clauses) . ")";
+    }
 }
 
 if ($min_price !== null && $min_price !== '') {
@@ -109,13 +120,14 @@ if ($sort_by === 'price_asc') {
 }
 
 try {
-    $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
+    $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, parent_c.name as parent_category_name, u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
             (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as main_image,
             COALESCE((SELECT ROUND(AVG(rating), 1) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id), 0) as seller_rating,
             (SELECT COUNT(*) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id) as seller_reviews_count
             $distance_select
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN categories parent_c ON c.parent_id = parent_c.id
             JOIN users u ON p.user_id = u.id
             $where_clause 
             ORDER BY $order_by
