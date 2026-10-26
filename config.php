@@ -142,12 +142,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     exit;
 }
 
-$host = 'localhost';
-$username = 'root';
-$password = '';
-$dbname = 'enteangadi_restored';
-
-
+$host = defined('DB_HOST') ? DB_HOST : 'localhost';
+$username = defined('DB_USER') ? DB_USER : 'root';
+$password = defined('DB_PASS') ? DB_PASS : '';
+$dbname = defined('DB_NAME') ? DB_NAME : 'enteangadi';
 
 try {
     // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
@@ -170,16 +168,19 @@ try {
 
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-    // 3. Check if core tables exist (e.g. check if 'users' table exists)
-    $table_check = $pdo->query("SHOW TABLES LIKE 'users'");
+    // 3. Check if core tables exist (e.g. check if 'users' or 'products' table exists)
+    $table_check = $pdo->query("SHOW TABLES LIKE 'products'");
     if (!$table_check->fetch()) {
-        // If users table is missing, import the entire schema from db_schema.sql
-        $schema_file = dirname(__FILE__) . '/db_schema.sql';
+        // If core table is missing, import schema from db/enteangadi.sql or db_schema.sql
+        $schema_file = dirname(__FILE__) . '/db/enteangadi.sql';
+        if (!file_exists($schema_file)) {
+            $schema_file = dirname(__FILE__) . '/db_schema.sql';
+        }
         if (file_exists($schema_file)) {
             $sql = file_get_contents($schema_file);
-            // Remove database creation statements from the schema if they exist to avoid conflicts
-            $sql = str_replace("CREATE DATABASE IF NOT EXISTS enteangadi;", "", $sql);
-            $sql = str_replace("USE enteangadi;", "", $sql);
+            // Remove database creation and use statements from the schema if they exist to avoid conflicts
+            $sql = preg_replace('/CREATE DATABASE IF NOT EXISTS `?[a-zA-Z0-9_]+`?;/i', '', $sql);
+            $sql = preg_replace('/USE `?[a-zA-Z0-9_]+`?;/i', '', $sql);
             $pdo->exec($sql);
         }
     }

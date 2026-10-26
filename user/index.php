@@ -248,31 +248,15 @@ require_once '../includes/header.php';
 ?>
 
 <div class="container">
-<<<<<<< HEAD
     <!-- Browse Categories section (Always accessible) -->
-    <div style="margin-bottom: 32px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: var(--text-dark); font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">Browse categories</h2>
-            <?php if ($category_filter || $post_type || $search_query || $active_spec): ?>
-                <a href="index.php"
-                    style="font-size: 14px; color: var(--primary-green); text-decoration: none; font-weight: 700; background: #f0fdf4; padding: 6px 14px; border-radius: 12px; transition: all 0.2s ease;">Clear Filter</a>
-            <?php endif; ?>
-        </div>
-        <div
-            style="display: flex; gap: 16px; overflow-x: auto; padding: 4px 4px 12px 4px; scrollbar-width: none; -ms-overflow-style: none;">
-            <?php foreach ($l1_categories as $cat): 
-                $isActive = ($parent_id == $cat['id']);
-=======
-    <?php if (!$is_filtered_view): ?>
-    <!-- Browse Categories section with Auto & Manual Scroll Slider -->
     <div style="margin-bottom: 32px;" class="category-slider-wrapper" id="categorySliderWrapper">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <h2 style="color: var(--text-dark); font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">Browse categories</h2>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">
-                <?php if ($category_filter): ?>
-                    <a href="index.php<?= $post_type ? '?post_type=' . $post_type : '' ?>"
+                <?php if ($category_filter || $post_type || $search_query || $active_spec): ?>
+                    <a href="index.php"
                         style="font-size: 13px; color: var(--primary-green); text-decoration: none; font-weight: 700; background: #f0fdf4; padding: 6px 14px; border-radius: 12px; transition: all 0.2s ease;">Clear Filter</a>
                 <?php endif; ?>
                 <!-- Manual Scroll Control Buttons -->
@@ -293,7 +277,6 @@ require_once '../includes/header.php';
             $infinite_categories = !empty($l1_categories) ? array_merge($l1_categories, $l1_categories) : [];
             foreach ($infinite_categories as $cat): 
                 $isActive = ($parent_id == $cat['id'] || $category_filter == $cat['id']);
->>>>>>> 2ed130e648da3355126c97134ed103f8cf016994
                 $targetUrl = "index.php?category_id=" . $cat['id'] . ($post_type ? "&post_type=" . $post_type : "");
             ?>
                 <a href="<?= $targetUrl ?>" class="category-card <?= $isActive ? 'active' : '' ?>">
