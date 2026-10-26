@@ -1,7 +1,8 @@
 <?php
 require_once 'config.php';
+header("Location: login.php");
+exit;
 
-$error = '';
 $step = isset($_POST['step']) ? intval($_POST['step']) : 1;
 $phone_number = $_POST['phone_number'] ?? '';
 $otp = $_POST['otp'] ?? '';
