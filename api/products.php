@@ -57,8 +57,9 @@ if ($search_query) {
     if (!empty($words)) {
         $word_clauses = [];
         foreach ($words as $w) {
-            $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
+            $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
             $wildcard = "%$w%";
+            $params[] = $wildcard;
             $params[] = $wildcard;
             $params[] = $wildcard;
             $params[] = $wildcard;
@@ -86,9 +87,66 @@ if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
 
 $spec = $_GET['spec'] ?? null;
 if ($spec) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
     $params[] = '%' . $spec . '%';
     $params[] = '%' . $spec . '%';
+    $params[] = '%' . $spec . '%';
+}
+
+$body_type = $_GET['body_type'] ?? null;
+if ($body_type) {
+    if ($body_type === 'Luxury') {
+        $where_clause .= " AND (p.body_type = 'Luxury' OR p.brand IN ('Mercedes-Benz', 'BMW', 'Audi', 'Land Rover') OR p.title LIKE '%Luxury%' OR p.search_keywords LIKE '%Luxury%')";
+    } elseif ($body_type === 'SUV') {
+        $where_clause .= " AND (p.body_type IN ('SUV', 'Compact SUV') OR p.title LIKE '%SUV%' OR p.description LIKE '%SUV%' OR p.search_keywords LIKE '%SUV%')";
+    } else {
+        $where_clause .= " AND (p.body_type = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+        $params[] = $body_type;
+        $params[] = '%' . $body_type . '%';
+        $params[] = '%' . $body_type . '%';
+        $params[] = '%' . $body_type . '%';
+    }
+}
+
+$fuel = $_GET['fuel'] ?? null;
+if ($fuel) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = '%' . $fuel . '%';
+    $params[] = '%' . $fuel . '%';
+    $params[] = '%' . $fuel . '%';
+}
+
+$transmission = $_GET['transmission'] ?? null;
+if ($transmission) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = '%' . $transmission . '%';
+    $params[] = '%' . $transmission . '%';
+    $params[] = '%' . $transmission . '%';
+}
+
+$brand = $_GET['brand'] ?? null;
+if ($brand) {
+    $where_clause .= " AND (p.brand = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $brand;
+    $params[] = '%' . $brand . '%';
+    $params[] = '%' . $brand . '%';
+}
+
+$model = $_GET['model'] ?? null;
+if ($model) {
+    $where_clause .= " AND (p.model = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $model;
+    $params[] = '%' . $model . '%';
+    $params[] = '%' . $model . '%';
+}
+
+$variant = $_GET['variant'] ?? null;
+if ($variant) {
+    $where_clause .= " AND (p.variant = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $variant;
+    $params[] = '%' . $variant . '%';
+    $params[] = '%' . $variant . '%';
+    $params[] = '%' . $variant . '%';
 }
 
 $radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;

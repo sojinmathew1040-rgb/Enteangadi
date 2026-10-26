@@ -12,60 +12,62 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 
-function renderProductCard($product, $baseUrl, $isGuest = true) {
-    $detailLink = $isGuest ? "product.php?id=" . $product['id'] : "../product.php?id=" . $product['id'];
-    $imgVersion = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : time());
-    $imageSrc = $product['main_image'] ? "../" . htmlspecialchars($product['main_image']) . "?v=" . $imgVersion : null;
-    
-    $typeBadge = '';
-    if ($product['type'] == 'buy') {
-        $typeBadge = '<div class="badge-wanted">' . htmlspecialchars(__('wanted')) . '</div>';
-    } elseif ($product['type'] == 'rent') {
-        $typeBadge = '<div class="badge-rent">' . htmlspecialchars(__('for_rent')) . '</div>';
-    } else {
-        $typeBadge = '<div class="badge-selling">' . htmlspecialchars(__('for_sale')) . '</div>';
-    }
+if (!function_exists('renderProductCard')) {
+    function renderProductCard($product, $baseUrl, $isGuest = true) {
+        $detailLink = $isGuest ? "product.php?id=" . $product['id'] : "../product.php?id=" . $product['id'];
+        $imgVersion = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : time());
+        $imageSrc = $product['main_image'] ? "../" . htmlspecialchars($product['main_image']) . "?v=" . $imgVersion : null;
+        
+        $typeBadge = '';
+        if ($product['type'] == 'buy') {
+            $typeBadge = '<div class="badge-wanted">' . htmlspecialchars(__('wanted')) . '</div>';
+        } elseif ($product['type'] == 'rent') {
+            $typeBadge = '<div class="badge-rent">' . htmlspecialchars(__('for_rent')) . '</div>';
+        } else {
+            $typeBadge = '<div class="badge-selling">' . htmlspecialchars(__('for_sale')) . '</div>';
+        }
 
-    $adminBadge = '';
-    if (!empty($product['is_admin_posted'])) {
-        $adminBadge = '<div class="badge-admin-posted" style="position: absolute; top: 10px; right: 10px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 4px 9px; border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; z-index: 10; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.4); letter-spacing: 0.5px;"><i class="fa fa-shield-alt" style="font-size: 8px;"></i> Posted by Admin</div>';
-    }
-    
-    $imgHtml = '';
-    if ($imageSrc) {
-        $imgHtml = '<img src="' . $imageSrc . '" loading="lazy" alt="' . htmlspecialchars($product['title']) . '" class="product-card-image">';
-    } else {
-        $imgHtml = '<div class="product-card-image" style="display: flex; align-items: center; justify-content: center; background: #e0e0e0;"><i class="fa fa-image" style="font-size: 40px; color: #999;"></i></div>';
-    }
-    
-    $priceVal = number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2);
-    $titleHtml = htmlspecialchars($product['title']);
-    $catName = htmlspecialchars($product['category_name'] ?? 'Uncategorized');
-    $dateStr = date('M d', strtotime($product['created_at']));
-    
-    $distanceHtml = '';
-    if (isset($product['distance']) && $product['distance'] !== null) {
-        $dist = floatval($product['distance']);
-        $distText = $dist < 1 ? round($dist * 1000) . ' m' : number_format($dist, 1) . ' km';
-        $distanceHtml = '<span style="font-size: 11px; font-weight: 700; color: var(--primary-green); margin-left: auto;">🚴 ' . $distText . '</span>';
-    }
-    
-    return '
-        <a href="' . $detailLink . '" class="product-card" style="position: relative;">
-            ' . $typeBadge . '
-            ' . $adminBadge . '
-            ' . $imgHtml . '
-            <div class="product-card-content">
-                <div class="product-card-price">₹' . $priceVal . '</div>
-                <div class="product-card-title">' . $titleHtml . '</div>
-                <div class="product-card-meta" style="display: flex; align-items: center; width: 100%;">
-                    <span>' . $catName . '</span>
-                    <span style="margin-left: 8px;">' . $dateStr . '</span>
-                    ' . $distanceHtml . '
+        $adminBadge = '';
+        if (!empty($product['is_admin_posted'])) {
+            $adminBadge = '<div class="badge-admin-posted" style="position: absolute; top: 10px; right: 10px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 4px 9px; border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; z-index: 10; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.4); letter-spacing: 0.5px;"><i class="fa fa-shield-alt" style="font-size: 8px;"></i> Posted by Admin</div>';
+        }
+        
+        $imgHtml = '';
+        if ($imageSrc) {
+            $imgHtml = '<img src="' . $imageSrc . '" loading="lazy" alt="' . htmlspecialchars($product['title']) . '" class="product-card-image">';
+        } else {
+            $imgHtml = '<div class="product-card-image" style="display: flex; align-items: center; justify-content: center; background: #e0e0e0;"><i class="fa fa-image" style="font-size: 40px; color: #999;"></i></div>';
+        }
+        
+        $priceVal = number_format($product['price'], (fmod($product['price'], 1) == 0) ? 0 : 2);
+        $titleHtml = htmlspecialchars($product['title']);
+        $catName = htmlspecialchars($product['category_name'] ?? 'Uncategorized');
+        $dateStr = date('M d', strtotime($product['created_at']));
+        
+        $distanceHtml = '';
+        if (isset($product['distance']) && $product['distance'] !== null) {
+            $dist = floatval($product['distance']);
+            $distText = $dist < 1 ? round($dist * 1000) . ' m' : number_format($dist, 1) . ' km';
+            $distanceHtml = '<span style="font-size: 11px; font-weight: 700; color: var(--primary-green); margin-left: auto;">🚴 ' . $distText . '</span>';
+        }
+        
+        return '
+            <a href="' . $detailLink . '" class="product-card" style="position: relative;">
+                ' . $typeBadge . '
+                ' . $adminBadge . '
+                ' . $imgHtml . '
+                <div class="product-card-content">
+                    <div class="product-card-price">₹' . $priceVal . '</div>
+                    <div class="product-card-title">' . $titleHtml . '</div>
+                    <div class="product-card-meta" style="display: flex; align-items: center; width: 100%;">
+                        <span>' . $catName . '</span>
+                        <span style="margin-left: 8px;">' . $dateStr . '</span>
+                        ' . $distanceHtml . '
+                    </div>
                 </div>
-            </div>
-        </a>
-    ';
+            </a>
+        ';
+    }
 }
 
 // Fetch recently viewed products from cookies (limit 6 for index horizontal scroll)
@@ -108,8 +110,37 @@ if (isset($_COOKIE['recently_viewed'])) {
 
 $category_filter = $_GET['category_id'] ?? null;
 $search_query = $_GET['search'] ?? null;
+$body_type_filter = $_GET['body_type'] ?? null;
+$brand_filter = $_GET['brand'] ?? null;
+$model_filter = $_GET['model'] ?? null;
+$variant_filter = $_GET['variant'] ?? null;
+$fuel_filter = $_GET['fuel'] ?? null;
+$transmission_filter = $_GET['transmission'] ?? null;
 $active_spec = $_GET['spec'] ?? null;
 $post_type = $_GET['post_type'] ?? null;
+
+// Backwards compatibility with 'spec' parameter
+$known_body_types = [
+    'Hatchback', 'Sedan', 'SUV', 'Compact SUV', 'MUV', 'Luxury',
+    'Motorcycle', 'Scooter', 'Cruiser', 'Sports Bike', 'Electric Scooter', 'Bicycle',
+    'Auto Rickshaw', 'Pickup & Mini Truck', 'Tipper & Truck', 'Tractor', 'Bus & Traveller', 'JCB & Cranes',
+    'House', 'Villa', 'Apartment', 'Plot / Land', 'Plantation', 'Commercial Shop', 'Office',
+    'Fresh Milk', 'Country Eggs', 'Spices & Pepper', 'Coconuts & Oil', 'Fruits & Vegetables', 'Pure Honey', 'Plant Saplings', 'Manure',
+    'Milking', 'Kid / Young', 'Pair', 'Pregnant', 'Breeding'
+];
+$known_fuels = ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'];
+$known_transmissions = ['Manual', 'Automatic'];
+
+if (!$body_type_filter && $active_spec && in_array($active_spec, $known_body_types)) {
+    $body_type_filter = $active_spec;
+}
+if (!$fuel_filter && $active_spec && in_array($active_spec, $known_fuels)) {
+    $fuel_filter = $active_spec;
+}
+if (!$transmission_filter && $active_spec && in_array($active_spec, $known_transmissions)) {
+    $transmission_filter = $active_spec;
+}
+
 $where_clause = "WHERE p.status = 'active'";
 $params = [];
 
@@ -135,14 +166,71 @@ if ($category_filter) {
     }
 }
 
-// Search across Title, Description, Subcategory, Parent Category, and Location
+// Body Type Filter
+if ($body_type_filter) {
+    if ($body_type_filter === 'Luxury') {
+        $where_clause .= " AND (p.body_type = 'Luxury' OR p.brand IN ('Mercedes-Benz', 'BMW', 'Audi', 'Land Rover') OR p.title LIKE '%Luxury%' OR p.search_keywords LIKE '%Luxury%')";
+    } elseif ($body_type_filter === 'SUV') {
+        $where_clause .= " AND (p.body_type IN ('SUV', 'Compact SUV') OR p.title LIKE '%SUV%' OR p.description LIKE '%SUV%' OR p.search_keywords LIKE '%SUV%' OR c.name LIKE '%SUV%')";
+    } else {
+        $clean_btype = trim(preg_replace('/\(.*?\)/', '', $body_type_filter));
+        $where_clause .= " AND (p.body_type = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR c.name LIKE ?)";
+        $params[] = $body_type_filter;
+        $params[] = '%' . $clean_btype . '%';
+        $params[] = '%' . $clean_btype . '%';
+        $params[] = '%' . $clean_btype . '%';
+        $params[] = '%' . $clean_btype . '%';
+    }
+}
+
+// Fuel Filter
+if ($fuel_filter) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = '%' . $fuel_filter . '%';
+    $params[] = '%' . $fuel_filter . '%';
+    $params[] = '%' . $fuel_filter . '%';
+}
+
+// Transmission Filter
+if ($transmission_filter) {
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = '%' . $transmission_filter . '%';
+    $params[] = '%' . $transmission_filter . '%';
+    $params[] = '%' . $transmission_filter . '%';
+}
+
+// Hierarchical Brand, Model, and Variant filters
+if ($brand_filter) {
+    $where_clause .= " AND (p.brand = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $brand_filter;
+    $params[] = '%' . $brand_filter . '%';
+    $params[] = '%' . $brand_filter . '%';
+}
+
+if ($model_filter) {
+    $where_clause .= " AND (p.model = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $model_filter;
+    $params[] = '%' . $model_filter . '%';
+    $params[] = '%' . $model_filter . '%';
+}
+
+if ($variant_filter) {
+    $where_clause .= " AND (p.variant = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    $params[] = $variant_filter;
+    $params[] = '%' . $variant_filter . '%';
+    $params[] = '%' . $variant_filter . '%';
+    $params[] = '%' . $variant_filter . '%';
+}
+
+// Search across Title, Description, Multilingual Keywords, Subcategory, Parent Category, and Location
 if (!empty($search_query)) {
     $terms = array_filter(array_map('trim', explode(' ', $search_query)));
     if (!empty($terms)) {
         $term_clauses = [];
         foreach ($terms as $term) {
-            $term_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
+            $term_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
             $wildcard = '%' . $term . '%';
+            $params[] = $wildcard;
             $params[] = $wildcard;
             $params[] = $wildcard;
             $params[] = $wildcard;
@@ -153,10 +241,15 @@ if (!empty($search_query)) {
     }
 }
 
-if ($active_spec) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ?)";
+if ($active_spec && $active_spec !== $body_type_filter && $active_spec !== $fuel_filter && $active_spec !== $transmission_filter) {
+    $clean_spec = trim(preg_replace('/\(.*?\)/', '', $active_spec));
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
     $params[] = '%' . $active_spec . '%';
     $params[] = '%' . $active_spec . '%';
+    $params[] = '%' . $active_spec . '%';
+    $params[] = '%' . $clean_spec . '%';
+    $params[] = '%' . $clean_spec . '%';
+    $params[] = '%' . $clean_spec . '%';
 }
 
 if ($post_type && in_array($post_type, ['sell', 'buy', 'rent'])) {
@@ -180,8 +273,24 @@ if (!function_exists('isOrUnderCategory')) {
 }
 
 $is_cars = isOrUnderCategory($category_filter, 25, $pdo);
+$is_bikes = isOrUnderCategory($category_filter, 27, $pdo);
+$is_pets = isOrUnderCategory($category_filter, 80, $pdo);
+$is_farm = isOrUnderCategory($category_filter, 9, $pdo);
+$is_commercial = isOrUnderCategory($category_filter, 61, $pdo);
 $is_mobiles = isOrUnderCategory($category_filter, 11, $pdo);
 $is_properties = isOrUnderCategory($category_filter, 32, $pdo);
+
+$buildFilterUrl = function($overrides = []) {
+    $params = $_GET;
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') {
+            unset($params[$k]);
+        } else {
+            $params[$k] = $v;
+        }
+    }
+    return 'index.php?' . http_build_query($params);
+};
 
 $user_location = $_SESSION['user_location'] ?? null;
 $radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
@@ -212,7 +321,7 @@ if ($radius && $user_location && isset($user_location['lat']) && isset($user_loc
     $params[] = $radius;
 }
 
-$is_filtered_view = (!empty($category_filter) || !empty($post_type) || !empty($search_query) || !empty($radius) || !empty($active_spec));
+$is_filtered_view = (!empty($category_filter) || !empty($post_type) || !empty($search_query) || !empty($radius) || !empty($body_type_filter) || !empty($fuel_filter) || !empty($transmission_filter) || !empty($active_spec) || !empty($brand_filter) || !empty($model_filter) || !empty($variant_filter));
 $products = [];
 
 // Fetch products: On homepage displays all active ads; on category/search displays all matching ads
@@ -244,6 +353,91 @@ if ($parent_id) {
     $child_stmt = $pdo->prepare("SELECT * FROM categories WHERE parent_id = ? ORDER BY name");
     $child_stmt->execute([$parent_id]);
     $l2_categories = $child_stmt->fetchAll();
+}
+
+// Hierarchical Brand -> Model -> Variant Catalog Logic
+$available_brands = [];
+$available_models = [];
+$available_variants = [];
+$active_b_id = null;
+$active_m_id = null;
+$selected_model_body_type = null;
+
+if ($parent_id) {
+    // If a model is selected, get its body_type so we can disable non-applicable body types in UI
+    if ($model_filter) {
+        $mb_stmt = $pdo->prepare("SELECT body_type FROM product_models WHERE name = ? LIMIT 1");
+        $mb_stmt->execute([$model_filter]);
+        $selected_model_body_type = $mb_stmt->fetchColumn() ?: null;
+        if ($selected_model_body_type && !$body_type_filter) {
+            $body_type_filter = $selected_model_body_type;
+        }
+    }
+
+    // Brands Query: Filter by body_type if selected!
+    if ($body_type_filter) {
+        if ($body_type_filter === 'Luxury') {
+            $b_stmt = $pdo->prepare("SELECT DISTINCT b.id, b.name FROM product_brands b JOIN product_models m ON m.brand_id = b.id WHERE b.category_id = ? AND b.name IN ('Mercedes-Benz', 'BMW', 'Audi', 'Land Rover') ORDER BY b.sort_order, b.name");
+            $b_stmt->execute([$parent_id]);
+        } elseif ($body_type_filter === 'SUV') {
+            $b_stmt = $pdo->prepare("SELECT DISTINCT b.id, b.name FROM product_brands b JOIN product_models m ON m.brand_id = b.id WHERE b.category_id = ? AND m.body_type IN ('SUV', 'Compact SUV') ORDER BY b.sort_order, b.name");
+            $b_stmt->execute([$parent_id]);
+        } else {
+            $b_stmt = $pdo->prepare("SELECT DISTINCT b.id, b.name FROM product_brands b JOIN product_models m ON m.brand_id = b.id WHERE b.category_id = ? AND m.body_type = ? ORDER BY b.sort_order, b.name");
+            $b_stmt->execute([$parent_id, $body_type_filter]);
+        }
+        $available_brands = $b_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fallback to all brands if none match
+        if (empty($available_brands)) {
+            $b_stmt = $pdo->prepare("SELECT id, name FROM product_brands WHERE category_id = ? ORDER BY sort_order, name");
+            $b_stmt->execute([$parent_id]);
+            $available_brands = $b_stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } else {
+        $b_stmt = $pdo->prepare("SELECT id, name FROM product_brands WHERE category_id = ? ORDER BY sort_order, name");
+        $b_stmt->execute([$parent_id]);
+        $available_brands = $b_stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    if ($brand_filter) {
+        $brand_row = $pdo->prepare("SELECT id FROM product_brands WHERE category_id = ? AND name = ?");
+        $brand_row->execute([$parent_id, $brand_filter]);
+        $active_b_id = $brand_row->fetchColumn();
+        if ($active_b_id) {
+            // Models Query: Filter by body_type if selected!
+            if ($body_type_filter && $body_type_filter !== 'Luxury') {
+                if ($body_type_filter === 'SUV') {
+                    $m_stmt = $pdo->prepare("SELECT id, name, body_type FROM product_models WHERE brand_id = ? AND body_type IN ('SUV', 'Compact SUV') ORDER BY sort_order, name");
+                    $m_stmt->execute([$active_b_id]);
+                } else {
+                    $m_stmt = $pdo->prepare("SELECT id, name, body_type FROM product_models WHERE brand_id = ? AND body_type = ? ORDER BY sort_order, name");
+                    $m_stmt->execute([$active_b_id, $body_type_filter]);
+                }
+                $available_models = $m_stmt->fetchAll(PDO::FETCH_ASSOC);
+                if (empty($available_models)) {
+                    $m_stmt = $pdo->prepare("SELECT id, name, body_type FROM product_models WHERE brand_id = ? ORDER BY sort_order, name");
+                    $m_stmt->execute([$active_b_id]);
+                    $available_models = $m_stmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+            } else {
+                $m_stmt = $pdo->prepare("SELECT id, name, body_type FROM product_models WHERE brand_id = ? ORDER BY sort_order, name");
+                $m_stmt->execute([$active_b_id]);
+                $available_models = $m_stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            if ($model_filter) {
+                $model_row = $pdo->prepare("SELECT id FROM product_models WHERE brand_id = ? AND name = ?");
+                $model_row->execute([$active_b_id, $model_filter]);
+                $active_m_id = $model_row->fetchColumn();
+                if ($active_m_id) {
+                    $v_stmt = $pdo->prepare("SELECT id, name FROM product_variants WHERE model_id = ? ORDER BY sort_order, name");
+                    $v_stmt->execute([$active_m_id]);
+                    $available_variants = $v_stmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+            }
+        }
+    }
 }
 
 require_once '../includes/header.php';
@@ -519,58 +713,461 @@ require_once '../includes/header.php';
         </script>
     <?php endif; ?>
 
-    <?php if ($is_cars || $is_mobiles || $is_properties): ?>
-        <div class="glass-card" style="padding: 20px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--white); margin-bottom: 32px; box-shadow: var(--shadow-sm);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px;">
-                    <i class="fa fa-sliders-h" style="color: var(--primary-green);"></i> Specific Filters
-                </h3>
-                <?php if ($active_spec): ?>
-                    <a href="index.php?category_id=<?= $category_filter ?><?= $post_type ? '&post_type=' . $post_type : '' ?><?= $radius ? '&radius=' . $radius : '' ?>" style="font-size: 11px; font-weight: 700; color: var(--primary-green); text-decoration: none; background: #f0fdf4; padding: 4px 10px; border-radius: 8px;">Clear Filters</a>
-                <?php endif; ?>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 16px;">
-                <?php 
-                $filter_groups = [];
-                if ($is_cars) {
-                    $filter_groups = [
-                        'Popular Brands' => ['Maruti Suzuki', 'Hyundai', 'Honda', 'Toyota', 'Tata', 'Mahindra'],
-                        'Body Types' => ['Sedan', 'SUV', 'Hatchback'],
-                        'Fuel Types' => ['Petrol', 'Diesel', 'Electric', 'CNG']
-                    ];
-                } elseif ($is_mobiles) {
-                    $filter_groups = [
-                        'Brands' => ['Apple', 'Samsung', 'OnePlus', 'Xiaomi', 'Realme'],
-                        'Storage Capacity' => ['64 GB', '128 GB', '256 GB', '512 GB']
-                    ];
-                } elseif ($is_properties) {
-                    $filter_groups = [
-                        'Properties Type' => ['House', 'Apartment', 'Villa', 'Plot'],
-                        'Size / Layout' => ['1 BHK', '2 BHK', '3 BHK', '4 BHK']
-                    ];
-                }
+    <style>
+        .catalog-drawer-modal {
+            position: fixed;
+            z-index: 10001;
+            background: #ffffff;
+            box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.25);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+        }
+        @media (max-width: 768px) {
+            .catalog-drawer-modal {
+                bottom: 0;
+                left: 0;
+                right: 0;
+                max-height: 85vh;
+                height: 85vh;
+                border-radius: 24px 24px 0 0;
+                transform: translateY(105%);
+            }
+            .catalog-drawer-modal.open {
+                transform: translateY(0);
+            }
+        }
+        @media (min-width: 769px) {
+            .catalog-drawer-modal {
+                top: 50%;
+                left: 50%;
+                width: 680px;
+                max-height: 85vh;
+                border-radius: 24px;
+                transform: translate(-50%, -50%) scale(0.92);
+                opacity: 0;
+                pointer-events: none;
+            }
+            .catalog-drawer-modal.open {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+    </style>
 
-                foreach ($filter_groups as $group_title => $opts): ?>
+    <?php 
+    $primary_type_title = null;
+    $primary_type_icon = null;
+    $primary_type_opts = [];
+    $secondary_filters = [];
+
+    if ($is_cars) {
+        $primary_type_title = 'Body Type (ബോഡി ടൈപ്പ്)';
+        $primary_type_icon = 'fa-car-side';
+        $primary_type_opts = ['Hatchback', 'Sedan', 'SUV', 'Compact SUV', 'MUV', 'Luxury'];
+        $secondary_filters = [
+            'Fuel Types' => ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'],
+            'Transmission' => ['Manual', 'Automatic']
+        ];
+    } elseif ($is_bikes) {
+        $primary_type_title = 'Vehicle Type (വാഹന ഇനം)';
+        $primary_type_icon = 'fa-motorcycle';
+        $primary_type_opts = ['Motorcycle', 'Scooter', 'Cruiser', 'Sports Bike', 'Electric Scooter', 'Bicycle'];
+    } elseif ($is_commercial) {
+        $primary_type_title = 'Vehicle Type (വാഹന ഇനം)';
+        $primary_type_icon = 'fa-truck';
+        $primary_type_opts = ['Auto Rickshaw', 'Pickup & Mini Truck', 'Tipper & Truck', 'Tractor', 'Bus & Traveller', 'JCB & Cranes'];
+        $secondary_filters = [
+            'Fuel Type' => ['Diesel', 'Petrol', 'CNG', 'Electric']
+        ];
+    } elseif ($is_properties) {
+        $primary_type_title = 'Property Type (വസ്തു ഇനം)';
+        $primary_type_icon = 'fa-home';
+        $primary_type_opts = ['House', 'Villa', 'Apartment', 'Plot / Land', 'Plantation', 'Commercial Shop', 'Office'];
+        $secondary_filters = [
+            'Layout' => ['1 BHK', '2 BHK', '3 BHK', '4 BHK', '5+ BHK']
+        ];
+    } elseif ($is_farm) {
+        $primary_type_title = 'Product Type (ഉൽപ്പന്ന ഇനം)';
+        $primary_type_icon = 'fa-seedling';
+        $primary_type_opts = ['Fresh Milk', 'Country Eggs', 'Spices & Pepper', 'Coconuts & Oil', 'Fruits & Vegetables', 'Pure Honey', 'Plant Saplings', 'Manure'];
+        $secondary_filters = [
+            'Quality' => ['Organic', 'Farm Fresh', 'Homemade']
+        ];
+    } elseif ($is_pets) {
+        $primary_type_title = 'Livestock & Pet Types (ഇനം)';
+        $primary_type_icon = 'fa-paw';
+        $primary_type_opts = ['Milking', 'Kid / Young', 'Pair', 'Pregnant', 'Breeding'];
+    } elseif ($is_mobiles) {
+        $secondary_filters = [
+            'Storage Capacity' => ['64 GB', '128 GB', '256 GB', '512 GB', '1 TB']
+        ];
+    }
+
+    $has_catalog_filter = (!empty($available_brands) || !empty($brand_filter) || !empty($model_filter) || !empty($variant_filter) || !empty($primary_type_opts));
+    $show_filters_panel = ($has_catalog_filter || $is_cars || $is_bikes || $is_pets || $is_farm || $is_commercial || $is_mobiles || $is_properties || !empty($active_spec) || !empty($body_type_filter));
+    $active_filter_count = ($body_type_filter ? 1 : 0) + ($brand_filter ? 1 : 0) + ($model_filter ? 1 : 0) + ($variant_filter ? 1 : 0) + ($fuel_filter ? 1 : 0) + ($transmission_filter ? 1 : 0) + (($active_spec && $active_spec !== $body_type_filter && $active_spec !== $fuel_filter && $active_spec !== $transmission_filter) ? 1 : 0);
+    ?>
+    <?php if ($show_filters_panel): ?>
+        <!-- Compact Filter Bar (Menu Trigger + Active Filter Chips Strip) -->
+        <div id="catalog-filter-bar-container" style="margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <!-- Filter Drawer Trigger Button -->
+                <button type="button" onclick="openCatalogDrawer()" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background: <?= $active_filter_count > 0 ? 'var(--primary-green)' : '#ffffff' ?>; color: <?= $active_filter_count > 0 ? '#ffffff' : 'var(--text-dark)' ?>; border: 1.5px solid <?= $active_filter_count > 0 ? 'var(--primary-green)' : 'var(--border-color)' ?>; border-radius: 14px; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: <?= $active_filter_count > 0 ? '0 4px 12px rgba(16, 185, 129, 0.25)' : 'var(--shadow-sm)' ?>; transition: all 0.2s ease;">
+                    <i class="fa fa-sliders-h" style="color: <?= $active_filter_count > 0 ? '#ffffff' : 'var(--primary-green)' ?>;"></i>
+                    <span>Filter & Catalog</span>
+                    <?php if ($active_filter_count > 0): ?>
+                        <span style="background: rgba(255,255,255,0.3); color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 800;"><?= $active_filter_count ?></span>
+                    <?php endif; ?>
+                    <i class="fa fa-chevron-down" style="font-size: 10px; opacity: 0.7; margin-left: 2px;"></i>
+                </button>
+
+                <!-- Active Filter Pills Strip (Single line scrollable) -->
+                <div id="active-pills-bar" style="display: flex; align-items: center; gap: 8px; flex: 1; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none;">
+                    <?php if ($body_type_filter): ?>
+                        <a href="<?= $buildFilterUrl(['body_type' => null, 'spec' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #dcfce7; color: #15803d; text-decoration: none; border: 1px solid #bbf7d0; white-space: nowrap;">
+                            <span>Type: <?= htmlspecialchars($body_type_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($brand_filter): ?>
+                        <a href="<?= $buildFilterUrl(['brand' => null, 'model' => null, 'variant' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #e0f2fe; color: #0284c7; text-decoration: none; border: 1px solid #bae6fd; white-space: nowrap;">
+                            <span>Brand: <?= htmlspecialchars($brand_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($model_filter): ?>
+                        <a href="<?= $buildFilterUrl(['model' => null, 'variant' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #ede9fe; color: #6d28d9; text-decoration: none; border: 1px solid #ddd6fe; white-space: nowrap;">
+                            <span>Model: <?= htmlspecialchars($model_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($variant_filter): ?>
+                        <a href="<?= $buildFilterUrl(['variant' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #fef3c7; color: #b45309; text-decoration: none; border: 1px solid #fde68a; white-space: nowrap;">
+                            <span>Variant: <?= htmlspecialchars($variant_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($fuel_filter): ?>
+                        <a href="<?= $buildFilterUrl(['fuel' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #fee2e2; color: #b91c1c; text-decoration: none; border: 1px solid #fca5a5; white-space: nowrap;">
+                            <span>Fuel: <?= htmlspecialchars($fuel_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($transmission_filter): ?>
+                        <a href="<?= $buildFilterUrl(['transmission' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #f1f5f9; color: #334155; text-decoration: none; border: 1px solid #cbd5e1; white-space: nowrap;">
+                            <span>Gear: <?= htmlspecialchars($transmission_filter) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($active_spec && $active_spec !== $body_type_filter && $active_spec !== $fuel_filter && $active_spec !== $transmission_filter): ?>
+                        <a href="<?= $buildFilterUrl(['spec' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 700; border-radius: 20px; background: #f0fdf4; color: #166534; text-decoration: none; border: 1px solid #bbf7d0; white-space: nowrap;">
+                            <span><?= htmlspecialchars($active_spec) ?></span>
+                            <i class="fa fa-times" style="font-size: 10px;"></i>
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($active_filter_count > 0): ?>
+                        <a href="<?= $buildFilterUrl(['body_type' => null, 'brand' => null, 'model' => null, 'variant' => null, 'fuel' => null, 'transmission' => null, 'spec' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="font-size: 12px; font-weight: 700; color: #ef4444; text-decoration: none; white-space: nowrap; padding: 4px 8px;">
+                            Clear All
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide-Up / Modal Backdrop -->
+        <div id="catalog-drawer-backdrop" onclick="closeCatalogDrawer()" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); z-index: 10000; opacity: 0; transition: opacity 0.3s ease;"></div>
+
+        <!-- Slide-Up Drawer / Modal Dialog -->
+        <div id="catalog-drawer" class="catalog-drawer-modal">
+            <!-- Drawer Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--border-color); background: #ffffff; border-radius: 24px 24px 0 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 36px; height: 36px; border-radius: 10px; background: #f0fdf4; color: var(--primary-green); display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                        <i class="fa fa-sliders-h"></i>
+                    </div>
                     <div>
-                        <span style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;"><?= $group_title ?></span>
+                        <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: var(--text-dark);">Detailed Filter & Catalog</h3>
+                        <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;" id="drawer-ads-counter">
+                            <?= count($products) ?> ads matching
+                        </span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <?php if ($active_filter_count > 0): ?>
+                        <a href="<?= $buildFilterUrl(['body_type' => null, 'brand' => null, 'model' => null, 'variant' => null, 'fuel' => null, 'transmission' => null, 'spec' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="font-size: 12px; font-weight: 700; color: #ef4444; text-decoration: none; background: #fef2f2; padding: 5px 10px; border-radius: 8px;">
+                            Clear All
+                        </a>
+                    <?php endif; ?>
+                    <button type="button" onclick="closeCatalogDrawer()" style="background: #f1f5f9; border: none; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; font-size: 16px;">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Catalog Content (Updated seamlessly via AJAX) -->
+            <div id="catalog-drawer-content" style="padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                <!-- LEVEL 1: PRIMARY BODY TYPE / VEHICLE TYPE / PROPERTY TYPE -->
+                <?php if (!empty($primary_type_opts)): ?>
+                    <div style="background: #f0fdf4; border-radius: 16px; padding: 16px; border: 1.5px solid #bbf7d0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-size: 12px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa <?= $primary_type_icon ?: 'fa-th-large' ?>" style="color: var(--primary-green);"></i> 1. <?= $primary_type_title ?>
+                            </span>
+                            <?php if ($body_type_filter): ?>
+                                <a href="<?= $buildFilterUrl(['body_type' => null, 'spec' => null]) ?>" onclick="applyFilterAjax(event, this.href)" style="font-size: 11px; font-weight: 700; color: #ef4444; text-decoration: none;">Reset</a>
+                            <?php else: ?>
+                                <span style="font-size: 11px; color: #15803d; font-weight: 600;"><?= count($primary_type_opts) ?> styles</span>
+                            <?php endif; ?>
+                        </div>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            <?php foreach ($opts as $opt): 
-                                $isSelected = ($active_spec === $opt);
-                                if ($isSelected) {
-                                    $targetUrl = "index.php?category_id=" . $category_filter . ($post_type ? "&post_type=" . $post_type : "") . ($radius ? "&radius=" . $radius : "");
-                                } else {
-                                    $targetUrl = "index.php?category_id=" . $category_filter . ($post_type ? "&post_type=" . $post_type : "") . ($radius ? "&radius=" . $radius : "") . "&spec=" . urlencode($opt);
+                            <?php foreach ($primary_type_opts as $opt): 
+                                $isSelected = ($body_type_filter === $opt);
+                                
+                                // Disable incompatible body types if a specific model is chosen (e.g. Fronx is not Sedan)
+                                $isDisabled = false;
+                                if ($selected_model_body_type) {
+                                    if ($selected_model_body_type === 'Compact SUV' && $opt === 'SUV') {
+                                        $isDisabled = false; // Allow SUV broad parent group
+                                    } elseif ($selected_model_body_type !== $opt) {
+                                        $isDisabled = true;
+                                    }
                                 }
+
+                                if ($isDisabled): ?>
+                                    <span style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; border-radius: 12px; border: 1.5px dashed #cbd5e1; background: #f8fafc; color: #94a3b8; cursor: not-allowed; opacity: 0.45; text-decoration: line-through;" title="Not available for <?= htmlspecialchars($model_filter) ?>">
+                                        <?= htmlspecialchars($opt) ?>
+                                    </span>
+                                <?php else: 
+                                    $targetUrl = $buildFilterUrl(['body_type' => ($isSelected ? null : $opt), 'spec' => null]);
+                                ?>
+                                    <a href="<?= $targetUrl ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 700; border-radius: 12px; border: 1.5px solid <?= $isSelected ? '#059669' : '#86efac' ?>; background: <?= $isSelected ? '#059669' : '#ffffff' ?>; color: <?= $isSelected ? '#ffffff' : '#14532d' ?>; text-decoration: none; transition: all 0.2s ease; box-shadow: <?= $isSelected ? '0 4px 12px rgba(5, 150, 105, 0.3)' : 'none' ?>;">
+                                        <?php if ($isSelected): ?><i class="fa fa-check" style="font-size: 10px;"></i><?php endif; ?>
+                                        <?= htmlspecialchars($opt) ?>
+                                    </a>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- LEVEL 2: Brands / Makes -->
+                <?php if (!empty($available_brands)): ?>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-size: 12px; font-weight: 800; color: var(--text-dark); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa fa-shield-alt" style="color: var(--primary-green);"></i> 2. Brand / Make (നിർമ്മാതാവ് / ബ്രാൻഡ്)
+                            </span>
+                            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;"><?= count($available_brands) ?> available</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; padding: 2px;">
+                            <?php foreach ($available_brands as $b): 
+                                $isSelected = ($brand_filter === $b['name']);
+                                $targetUrl = $buildFilterUrl(['brand' => ($isSelected ? null : $b['name']), 'model' => null, 'variant' => null]);
                             ?>
-                                <a href="<?= $targetUrl ?>" style="display: inline-block; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 12px; border: 1px solid <?= $isSelected ? 'var(--primary-green)' : 'var(--border-color)' ?>; background: <?= $isSelected ? '#f0fdf4' : 'var(--white)' ?>; color: <?= $isSelected ? 'var(--primary-green-dark)' : 'var(--text-dark)' ?>; text-decoration: none; transition: all 0.2s ease;">
-                                    <?= htmlspecialchars($opt) ?>
+                                <a href="<?= $targetUrl ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 700; border-radius: 12px; border: 1.5px solid <?= $isSelected ? 'var(--primary-green)' : 'var(--border-color)' ?>; background: <?= $isSelected ? 'var(--primary-green)' : 'var(--white)' ?>; color: <?= $isSelected ? '#fff' : 'var(--text-dark)' ?>; text-decoration: none; transition: all 0.2s ease; box-shadow: <?= $isSelected ? '0 4px 12px rgba(16,185,129,0.3)' : 'none' ?>;">
+                                    <?php if ($isSelected): ?><i class="fa fa-check" style="font-size: 10px;"></i><?php endif; ?>
+                                    <?= htmlspecialchars($b['name']) ?>
                                 </a>
                             <?php endforeach; ?>
                         </div>
                     </div>
-                <?php endforeach; ?>
+                <?php endif; ?>
+
+                <!-- LEVEL 3: Models / Breeds (When Brand Selected) -->
+                <?php if (!empty($available_models)): ?>
+                    <div style="background: #f8fafc; border-radius: 16px; padding: 16px; border: 1.5px solid #e2e8f0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-size: 12px; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa fa-car" style="color: #0284c7;"></i> 3. Model / Variety for <?= htmlspecialchars($brand_filter) ?> (മോഡൽ / ഇനം)
+                            </span>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 600;"><?= count($available_models) ?> models</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; padding: 2px;">
+                            <?php foreach ($available_models as $m): 
+                                $isSelected = ($model_filter === $m['name']);
+                                $targetUrl = $buildFilterUrl(['model' => ($isSelected ? null : $m['name']), 'variant' => null]);
+                            ?>
+                                <a href="<?= $targetUrl ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 700; border-radius: 12px; border: 1.5px solid <?= $isSelected ? '#0284c7' : '#cbd5e1' ?>; background: <?= $isSelected ? '#0284c7' : '#fff' ?>; color: <?= $isSelected ? '#fff' : '#1e293b' ?>; text-decoration: none; transition: all 0.2s ease; box-shadow: <?= $isSelected ? '0 4px 12px rgba(2,132,199,0.25)' : 'none' ?>;">
+                                    <?php if ($isSelected): ?><i class="fa fa-check" style="font-size: 10px;"></i><?php endif; ?>
+                                    <?= htmlspecialchars($m['name']) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- LEVEL 4: Variants / Trims (When Model Selected) -->
+                <?php if (!empty($available_variants)): ?>
+                    <div style="background: #fffbeb; border-radius: 16px; padding: 16px; border: 1.5px solid #fde68a;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="font-size: 12px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa fa-tags" style="color: #d97706;"></i> 4. Variant / Trim / Spec for <?= htmlspecialchars($model_filter) ?> (വേരിയന്റ്)
+                            </span>
+                            <span style="font-size: 11px; color: #b45309; font-weight: 600;"><?= count($available_variants) ?> variants</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 160px; overflow-y: auto; padding: 2px;">
+                            <?php foreach ($available_variants as $v): 
+                                $isSelected = ($variant_filter === $v['name']);
+                                $targetUrl = $buildFilterUrl(['variant' => ($isSelected ? null : $v['name'])]);
+                            ?>
+                                <a href="<?= $targetUrl ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; border-radius: 10px; border: 1.5px solid <?= $isSelected ? '#d97706' : '#fcd34d' ?>; background: <?= $isSelected ? '#d97706' : '#fff' ?>; color: <?= $isSelected ? '#fff' : '#78350f' ?>; text-decoration: none; transition: all 0.2s ease; box-shadow: <?= $isSelected ? '0 4px 10px rgba(217,119,6,0.25)' : 'none' ?>;">
+                                    <?php if ($isSelected): ?><i class="fa fa-check" style="font-size: 9px;"></i><?php endif; ?>
+                                    <?= htmlspecialchars($v['name']) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- LEVEL 5: Secondary Attribute Filter Groups (Fuel, Transmission, etc.) -->
+                <?php if (!empty($secondary_filters)): ?>
+                    <?php foreach ($secondary_filters as $group_title => $opts): ?>
+                        <div>
+                            <span style="font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 8px;"><?= $group_title ?></span>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                <?php foreach ($opts as $opt): 
+                                    if ($group_title === 'Fuel Types' || $group_title === 'Fuel Type') {
+                                        $isSelected = ($fuel_filter === $opt);
+                                        $targetUrl = $buildFilterUrl(['fuel' => ($isSelected ? null : $opt)]);
+                                    } elseif ($group_title === 'Transmission') {
+                                        $isSelected = ($transmission_filter === $opt);
+                                        $targetUrl = $buildFilterUrl(['transmission' => ($isSelected ? null : $opt)]);
+                                    } else {
+                                        $isSelected = ($active_spec === $opt);
+                                        $targetUrl = $buildFilterUrl(['spec' => ($isSelected ? null : $opt)]);
+                                    }
+                                ?>
+                                    <a href="<?= $targetUrl ?>" onclick="applyFilterAjax(event, this.href)" style="display: inline-block; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 12px; border: 1px solid <?= $isSelected ? 'var(--primary-green)' : 'var(--border-color)' ?>; background: <?= $isSelected ? '#f0fdf4' : 'var(--white)' ?>; color: <?= $isSelected ? 'var(--primary-green-dark)' : 'var(--text-dark)' ?>; text-decoration: none; transition: all 0.2s ease;">
+                                        <?= htmlspecialchars($opt) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Drawer Sticky Footer Action Button -->
+            <div style="padding: 16px 24px; border-top: 1px solid var(--border-color); background: #ffffff; display: flex; gap: 12px; align-items: center; border-radius: 0 0 24px 24px;">
+                <button type="button" onclick="closeCatalogDrawer()" style="flex: 1; padding: 14px; background: var(--primary-green); color: white; border: none; border-radius: 14px; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>View Results</span>
+                    <span id="btn-view-count" style="background: rgba(255,255,255,0.25); padding: 2px 8px; border-radius: 12px; font-size: 12px;"><?= count($products) ?> ads</span>
+                </button>
             </div>
         </div>
+
+        <script>
+            function openCatalogDrawer() {
+                const backdrop = document.getElementById('catalog-drawer-backdrop');
+                const drawer = document.getElementById('catalog-drawer');
+                if (!drawer || !backdrop) return;
+                backdrop.style.display = 'block';
+                setTimeout(() => {
+                    backdrop.style.opacity = '1';
+                    drawer.classList.add('open');
+                }, 10);
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeCatalogDrawer() {
+                const backdrop = document.getElementById('catalog-drawer-backdrop');
+                const drawer = document.getElementById('catalog-drawer');
+                if (!drawer || !backdrop) return;
+                drawer.classList.remove('open');
+                backdrop.style.opacity = '0';
+                setTimeout(() => {
+                    backdrop.style.display = 'none';
+                    document.body.style.overflow = '';
+                }, 300);
+            }
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeCatalogDrawer();
+            });
+
+            async function applyFilterAjax(e, url) {
+                if (e) e.preventDefault();
+
+                const listingsCont = document.getElementById('home-listings-container');
+                const drawerContent = document.getElementById('catalog-drawer-content');
+                if (listingsCont) {
+                    listingsCont.style.opacity = '0.5';
+                    listingsCont.style.pointerEvents = 'none';
+                }
+                if (drawerContent) {
+                    drawerContent.style.opacity = '0.7';
+                }
+
+                try {
+                    const res = await fetch(url, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const html = await res.text();
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                    // 1. Update filter bar active chips & count
+                    const newBar = doc.getElementById('catalog-filter-bar-container');
+                    const currBar = document.getElementById('catalog-filter-bar-container');
+                    if (newBar && currBar) {
+                        currBar.innerHTML = newBar.innerHTML;
+                    }
+
+                    // 2. Update drawer content (models, variants, pills)
+                    const newContent = doc.getElementById('catalog-drawer-content');
+                    const currContent = document.getElementById('catalog-drawer-content');
+                    if (newContent && currContent) {
+                        currContent.innerHTML = newContent.innerHTML;
+                    }
+
+                    // 3. Update drawer header counter & footer button
+                    const newCounter = doc.getElementById('drawer-ads-counter');
+                    const currCounter = document.getElementById('drawer-ads-counter');
+                    if (newCounter && currCounter) {
+                        currCounter.innerHTML = newCounter.innerHTML;
+                    }
+
+                    const newBtnView = doc.getElementById('btn-view-count');
+                    const currBtnView = document.getElementById('btn-view-count');
+                    if (newBtnView && currBtnView) {
+                        currBtnView.innerHTML = newBtnView.innerHTML;
+                    }
+
+                    // 4. Update section title & ads counter
+                    const newAdsBadge = doc.getElementById('ads-count-badge');
+                    const currAdsBadge = document.getElementById('ads-count-badge');
+                    if (newAdsBadge && currAdsBadge) {
+                        currAdsBadge.innerHTML = newAdsBadge.innerHTML;
+                    }
+
+                    // 5. Update listings container
+                    const newListings = doc.getElementById('home-listings-container');
+                    if (newListings && listingsCont) {
+                        listingsCont.innerHTML = newListings.innerHTML;
+                    }
+
+                    // 6. Update URL in address bar without scrolling or reloading
+                    window.history.pushState(null, '', url);
+
+                } catch (err) {
+                    console.error('Filter AJAX error, falling back to full navigation:', err);
+                    window.location.href = url;
+                } finally {
+                    if (listingsCont) {
+                        listingsCont.style.opacity = '1';
+                        listingsCont.style.pointerEvents = 'auto';
+                    }
+                    if (drawerContent) {
+                        drawerContent.style.opacity = '1';
+                    }
+                }
+            }
+
+            window.addEventListener('popstate', () => {
+                applyFilterAjax(null, window.location.href);
+            });
+        </script>
     <?php endif; ?>
 
     <!-- Global Header Controls, Section Title & Deal Type Filter Tabs -->
@@ -587,7 +1184,7 @@ require_once '../includes/header.php';
                 }
                 ?>
             </h2>
-            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;" id="ads-count-badge">
                 <?= count($products) ?> <?= count($products) === 1 ? 'ad' : 'ads' ?> available
             </span>
         </div>

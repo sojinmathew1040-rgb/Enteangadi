@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $_POST['type'] ?? 'sell';
     $title = $_POST['title'] ?? '';
     $category_id = $_POST['category_id'] ?? '';
+    $brand = !empty($_POST['brand']) ? trim($_POST['brand']) : null;
+    $model = !empty($_POST['model']) ? trim($_POST['model']) : null;
+    $variant = !empty($_POST['variant']) ? trim($_POST['variant']) : null;
     $price = isset($_POST['price']) ? preg_replace('/[^-0-9.]/', '', $_POST['price']) : '0';
     $contact_whatsapp = isset($_POST['contact_whatsapp']) ? 1 : 0;
     $contact_phone = isset($_POST['contact_phone']) ? 1 : 0;
@@ -94,8 +97,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $approval_mode = $set_stmt->fetchColumn() ?: 'auto';
                 $status = ($approval_mode !== 'auto') ? 'pending' : 'active';
 
-                $stmt = $pdo->prepare("INSERT INTO products (user_id, unique_id, category_id, type, title, description, price, expiry_date, whatsapp_number, phone_number, location_name, latitude, longitude, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$_SESSION['user_id'], $unique_id, $category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $status]);
+                // Generate multilingual and cross-lingual search keywords (Malayalam, English, Manglish, Hindi)
+                $cat_name = '';
+                if (!empty($all_cats)) {
+                    foreach ($all_cats as $c) {
+                        if ($c['id'] == $category_id) {
+                            $cat_name = $c['name'];
+                            break;
+                        }
+                    }
+                }
+                $search_input = trim($title . ' ' . ($brand ?? '') . ' ' . ($model ?? '') . ' ' . ($variant ?? ''));
+                $search_keywords = function_exists('generateProductSearchKeywords') ? generateProductSearchKeywords($search_input, $description, $cat_name) : '';
+
+                $stmt = $pdo->prepare("INSERT INTO products (user_id, unique_id, category_id, type, title, brand, model, variant, description, search_keywords, price, expiry_date, whatsapp_number, phone_number, location_name, latitude, longitude, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$_SESSION['user_id'], $unique_id, $category_id, $type, $title, $brand, $model, $variant, $description, $search_keywords, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $status]);
                 $product_id = $pdo->lastInsertId();
 
                 if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
@@ -321,6 +337,24 @@ require_once '../includes/header.php';
                                 <select id="category_id" name="category_id" class="premium-select" required
                                     onchange="checkPerishable(this.value)">
                                     <option value="">Select Sub-Category</option>
+                                </select>
+                            </div>
+                            <div class="form-group-premium" id="brand_group" style="display: none;">
+                                <label for="brand_select">Brand / Make (നിർമ്മാതാവ് / ബ്രാൻഡ്)</label>
+                                <select id="brand_select" name="brand" class="premium-select" onchange="onBrandSelected(this)">
+                                    <option value="">Select Brand</option>
+                                </select>
+                            </div>
+                            <div class="form-group-premium" id="model_group" style="display: none;">
+                                <label for="model_select">Model / Variety (മോഡൽ / ഇനം)</label>
+                                <select id="model_select" name="model" class="premium-select" onchange="onModelSelected(this)">
+                                    <option value="">Select Model</option>
+                                </select>
+                            </div>
+                            <div class="form-group-premium" id="variant_group" style="display: none;">
+                                <label for="variant_select">Variant / Trim / Spec (വേരിയന്റ്)</label>
+                                <select id="variant_select" name="variant" class="premium-select" onchange="onVariantSelected(this)">
+                                    <option value="">Select Variant</option>
                                 </select>
                             </div>
                             <div class="form-group-premium" id="price_group">

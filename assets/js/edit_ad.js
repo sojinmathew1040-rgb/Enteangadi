@@ -140,6 +140,142 @@ function updateL2Categories() {
     } else {
         if (l2Group) l2Group.style.display = 'none';
     }
+
+    loadCatalogBrands(selectedL1, typeof currentBrand !== 'undefined' ? currentBrand : null);
+}
+
+function loadCatalogBrands(categoryId, preselect = null) {
+    const brandGroup = document.getElementById('brand_group');
+    const brandSelect = document.getElementById('brand_select');
+    const modelGroup = document.getElementById('model_group');
+    const modelSelect = document.getElementById('model_select');
+    const variantGroup = document.getElementById('variant_group');
+    const variantSelect = document.getElementById('variant_select');
+
+    if (!brandGroup || !brandSelect) return;
+
+    if (!categoryId) {
+        brandGroup.style.display = 'none';
+        brandSelect.innerHTML = '<option value="">Select Brand</option>';
+        if (modelGroup) modelGroup.style.display = 'none';
+        if (variantGroup) variantGroup.style.display = 'none';
+        return;
+    }
+
+    fetch('../api/catalog.php?action=brands&category_id=' + encodeURIComponent(categoryId))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.brands && data.brands.length > 0) {
+                brandSelect.innerHTML = '<option value="">Select Brand / Make</option>';
+                data.brands.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b.name;
+                    opt.textContent = b.name;
+                    opt.dataset.id = b.id;
+                    if (preselect && (b.name === preselect || b.id == preselect)) {
+                        opt.selected = true;
+                    }
+                    brandSelect.appendChild(opt);
+                });
+                brandGroup.style.display = 'block';
+
+                if (brandSelect.value) {
+                    onBrandSelected(brandSelect, typeof currentModel !== 'undefined' ? currentModel : null);
+                }
+            } else {
+                brandGroup.style.display = 'none';
+                brandSelect.innerHTML = '<option value="">Select Brand</option>';
+                if (modelGroup) modelGroup.style.display = 'none';
+                if (variantGroup) variantGroup.style.display = 'none';
+            }
+        })
+        .catch(err => {
+            console.error('Error loading brands in edit_ad:', err);
+        });
+}
+
+function onBrandSelected(selectEl, preselectModel = null) {
+    const selectedOpt = selectEl.options[selectEl.selectedIndex];
+    const brandId = selectedOpt ? selectedOpt.dataset.id : null;
+    const modelGroup = document.getElementById('model_group');
+    const modelSelect = document.getElementById('model_select');
+    const variantGroup = document.getElementById('variant_group');
+    const variantSelect = document.getElementById('variant_select');
+
+    if (variantGroup) variantGroup.style.display = 'none';
+    if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
+
+    if (!brandId) {
+        if (modelGroup) modelGroup.style.display = 'none';
+        if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
+        return;
+    }
+
+    fetch('../api/catalog.php?action=models&brand_id=' + encodeURIComponent(brandId))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.models && data.models.length > 0) {
+                modelSelect.innerHTML = '<option value="">Select Model / Variety</option>';
+                data.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.name;
+                    opt.textContent = m.name;
+                    opt.dataset.id = m.id;
+                    if (preselectModel && (m.name === preselectModel || m.id == preselectModel)) {
+                        opt.selected = true;
+                    }
+                    modelSelect.appendChild(opt);
+                });
+                if (modelGroup) modelGroup.style.display = 'block';
+
+                if (modelSelect.value) {
+                    onModelSelected(modelSelect, typeof currentVariant !== 'undefined' ? currentVariant : null);
+                }
+            } else {
+                if (modelGroup) modelGroup.style.display = 'none';
+                if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
+            }
+        })
+        .catch(err => console.error('Error loading models in edit_ad:', err));
+}
+
+function onModelSelected(selectEl, preselectVariant = null) {
+    const selectedOpt = selectEl.options[selectEl.selectedIndex];
+    const modelId = selectedOpt ? selectedOpt.dataset.id : null;
+    const variantGroup = document.getElementById('variant_group');
+    const variantSelect = document.getElementById('variant_select');
+
+    if (!modelId) {
+        if (variantGroup) variantGroup.style.display = 'none';
+        if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
+        return;
+    }
+
+    fetch('../api/catalog.php?action=variants&model_id=' + encodeURIComponent(modelId))
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.variants && data.variants.length > 0) {
+                variantSelect.innerHTML = '<option value="">Select Variant / Trim / Spec</option>';
+                data.variants.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = v.name;
+                    if (preselectVariant && (v.name === preselectVariant || v.id == preselectVariant)) {
+                        opt.selected = true;
+                    }
+                    variantSelect.appendChild(opt);
+                });
+                if (variantGroup) variantGroup.style.display = 'block';
+            } else {
+                if (variantGroup) variantGroup.style.display = 'none';
+                if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
+            }
+        })
+        .catch(err => console.error('Error loading variants in edit_ad:', err));
+}
+
+function onVariantSelected(selectEl) {
+    // Selection made
 }
 
 function checkPerishable(catId) {

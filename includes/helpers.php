@@ -956,6 +956,140 @@ if (!function_exists('render_xls_bar')) {
     }
 }
 
+if (!function_exists('generateProductSearchKeywords')) {
+    /**
+     * Generates multilingual and cross-lingual search keywords (Malayalam, English, Manglish, Hindi)
+     * using Groq AI (qwen/qwen3.8-27b) and a curated offline marketplace dictionary.
+     */
+    function generateProductSearchKeywords($title, $description = '', $categoryName = '') {
+        $apiKey = defined('GROQ_API_KEY') ? GROQ_API_KEY : '';
+        $keywords = [];
+
+        // Curated offline dictionary for instant fallback & guaranteed baseline coverage
+        $dictionary = [
+            'ആട്' => ['goat', 'milking goat', 'nanny goat', 'aadu', 'bakri', 'milk', 'domestic animal', 'pets', 'livestock', 'dairy'],
+            'goat' => ['ആട്', 'കറവയുള്ള ആട്', 'aadu', 'bakri', 'milk', 'livestock', 'pets'],
+            'പശു' => ['cow', 'milking cow', 'pashu', 'dairy cow', 'cattle', 'milk', 'gau', 'doodh', 'livestock'],
+            'cow' => ['പശു', 'നാടൻ പശു', 'pashu', 'milk', 'dairy', 'cattle', 'livestock'],
+            'പോത്ത്' => ['buffalo', 'pothu', 'bull', 'livestock', 'meat'],
+            'buffalo' => ['പോത്ത്', 'എരുമ', 'pothu', 'eruma'],
+            'എരുമ' => ['buffalo', 'female buffalo', 'eruma', 'milk', 'dairy'],
+            'കോഴി' => ['chicken', 'hen', 'rooster', 'kozhi', 'poultry', 'eggs', 'birds'],
+            'chicken' => ['കോഴി', 'നാടൻ കോഴി', 'kozhi', 'hen', 'poultry'],
+            'താറാവ്' => ['duck', 'thaaravu', 'poultry', 'eggs'],
+            'duck' => ['താറാവ്', 'thaaravu', 'birds'],
+            'നായ' => ['dog', 'puppy', 'naya', 'patti', 'pet', 'pets'],
+            'പട്ടി' => ['dog', 'puppy', 'naya', 'patti', 'pet', 'pets'],
+            'dog' => ['നായ', 'പട്ടി', 'naya', 'patti', 'puppy', 'pet', 'pets'],
+            'puppy' => ['പട്ടിക്കുട്ടി', 'നായക്കുട്ടി', 'dog', 'pet'],
+            'പൂച്ച' => ['cat', 'kitten', 'poocha', 'pet', 'pets'],
+            'cat' => ['പൂച്ച', 'poocha', 'kitten', 'pet'],
+            'മുയൽ' => ['rabbit', 'muyal', 'bunny', 'pet'],
+            'rabbit' => ['മുയൽ', 'muyal', 'pet'],
+            'മീൻ' => ['fish', 'aquarium', 'meen', 'guppy', 'pets'],
+            'fish' => ['മീൻ', 'മത്സ്യം', 'meen', 'aquarium'],
+            'ബൈക്ക്' => ['bike', 'motorcycle', 'two wheeler', 'vandi', 'scooter'],
+            'bike' => ['ബൈക്ക്', 'motorcycle', 'two wheeler', 'vandi', 'scooter'],
+            'സ്കൂട്ടർ' => ['scooter', 'activa', 'bike', 'two wheeler'],
+            'scooter' => ['സ്കൂട്ടർ', 'bike', 'two wheeler'],
+            'കാർ' => ['car', 'four wheeler', 'vandi', 'automobile', 'vehicle'],
+            'car' => ['കാർ', 'automobile', 'vehicle', 'vandi', 'four wheeler'],
+            'ഓട്ടോ' => ['auto', 'autorickshaw', 'three wheeler', 'vandi'],
+            'auto' => ['ഓട്ടോ', 'ഓട്ടോറിക്ഷ', 'autorickshaw'],
+            'വീട്' => ['house', 'home', 'villa', 'veedu', 'property'],
+            'house' => ['വീട്', 'veedu', 'villa', 'home', 'property'],
+            'വാടക' => ['rent', 'for rent', 'vadaka', 'rental', 'lease'],
+            'rent' => ['വാടക', 'vadaka', 'lease', 'rental'],
+            'സ്ഥലം' => ['land', 'plot', 'property', 'sthalam', 'real estate'],
+            'land' => ['സ്ഥലം', 'പറമ്പ്', 'plot', 'sthalam', 'property'],
+            'plot' => ['സ്ഥലം', 'plot', 'land', 'sthalam'],
+            'കട' => ['shop', 'store', 'commercial', 'kada'],
+            'shop' => ['കട', 'ഷോപ്പ്', 'kada', 'store', 'commercial'],
+            'ഫോൺ' => ['mobile', 'phone', 'smartphone', 'electronics'],
+            'മൊബൈൽ' => ['mobile', 'phone', 'smartphone', 'electronics'],
+            'mobile' => ['ഫോൺ', 'മൊബൈൽ', 'mobile', 'smartphone', 'phone'],
+            'phone' => ['ഫോൺ', 'മൊബൈൽ', 'mobile', 'smartphone'],
+            'ലാപ്‌ടോപ്പ്' => ['laptop', 'computer', 'pc'],
+            'laptop' => ['ലാപ്‌ടോപ്പ്', 'computer', 'pc'],
+            'ജോലി' => ['job', 'vacancy', 'employment', 'work', 'career'],
+            'job' => ['ജോലി', 'ഒഴിവുകൾ', 'vacancy', 'employment', 'work']
+        ];
+
+        $combinedText = mb_strtolower($title . ' ' . $description . ' ' . $categoryName, 'UTF-8');
+
+        // Groq AI call (~50ms)
+        if (!empty($apiKey)) {
+            try {
+                $prompt = "You are a search indexing assistant for a marketplace in Kerala (Enteangadi).\n"
+                        . "Generate 15-20 comma-separated search keywords/synonyms/translations in English, Malayalam, Manglish (phonetic Malayalam in English alphabets), and Hindi for this listing.\n"
+                        . "Include common search phrases buyers might search (e.g. for milking goat: goat, milking goat, aadu, karavayulla aadu, bakri, milk, pet, livestock).\n"
+                        . "Title: " . $title . "\n"
+                        . "Description: " . $description . "\n"
+                        . "Category: " . $categoryName . "\n"
+                        . "Output ONLY lowercase comma separated words.";
+
+                $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Authorization: Bearer ' . $apiKey,
+                    'Content-Type: application/json'
+                ]);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+                    'model' => 'qwen/qwen3.8-27b',
+                    'messages' => [
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.2,
+                    'max_tokens' => 150
+                ]));
+
+                $res = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 200 && $res) {
+                    $data = json_decode($res, true);
+                    if (isset($data['choices'][0]['message']['content'])) {
+                        $rawContent = trim($data['choices'][0]['message']['content']);
+                        $aiKeywords = array_map('trim', explode(',', $rawContent));
+                        foreach ($aiKeywords as $kw) {
+                            if (!empty($kw) && mb_strlen($kw) > 1 && mb_strlen($kw) < 60) {
+                                $keywords[] = mb_strtolower($kw, 'UTF-8');
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // Ignore API errors, fallback immediately
+            }
+        }
+
+        // Offline dictionary matches
+        foreach ($dictionary as $dictKey => $synonyms) {
+            if (mb_strpos($combinedText, $dictKey) !== false) {
+                foreach ($synonyms as $s) {
+                    $keywords[] = mb_strtolower($s, 'UTF-8');
+                }
+            }
+        }
+
+        // Title and description words
+        $titleWords = preg_split('/[\s,\.\-]+/u', $title);
+        foreach ($titleWords as $tw) {
+            $tw = trim($tw);
+            if (mb_strlen($tw) > 1) {
+                $keywords[] = mb_strtolower($tw, 'UTF-8');
+            }
+        }
+
+        $keywords = array_values(array_unique(array_filter($keywords)));
+        return implode(', ', $keywords);
+    }
+}
+
+
 
 
 

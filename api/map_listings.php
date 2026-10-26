@@ -46,8 +46,9 @@ try {
         if (!empty($words)) {
             $word_clauses = [];
             foreach ($words as $w) {
-                $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
+                $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
                 $wildcard = "%$w%";
+                $params[] = $wildcard;
                 $params[] = $wildcard;
                 $params[] = $wildcard;
                 $params[] = $wildcard;

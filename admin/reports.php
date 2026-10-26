@@ -1034,7 +1034,7 @@ try {
     }
 
     if (!empty($search_q)) {
-        $where_ad_clauses[] = "(p.title LIKE :q OR p.unique_id LIKE :q OR u.username LIKE :q OR c.name LIKE :q)";
+        $where_ad_clauses[] = "(p.title LIKE :q OR p.unique_id LIKE :q OR u.username LIKE :q OR c.name LIKE :q OR p.search_keywords LIKE :q)";
         $ad_params['q'] = '%' . $search_q . '%';
     }
 
