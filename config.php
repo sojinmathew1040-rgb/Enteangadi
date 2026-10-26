@@ -242,6 +242,21 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
         ");
 
+        // Ensure announcement_views table exists for poster impression tracking
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `announcement_views` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `poster_image` varchar(255) DEFAULT NULL,
+                `view_date` date NOT NULL,
+                `user_id` int(11) DEFAULT NULL,
+                `ip_address` varchar(45) NOT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `idx_view_date` (`view_date`),
+                KEY `idx_poster` (`poster_image`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
         // site_visits table ready (no dummy auto-seeding)
 
         // Automatic page visit logger for live requests

@@ -736,7 +736,7 @@ if (!function_exists('exportCleanProductionSql')) {
 
             // Tables where structural schema is preserved, but data is completely wiped
             $wipedDataTables = [
-                'site_visits', 'analytics_clicks', 'reports', 'messages', 
+                'site_visits', 'announcement_views', 'analytics_clicks', 'reports', 'messages', 
                 'wishlist', 'user_ratings', 'verification_requests', 
                 'account_closures', 'product_images', 'products', 'blocked_users'
             ];
@@ -883,6 +883,7 @@ if (!function_exists('purgeDummyTestData')) {
             $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
             $tablesToTruncate = [
                 'site_visits',
+                'announcement_views',
                 'analytics_clicks',
                 'reports',
                 'messages',

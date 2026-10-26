@@ -700,7 +700,7 @@ if ($ad_active && !empty($interstitial_ads)):
     </script>
 <?php endif; ?>
 
-<?php if (isset($_SESSION['user_id']) && !empty($app_settings['announcement_poster']) && basename($_SERVER['PHP_SELF']) === 'index.php' && strpos($_SERVER['PHP_SELF'], '/user/') !== false): ?>
+<?php if (!empty($app_settings['announcement_poster']) && (basename($_SERVER['PHP_SELF']) === 'index.php' || strpos($_SERVER['PHP_SELF'], '/guest/') !== false || strpos($_SERVER['PHP_SELF'], '/user/') !== false)): ?>
     <!-- Announcement Poster Modal -->
     <div id="announcement-poster-overlay" class="announcement-overlay"
         style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px); z-index: 99999; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.4s ease;">
@@ -748,6 +748,16 @@ if ($ad_active && !empty($interstitial_ads)):
             overlay.style.opacity = '1';
             container.style.transform = 'scale(1)';
             document.body.style.overflow = 'hidden'; // Lock background scroll
+
+            // Track announcement view count (non-unique, each view incremented)
+            try {
+                const formData = new FormData();
+                formData.append('poster', '<?= htmlspecialchars($app_settings['announcement_poster'] ?? '') ?>');
+                fetch('<?= $base_url ?>/api/track_announcement.php', {
+                    method: 'POST',
+                    body: formData
+                }).catch(function(err) {});
+            } catch (err) {}
         }
 
         function closeAnnouncementPoster() {
