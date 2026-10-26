@@ -723,7 +723,11 @@ if ($ad_active && !empty($interstitial_ads)):
             <!-- Body (Image) -->
             <div
                 style="overflow-y: auto; flex: 1; padding: 16px; display: flex; align-items: center; justify-content: center; background: #f8fafc;">
-                <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['announcement_poster']) ?>" alt="Announcement"
+                <?php
+                $poster_disk = __DIR__ . '/../' . $app_settings['announcement_poster'];
+                $poster_v = file_exists($poster_disk) ? filemtime($poster_disk) : time();
+                ?>
+                <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['announcement_poster']) ?>?v=<?= $poster_v ?>" alt="Announcement"
                     style="max-width: 100%; max-height: 100%; border-radius: 12px; object-fit: contain; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             </div>
 

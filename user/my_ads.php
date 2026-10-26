@@ -170,6 +170,15 @@ require_once '../includes/header.php';
                 </div>
                 <button onclick="this.parentElement.style.display='none'">&times;</button>
             </div>
+            <script>
+                // Purge caches immediately upon ad update/deletion
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ action: 'clearCache' });
+                }
+                if ('caches' in window) {
+                    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
+                }
+            </script>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -207,8 +216,10 @@ require_once '../includes/header.php';
                     ?>
                     <div class="my-ad-card <?= !$is_active ? 'ad-card-dimmed' : '' ?>" style="cursor: pointer;" onclick="if(!event.target.closest('.action-tools-grid') && !event.target.closest('.modal-overlay-premium') && !event.target.closest('#feedbackModal')) window.location.href='../product.php?id=<?= $ad['id'] ?>';">
                         <div class="ad-card-image-box">
-                            <?php if ($ad['main_image']): ?>
-                                <img src="../<?= htmlspecialchars($ad['main_image']) ?>" alt="<?= htmlspecialchars($ad['title']) ?>"
+                            <?php if ($ad['main_image']): 
+                                $ad_v = !empty($ad['updated_at']) ? strtotime($ad['updated_at']) : (!empty($ad['created_at']) ? strtotime($ad['created_at']) : time());
+                            ?>
+                                <img src="../<?= htmlspecialchars($ad['main_image']) ?>?v=<?= $ad_v ?>" alt="<?= htmlspecialchars($ad['title']) ?>"
                                     class="ad-image">
                             <?php else: ?>
                                 <div class="ad-image-placeholder"><i class="fa fa-image"></i></div>

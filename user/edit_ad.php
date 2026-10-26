@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, description = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = 'pending' WHERE id = ?");
+                $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, description = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = 'pending', updated_at = NOW() WHERE id = ?");
                 $stmt->execute([$category_id, $type, $title, $description, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $product_id]);
 
                 // Handle image deletions
@@ -228,7 +228,13 @@ function compressProductImageLocal($source, $destination, $max_width, $quality)
     // Draw foreground text
     imagestring($new_image, $font, $x, $y, $watermark_text, $white);
 
-    $result = imagejpeg($new_image, $destination, $quality);
+    if ($info['mime'] == 'image/png') {
+        $result = imagepng($new_image, $destination, 6);
+    } elseif ($info['mime'] == 'image/webp') {
+        $result = imagewebp($new_image, $destination, $quality);
+    } else {
+        $result = imagejpeg($new_image, $destination, $quality);
+    }
     return $result;
 }
 
@@ -258,6 +264,15 @@ require_once '../includes/header.php';
                     </a>
                 </div>
             </div>
+            <script>
+                // Purge caches immediately upon ad update
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ action: 'clearCache' });
+                }
+                if ('caches' in window) {
+                    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
+                }
+            </script>
         <?php else: ?>
             <div class="stepper-wrapper-premium">
                 <div class="step active" id="step-dot-1">
@@ -369,9 +384,12 @@ require_once '../includes/header.php';
                                     style="display: none;" onchange="previewImages()">
                             </div>
                             <div id="image_preview_container" class="image-preview-side-container">
-                                <?php foreach ($existing_images as $img): ?>
+                                <?php foreach ($existing_images as $img): 
+                                    $img_file = '../' . $img['image_path'];
+                                    $img_v = file_exists($img_file) ? filemtime($img_file) : time();
+                                ?>
                                     <div class="preview-item" onclick="toggleExistingDelete(<?= $img['id'] ?>, this)">
-                                        <img src="../<?= htmlspecialchars($img['image_path']) ?>">
+                                        <img src="../<?= htmlspecialchars($img['image_path']) ?>?v=<?= $img_v ?>">
                                         <div class="delete-overlay">
                                             <i class="fa fa-trash-alt"></i>
                                             <span>DELETE</span>

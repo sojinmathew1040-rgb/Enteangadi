@@ -13,7 +13,8 @@ if (!isset($_SESSION['user_id'])) {
 
 function renderProductCard($product, $baseUrl, $isGuest = false) {
     $detailLink = $isGuest ? "product.php?id=" . $product['id'] : "../product.php?id=" . $product['id'];
-    $imageSrc = $product['main_image'] ? "../" . htmlspecialchars($product['main_image']) : null;
+    $imgVersion = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : time());
+    $imageSrc = $product['main_image'] ? "../" . htmlspecialchars($product['main_image']) . "?v=" . $imgVersion : null;
     
     $typeBadge = '';
     if ($product['type'] == 'buy') {
@@ -707,8 +708,9 @@ require_once '../includes/header.php';
                         if (!p.latitude || !p.longitude) return;
                         
                         const priceFormatted = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(p.price);
+                        const imgV = encodeURIComponent(p.updated_at || p.created_at || Date.now());
                         const imgHtml = p.main_image 
-                            ? `<img src="../${p.main_image}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
+                            ? `<img src="../${p.main_image}?v=${imgV}" style="width: 100%; height: 80px; object-fit: cover; border-radius: 8px; margin-bottom: 6px;">`
                             : `<div style="width: 100%; height: 80px; display: flex; align-items: center; justify-content: center; background: #e2e8f0; border-radius: 8px; margin-bottom: 6px;"><i class="fa fa-image" style="color: #94a3b8;"></i></div>`;
                         
                         const popupContent = `

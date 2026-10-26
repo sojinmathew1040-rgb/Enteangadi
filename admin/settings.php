@@ -432,7 +432,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $file_name = 'logo_' . time() . '.' . $file_ext;
                 $target_path = $upload_dir . $file_name;
 
-                if (compressAndResizeImage($_FILES['app_logo']['tmp_name'], $target_path, 400, 80) || move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path)) {
+                // For PNG and SVG logos, preserve transparency directly without altering alpha channel
+                if ($file_ext === 'png' || $file_ext === 'svg') {
+                    $uploaded = move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path);
+                } else {
+                    $uploaded = compressAndResizeImage($_FILES['app_logo']['tmp_name'], $target_path, 600, 85) || move_uploaded_file($_FILES['app_logo']['tmp_name'], $target_path);
+                }
+
+                if ($uploaded) {
                     @chmod($target_path, 0644);
                     $db_path = 'uploads/logo/' . $file_name;
                     $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'app_logo'");
@@ -3346,9 +3353,12 @@ require_once 'includes/header.php';
                 <div class="form-group">
                     <label>Platform Logo</label>
                     <div class="logo-preview-box">
-                        <?php if (!empty($app_settings['app_logo'])): ?>
-                            <img src="../<?= htmlspecialchars($app_settings['app_logo']) ?>" alt="Current Logo"
-                                style="max-height: 80px; object-fit: contain;">
+                        <?php if (!empty($app_settings['app_logo'])): 
+                            $logo_disk = '../' . $app_settings['app_logo'];
+                            $logo_v = file_exists($logo_disk) ? filemtime($logo_disk) : time();
+                        ?>
+                            <img src="../<?= htmlspecialchars($app_settings['app_logo']) ?>?v=<?= $logo_v ?>" alt="Current Logo"
+                                style="max-height: 80px; object-fit: contain; background: transparent !important;">
                             <label
                                 style="display: flex; align-items: center; gap: 8px; color: #dc2626; cursor: pointer; font-size: 13px; font-weight: 600; margin-top: 12px;">
                                 <input type="checkbox" name="delete_logo" value="1"> Remove current logo
@@ -3398,8 +3408,11 @@ require_once 'includes/header.php';
                 <div class="form-group">
                     <label>Active Poster Preview</label>
                     <div class="logo-preview-box" style="height: auto; min-height: 200px;">
-                        <?php if (!empty($app_settings['announcement_poster'])): ?>
-                            <img src="../<?= htmlspecialchars($app_settings['announcement_poster']) ?>" alt="Current Poster"
+                        <?php if (!empty($app_settings['announcement_poster'])): 
+                            $poster_disk = '../' . $app_settings['announcement_poster'];
+                            $poster_v = file_exists($poster_disk) ? filemtime($poster_disk) : time();
+                        ?>
+                            <img src="../<?= htmlspecialchars($app_settings['announcement_poster']) ?>?v=<?= $poster_v ?>" alt="Current Poster"
                                 style="max-width: 100%; border-radius: 12px; box-shadow: var(--shadow-sm);">
                             <label
                                 style="display: flex; align-items: center; gap: 8px; color: #dc2626; cursor: pointer; font-size: 13px; font-weight: 600; margin-top: 12px;">

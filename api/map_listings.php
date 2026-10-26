@@ -2,6 +2,9 @@
 require_once dirname(__DIR__) . '/config.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 $min_lat = isset($_GET['min_lat']) ? floatval($_GET['min_lat']) : null;
 $max_lat = isset($_GET['max_lat']) ? floatval($_GET['max_lat']) : null;

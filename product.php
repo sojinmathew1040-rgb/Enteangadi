@@ -103,6 +103,7 @@ try {
     $img_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ?");
     $img_stmt->execute([$product_id]);
     $images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
+    $prod_img_v = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : time());
 
     // Wishlist check
     $is_wishlisted = false;
@@ -220,7 +221,7 @@ require_once 'includes/header.php';
                             <div class="image-carousel-premium" id="mainCarousel" onscroll="updateSliderCounter(this)">
                                 <?php foreach ($images as $img): ?>
                                     <div class="carousel-item-premium">
-                                        <img src="<?= htmlspecialchars($img) ?>" alt="<?= htmlspecialchars($product['title']) ?>"
+                                        <img src="<?= htmlspecialchars($img) ?>?v=<?= $prod_img_v ?>" alt="<?= htmlspecialchars($product['title']) ?>"
                                             onclick="openLightbox()">
                                     </div>
                                 <?php endforeach; ?>
@@ -247,7 +248,7 @@ require_once 'includes/header.php';
                         <div class="thumbnail-grid-premium">
                             <?php foreach ($images as $index => $img): ?>
                                 <div class="thumb-item" onclick="jumpToImage(<?= $index ?>)">
-                                    <img src="<?= htmlspecialchars($img) ?>" alt="Thumb">
+                                    <img src="<?= htmlspecialchars($img) ?>?v=<?= $prod_img_v ?>" alt="Thumb">
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -533,8 +534,10 @@ require_once 'includes/header.php';
                                     <?php else: ?>
                                         <div class="badge-selling" style="font-size: 7px; top: 6px; left: 6px; padding: 2px 6px;">Sale</div>
                                     <?php endif; ?>
-                                    <?php if ($imgUrl): ?>
-                                        <img src="<?= $imgUrl ?>" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;">
+                                    <?php if ($imgUrl): 
+                                        $sug_v = !empty($sug_p['updated_at']) ? strtotime($sug_p['updated_at']) : (!empty($sug_p['created_at']) ? strtotime($sug_p['created_at']) : time());
+                                    ?>
+                                        <img src="<?= $imgUrl ?>?v=<?= $sug_v ?>" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;">
                                     <?php else: ?>
                                         <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
                                             <i class="fa fa-image" style="font-size: 24px; color: #cbd5e1;"></i>
@@ -575,7 +578,7 @@ require_once 'includes/header.php';
                 <div class="lightbox-gallery" id="lightboxGallery" onscroll="updateLightboxCounter(this)">
                     <?php foreach ($images as $img): ?>
                         <div class="lightbox-item">
-                            <img src="<?= htmlspecialchars($img) ?>" alt="Gallery Image">
+                            <img src="<?= htmlspecialchars($img) ?>?v=<?= $prod_img_v ?>" alt="Gallery Image">
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -660,8 +663,11 @@ require_once 'includes/header.php';
 <div id="appRedirectModal" class="app-redirect-backdrop">
     <div class="app-redirect-card">
         <div class="app-redirect-logo">
-            <?php if (!empty($app_settings['app_logo'])): ?>
-                <img src="<?= htmlspecialchars($app_settings['app_logo'], ENT_QUOTES) ?>" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 16px;">
+            <?php if (!empty($app_settings['app_logo'])): 
+                $app_logo_file = __DIR__ . '/' . $app_settings['app_logo'];
+                $app_logo_v = file_exists($app_logo_file) ? filemtime($app_logo_file) : time();
+            ?>
+                <img src="<?= htmlspecialchars($app_settings['app_logo'], ENT_QUOTES) ?>?v=<?= $app_logo_v ?>" alt="Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 16px; background: transparent !important;">
             <?php else: ?>
                 <i class="fa fa-shopping-bag"></i>
             <?php endif; ?>

@@ -16,8 +16,8 @@ try {
         t.other_user_id,
         u.username as other_username,
         u.profile_picture as other_profile_picture,
-        p.title as product_title,
-        p.price as product_price,
+        COALESCE(p.title, 'Product Listing') as product_title,
+        COALESCE(p.price, 0) as product_price,
         (SELECT image_path FROM product_images WHERE product_id = t.product_id ORDER BY id ASC LIMIT 1) as product_thumbnail,
         MAX(t.created_at) as last_message_time,
         SUM(t.unread_flag) as unread_count
@@ -31,7 +31,7 @@ try {
         WHERE receiver_id = :my_id AND deleted_by_receiver = 0
     ) t
     JOIN users u ON u.id = t.other_user_id
-    JOIN products p ON p.id = t.product_id
+    LEFT JOIN products p ON p.id = t.product_id
     GROUP BY t.product_id, t.other_user_id, u.username, u.profile_picture, p.title, p.price
     ORDER BY last_message_time DESC
     ";
@@ -52,9 +52,9 @@ try {
     }
     $conversations = $unique_conversations;
 
-    foreach ($conversations as &$conv) {
+    foreach ($conversations as $idx => $conv) {
         $msg_stmt = $pdo->prepare("
-            SELECT message_text, sender_id 
+            SELECT message_text, sender_id, created_at 
             FROM messages 
             WHERE product_id = ? 
             AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) 
@@ -63,9 +63,13 @@ try {
         ");
         $msg_stmt->execute([$conv['product_id'], $my_id, $conv['other_user_id'], $conv['other_user_id'], $my_id, $my_id, $my_id]);
         $last_msg = $msg_stmt->fetch();
-        $conv['last_message'] = $last_msg ? $last_msg['message_text'] : '';
-        $conv['last_sender_id'] = $last_msg ? $last_msg['sender_id'] : 0;
+        $conversations[$idx]['last_message'] = $last_msg ? $last_msg['message_text'] : '';
+        $conversations[$idx]['last_sender_id'] = $last_msg ? $last_msg['sender_id'] : 0;
+        if ($last_msg && !empty($last_msg['created_at'])) {
+            $conversations[$idx]['last_message_time'] = $last_msg['created_at'];
+        }
     }
+    unset($conv);
 } catch (PDOException $e) {
     $conversations = [];
     $error = "Failed to load messages.";

@@ -731,7 +731,7 @@ require_once 'includes/header.php';
     <div class="announcement-spotlight">
         <div class="poster-thumb-wrap">
             <?php if ($has_poster && file_exists('../' . $current_poster)): ?>
-                <img src="../<?= htmlspecialchars($current_poster) ?>" alt="Poster" class="poster-thumb">
+                <img src="../<?= htmlspecialchars($current_poster) ?>?v=<?= filemtime('../' . $current_poster) ?>" alt="Poster" class="poster-thumb">
             <?php else: ?>
                 <div style="text-align: center; color: #94a3b8; font-size: 11px; padding: 8px;">
                     <i class="fa fa-image" style="font-size: 24px; margin-bottom: 4px; display: block;"></i>

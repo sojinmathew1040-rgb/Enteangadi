@@ -43,6 +43,8 @@ try {
         'app_tagline' => 'Your Local Marketplace'
     ];
 }
+$logo_disk_file = !empty($app_settings['app_logo']) ? (__DIR__ . '/../' . $app_settings['app_logo']) : '';
+$logo_version = ($logo_disk_file && file_exists($logo_disk_file)) ? filemtime($logo_disk_file) : time();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -81,7 +83,7 @@ try {
     <script>
         const EnteangadiConfig = {
             baseUrl: '<?= $base_url ?>',
-            appLogo: '<?= !empty($app_settings['app_logo']) ? htmlspecialchars($app_settings['app_logo']) : 'uploads/logo/logo_1778137117.jpg' ?>',
+            appLogo: '<?= !empty($app_settings['app_logo']) ? htmlspecialchars($app_settings['app_logo']) . '?v=' . $logo_version : 'uploads/logo/logo_1778137117.jpg' ?>',
             hasLocation: <?= isset($_SESSION['user_location']) ? 'true' : 'false' ?>,
             location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>,
             isLoggedIn: <?= isset($_SESSION['user_id']) ? 'true' : 'false' ?>
@@ -201,11 +203,14 @@ try {
             document.documentElement.setAttribute('data-theme', savedTheme);
         })();
 
-        // Service Worker registration
+        // Service Worker registration with instant update check and cache-busting
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('<?= $base_url ?>/service-worker.js')
-                    .then(reg => console.log('Service Worker registered:', reg.scope))
+                navigator.serviceWorker.register('<?= $base_url ?>/service-worker.js?v=<?= file_exists(__DIR__ . '/../service-worker.js') ? filemtime(__DIR__ . '/../service-worker.js') : time() ?>', { updateViaCache: 'none' })
+                    .then(reg => {
+                        reg.update();
+                        console.log('Service Worker active:', reg.scope);
+                    })
                     .catch(err => console.warn('Service Worker registration failed:', err));
             });
         }
@@ -223,8 +228,8 @@ try {
     <!-- Application Loader -->
     <div id="loader-wrapper">
         <?php if (!empty($app_settings['app_logo'])): ?>
-            <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['app_logo']) ?>" alt="Logo"
-                class="loader-logo-img">
+            <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['app_logo']) ?>?v=<?= $logo_version ?>" alt="Logo"
+                class="loader-logo-img" style="background: transparent !important; object-fit: contain;">
         <?php else: ?>
             <div class="loader-logo"><?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?></div>
         <?php endif; ?>
@@ -383,10 +388,10 @@ try {
     <div class="main-sticky-header">
         <header>
 
-            <a href="<?= $base_url ?>/index.php" class="logo">
+            <a href="<?= $base_url ?>/index.php" class="logo" style="background: transparent;">
                 <?php if (!empty($app_settings['app_logo'])): ?>
-                    <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['app_logo']) ?>" alt="Enteangadi"
-                        style="max-height: 40px; display: block;">
+                    <img src="<?= $base_url ?>/<?= htmlspecialchars($app_settings['app_logo']) ?>?v=<?= $logo_version ?>" alt="Enteangadi"
+                        style="max-height: 42px; width: auto; object-fit: contain; background: transparent !important; display: block;">
                 <?php else: ?>
                     <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?>
                 <?php endif; ?>

@@ -59,12 +59,15 @@ if (!function_exists('compressAndResizeImage')) {
         if (!$info)
             return false;
 
-        if ($info['mime'] == 'image/jpeg')
+        $mime = $info['mime'] ?? '';
+        if ($mime == 'image/jpeg')
             $image = @imagecreatefromjpeg($source);
-        elseif ($info['mime'] == 'image/gif')
+        elseif ($mime == 'image/gif')
             $image = @imagecreatefromgif($source);
-        elseif ($info['mime'] == 'image/png')
+        elseif ($mime == 'image/png')
             $image = @imagecreatefrompng($source);
+        elseif ($mime == 'image/webp' && function_exists('imagecreatefromwebp'))
+            $image = @imagecreatefromwebp($source);
         else
             return false;
 
@@ -83,18 +86,34 @@ if (!function_exists('compressAndResizeImage')) {
         }
 
         $new_image = imagecreatetruecolor($new_width, $new_height);
+        $dest_ext = strtolower(pathinfo($destination, PATHINFO_EXTENSION));
 
-        if ($info['mime'] == 'image/png' || $info['mime'] == 'image/gif') {
+        if ($mime == 'image/png' || $dest_ext == 'png' || $mime == 'image/gif' || $dest_ext == 'gif') {
             imagealphablending($new_image, false);
             imagesavealpha($new_image, true);
             $transparent = imagecolorallocatealpha($new_image, 255, 255, 255, 127);
             imagefilledrectangle($new_image, 0, 0, $new_width, $new_height, $transparent);
+            imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+            $result = imagepng($new_image, $destination, 6);
+        } elseif (($mime == 'image/webp' || $dest_ext == 'webp') && function_exists('imagewebp')) {
+            imagealphablending($new_image, false);
+            imagesavealpha($new_image, true);
+            imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+            $result = imagewebp($new_image, $destination, $quality);
+        } else {
+            imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+            $result = imagejpeg($new_image, $destination, $quality);
         }
 
-        imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-        $result = imagejpeg($new_image, $destination, $quality);
         if ($result) {
             @chmod($destination, 0644);
+        }
+
+        if (is_resource($image) || (is_object($image) && $image instanceof GdImage)) {
+            imagedestroy($image);
+        }
+        if (is_resource($new_image) || (is_object($new_image) && $new_image instanceof GdImage)) {
+            imagedestroy($new_image);
         }
 
         return $result;

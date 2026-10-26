@@ -2,6 +2,9 @@
 require_once '../config.php';
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 if (isset($_GET['action']) && $_GET['action'] === 'view') {
     $product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
