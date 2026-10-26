@@ -9,28 +9,36 @@ if (isset($_SESSION['admin_id']) && $_SESSION['admin_role'] === 'admin') {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
-
-    if (!empty($username) && !empty($password)) {
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? AND role = 'admin'");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
-
-        if ($user && password_verify($password, $user['password'])) {
-            $_SESSION['admin_id'] = $user['id'];
-            $_SESSION['admin_role'] = $user['role'];
-            $_SESSION['admin_username'] = $user['username'];
-            $_SESSION['admin_permissions'] = $user['permissions'] ?? '';
-            $_SESSION['is_admin_session'] = true;
-
-            header("Location: index.php");
-            exit;
-        } else {
-            $error = "Invalid admin credentials.";
-        }
+    $rateStatus = checkRateLimit('admin_login', 5, 900);
+    if (!$rateStatus['allowed']) {
+        $minutes = ceil($rateStatus['retry_after'] / 60);
+        $error = "Too many failed attempts. Admin portal locked for {$minutes} minute(s).";
     } else {
-        $error = "Please enter username and password.";
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (!empty($username) && !empty($password)) {
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE (username = ? OR phone_number = ? OR email = ?) AND (role = 'admin' OR is_admin = 1)");
+            $stmt->execute([$username, $username, $username]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($password, $user['password'])) {
+                resetRateLimit('admin_login');
+                $_SESSION['admin_id'] = $user['id'];
+                $_SESSION['admin_role'] = $user['role'];
+                $_SESSION['admin_username'] = $user['username'];
+                $_SESSION['admin_permissions'] = $user['permissions'] ?? '';
+                $_SESSION['is_admin_session'] = true;
+
+                header("Location: index.php");
+                exit;
+            } else {
+                recordRateLimitHit('admin_login');
+                $error = "Invalid admin credentials.";
+            }
+        } else {
+            $error = "Please enter username and password.";
+        }
     }
 }
 ?>

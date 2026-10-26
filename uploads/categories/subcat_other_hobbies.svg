@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="50" fill="#faf5ff"/>
+  <!-- Paint palette -->
+  <path d="M50 20 C32 20 20 32 20 50 C20 68 36 78 50 78 C58 78 64 72 64 66 C64 62 60 58 60 54 C60 50 64 46 70 46 C76 46 80 40 80 34 C80 26 66 20 50 20 Z" fill="#a855f7"/>
+  <circle cx="34" cy="36" r="4" fill="#ef4444"/>
+  <circle cx="48" cy="30" r="4" fill="#facc15"/>
+  <circle cx="64" cy="36" r="4" fill="#38bdf8"/>
+  <circle cx="34" cy="52" r="4" fill="#22c55e"/>
+</svg>

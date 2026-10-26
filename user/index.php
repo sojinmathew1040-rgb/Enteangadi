@@ -23,6 +23,11 @@ function renderProductCard($product, $baseUrl, $isGuest = false) {
     } else {
         $typeBadge = '<div class="badge-selling">' . htmlspecialchars(__('for_sale')) . '</div>';
     }
+
+    $adminBadge = '';
+    if (!empty($product['is_admin_posted'])) {
+        $adminBadge = '<div class="badge-admin-posted" style="position: absolute; top: 10px; right: 10px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 4px 9px; border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; z-index: 10; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.4); letter-spacing: 0.5px;"><i class="fa fa-shield-alt" style="font-size: 8px;"></i> Posted by Admin</div>';
+    }
     
     $imgHtml = '';
     if ($imageSrc) {
@@ -44,8 +49,9 @@ function renderProductCard($product, $baseUrl, $isGuest = false) {
     }
     
     return '
-        <a href="' . $detailLink . '" class="product-card">
+        <a href="' . $detailLink . '" class="product-card" style="position: relative;">
             ' . $typeBadge . '
+            ' . $adminBadge . '
             ' . $imgHtml . '
             <div class="product-card-content">
                 <div class="product-card-price">₹' . $priceVal . '</div>
@@ -242,6 +248,7 @@ require_once '../includes/header.php';
 ?>
 
 <div class="container">
+<<<<<<< HEAD
     <!-- Browse Categories section (Always accessible) -->
     <div style="margin-bottom: 32px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -255,6 +262,38 @@ require_once '../includes/header.php';
             style="display: flex; gap: 16px; overflow-x: auto; padding: 4px 4px 12px 4px; scrollbar-width: none; -ms-overflow-style: none;">
             <?php foreach ($l1_categories as $cat): 
                 $isActive = ($parent_id == $cat['id']);
+=======
+    <?php if (!$is_filtered_view): ?>
+    <!-- Browse Categories section with Auto & Manual Scroll Slider -->
+    <div style="margin-bottom: 32px;" class="category-slider-wrapper" id="categorySliderWrapper">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="color: var(--text-dark); font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">Browse categories</h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <?php if ($category_filter): ?>
+                    <a href="index.php<?= $post_type ? '?post_type=' . $post_type : '' ?>"
+                        style="font-size: 13px; color: var(--primary-green); text-decoration: none; font-weight: 700; background: #f0fdf4; padding: 6px 14px; border-radius: 12px; transition: all 0.2s ease;">Clear Filter</a>
+                <?php endif; ?>
+                <!-- Manual Scroll Control Buttons -->
+                <div class="category-nav-controls">
+                    <button type="button" class="cat-nav-btn cat-prev-btn" onclick="scrollCategorySlider(-1)" title="Scroll Left" aria-label="Previous categories">
+                        <i class="fa fa-chevron-left"></i>
+                    </button>
+                    <button type="button" class="cat-nav-btn cat-next-btn" onclick="scrollCategorySlider(1)" title="Scroll Right" aria-label="Next categories">
+                        <i class="fa fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="category-track" id="categoryScrollTrack">
+            <?php 
+            // Duplicate the category list so it forms a continuous seamless infinite loop
+            $infinite_categories = !empty($l1_categories) ? array_merge($l1_categories, $l1_categories) : [];
+            foreach ($infinite_categories as $cat): 
+                $isActive = ($parent_id == $cat['id'] || $category_filter == $cat['id']);
+>>>>>>> 2ed130e648da3355126c97134ed103f8cf016994
                 $targetUrl = "index.php?category_id=" . $cat['id'] . ($post_type ? "&post_type=" . $post_type : "");
             ?>
                 <a href="<?= $targetUrl ?>" class="category-card <?= $isActive ? 'active' : '' ?>">
@@ -271,8 +310,7 @@ require_once '../includes/header.php';
         </div>
 
         <?php if (!empty($l2_categories)): ?>
-            <div
-                style="display: flex; gap: 12px; overflow-x: auto; padding-top: 16px; padding-bottom: 8px; scrollbar-width: none; -ms-overflow-style: none; border-top: 1.5px solid #f1f5f9; margin-top: 8px;">
+            <div style="display: flex; gap: 12px; overflow-x: auto; padding-top: 14px; padding-bottom: 8px; scrollbar-width: none; -ms-overflow-style: none; border-top: 1.5px solid #f1f5f9; margin-top: 4px;">
                 <?php foreach ($l2_categories as $cat): 
                     $isActive = ($category_filter == $cat['id']);
                     $targetUrl = "index.php?category_id=" . $cat['id'] . ($post_type ? "&post_type=" . $post_type : "");
@@ -286,11 +324,109 @@ require_once '../includes/header.php';
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        <style>
-            div::-webkit-scrollbar {
-                display: none;
-            }
-        </style>
+
+        <script>
+            (function() {
+                const track = document.getElementById('categoryScrollTrack');
+                const wrapper = document.getElementById('categorySliderWrapper');
+                if (!track) return;
+
+                let isPaused = false;
+                let manualResumeTimer = null;
+                const scrollSpeed = 0.75; // Smooth continuous pixels per frame
+
+                function step() {
+                    if (!isPaused && track) {
+                        const halfWidth = track.scrollWidth / 2;
+                        if (halfWidth > 50) {
+                            track.scrollLeft += scrollSpeed;
+                            if (track.scrollLeft >= halfWidth) {
+                                track.scrollLeft -= halfWidth;
+                            }
+                        }
+                    }
+                    requestAnimationFrame(step);
+                }
+
+                // Manual Navigation Button controls (< and >)
+                window.scrollCategorySlider = function(direction) {
+                    isPaused = true;
+                    const halfWidth = track.scrollWidth / 2;
+                    const scrollDistance = 240 * direction;
+                    
+                    let target = track.scrollLeft + scrollDistance;
+                    if (target < 0 && halfWidth > 0) {
+                        track.scrollLeft += halfWidth;
+                    } else if (target >= halfWidth * 2 && halfWidth > 0) {
+                        track.scrollLeft -= halfWidth;
+                    }
+
+                    track.scrollBy({ left: scrollDistance, behavior: 'smooth' });
+
+                    clearTimeout(manualResumeTimer);
+                    manualResumeTimer = setTimeout(() => {
+                        isPaused = false;
+                    }, 2500);
+                };
+
+                // Pause on hover
+                if (wrapper) {
+                    wrapper.addEventListener('mouseenter', () => { isPaused = true; });
+                    wrapper.addEventListener('mouseleave', () => { 
+                        clearTimeout(manualResumeTimer);
+                        manualResumeTimer = setTimeout(() => { isPaused = false; }, 300);
+                    });
+                    wrapper.addEventListener('touchstart', () => { isPaused = true; }, { passive: true });
+                    wrapper.addEventListener('touchend', () => { 
+                        clearTimeout(manualResumeTimer);
+                        manualResumeTimer = setTimeout(() => { isPaused = false; }, 2000); 
+                    }, { passive: true });
+                }
+
+                // Mouse Drag to scroll freely
+                let isDown = false;
+                let startX = 0;
+                let scrollLeftStart = 0;
+
+                track.addEventListener('mousedown', (e) => {
+                    isDown = true;
+                    isPaused = true;
+                    startX = e.pageX - track.offsetLeft;
+                    scrollLeftStart = track.scrollLeft;
+                    track.style.cursor = 'grabbing';
+                });
+
+                window.addEventListener('mouseup', () => {
+                    if (isDown) {
+                        isDown = false;
+                        if (track) track.style.cursor = 'pointer';
+                        clearTimeout(manualResumeTimer);
+                        manualResumeTimer = setTimeout(() => { isPaused = false; }, 2000);
+                    }
+                });
+
+                track.addEventListener('mousemove', (e) => {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    const x = e.pageX - track.offsetLeft;
+                    const walk = (x - startX) * 1.5;
+                    track.scrollLeft = scrollLeftStart - walk;
+
+                    const halfWidth = track.scrollWidth / 2;
+                    if (halfWidth > 0) {
+                        if (track.scrollLeft >= halfWidth) {
+                            track.scrollLeft -= halfWidth;
+                            scrollLeftStart -= halfWidth;
+                        } else if (track.scrollLeft < 0) {
+                            track.scrollLeft += halfWidth;
+                            scrollLeftStart += halfWidth;
+                        }
+                    }
+                });
+
+                requestAnimationFrame(step);
+            })();
+        </script>
     </div>
 
     <?php if (!empty($recently_viewed_products) && !$category_filter && !$search_query): ?>

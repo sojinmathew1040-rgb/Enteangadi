@@ -440,3 +440,502 @@ if (!function_exists('getUserTrustMetrics')) {
     }
 }
 
+/**
+ * CSRF Protection Helpers
+ */
+if (!function_exists('getCsrfToken')) {
+    function getCsrfToken() {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+}
+
+if (!function_exists('verifyCsrfToken')) {
+    function verifyCsrfToken($token = null) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $submittedToken = $token ?? ($_POST['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ''));
+        if (empty($_SESSION['csrf_token']) || empty($submittedToken)) {
+            return false;
+        }
+        return hash_equals($_SESSION['csrf_token'], $submittedToken);
+    }
+}
+
+if (!function_exists('csrfField')) {
+    function csrfField() {
+        return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(getCsrfToken()) . '">';
+    }
+}
+
+/**
+ * Rate Limiting Helper (Brute-force protection)
+ */
+if (!function_exists('checkRateLimit')) {
+    function checkRateLimit($actionKey, $maxAttempts = 5, $decaySeconds = 600) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
+        $key = 'rate_' . md5($actionKey . '_' . $ip);
+        
+        $now = time();
+        if (!isset($_SESSION[$key])) {
+            $_SESSION[$key] = ['attempts' => 0, 'first_attempt' => $now];
+        }
+        
+        $data = $_SESSION[$key];
+        if ($now - $data['first_attempt'] > $decaySeconds) {
+            // Window expired, reset
+            $_SESSION[$key] = ['attempts' => 0, 'first_attempt' => $now];
+            return ['allowed' => true, 'remaining' => $maxAttempts];
+        }
+        
+        if ($data['attempts'] >= $maxAttempts) {
+            $retryAfter = $decaySeconds - ($now - $data['first_attempt']);
+            return ['allowed' => false, 'retry_after' => $retryAfter];
+        }
+        
+        return ['allowed' => true, 'remaining' => $maxAttempts - $data['attempts']];
+    }
+}
+
+if (!function_exists('recordRateLimitHit')) {
+    function recordRateLimitHit($actionKey) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
+        $key = 'rate_' . md5($actionKey . '_' . $ip);
+        $now = time();
+        if (!isset($_SESSION[$key])) {
+            $_SESSION[$key] = ['attempts' => 1, 'first_attempt' => $now];
+        } else {
+            $_SESSION[$key]['attempts']++;
+        }
+    }
+}
+
+if (!function_exists('resetRateLimit')) {
+    function resetRateLimit($actionKey) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        $ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
+        $key = 'rate_' . md5($actionKey . '_' . $ip);
+        unset($_SESSION[$key]);
+    }
+}
+
+/**
+ * Auto-expire ads whose validity or perishable expiry date has passed
+ */
+if (!function_exists('checkAndExpireOldAds')) {
+    function checkAndExpireOldAds($pdo) {
+        if (!$pdo) return;
+        $lockFile = sys_get_temp_dir() . '/enteangadi_ad_expiry.lock';
+        $now = time();
+        if (file_exists($lockFile) && ($now - filemtime($lockFile) < 3600)) {
+            // Checked within the last 1 hour
+            return;
+        }
+        @touch($lockFile);
+        
+        try {
+            // 1. Expire perishable products past their expiry date
+            $stmt1 = $pdo->prepare("UPDATE products SET status = 'expired', status_reason = 'Perishable validity expired' 
+                                   WHERE status = 'active' AND expiry_date IS NOT NULL AND expiry_date < CURDATE()");
+            $stmt1->execute();
+            
+            // 2. Expire non-perishable ads older than 90 days
+            $stmt2 = $pdo->prepare("UPDATE products SET status = 'expired', status_reason = 'Listing reached 90-day validity limit' 
+                                   WHERE status = 'active' AND (expiry_date IS NULL OR expiry_date = '') AND created_at < (NOW() - INTERVAL 90 DAY)");
+            $stmt2->execute();
+        } catch (Exception $e) {
+            // Silently log/ignore on fail
+        }
+    }
+}
+
+/**
+ * Full Database Backup Exporter (phpMyAdmin format)
+ * Overwrites the destination file in place with complete table structures and data.
+ */
+if (!function_exists('exportFullDatabaseToSql')) {
+    function exportFullDatabaseToSql($pdo, $destinationFile) {
+        if (!$pdo) {
+            return ['success' => false, 'error' => 'Database connection not available.'];
+        }
+
+        $dir = dirname($destinationFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        $handle = @fopen($destinationFile, 'w');
+        if (!$handle) {
+            return ['success' => false, 'error' => "Unable to open target file for writing: $destinationFile"];
+        }
+
+        try {
+            // Get Server & DB metadata
+            $serverVersion = $pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
+            $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn() ?: 'enteangadi';
+            $genTime = date('Y-m-d H:i:s');
+            $phpVersion = phpversion();
+
+            // Header comments (phpMyAdmin standard format)
+            fwrite($handle, "-- phpMyAdmin SQL Dump\n");
+            fwrite($handle, "-- version 5.2.1 / Enteangadi Database Exporter\n");
+            fwrite($handle, "-- https://www.phpmyadmin.net/\n");
+            fwrite($handle, "--\n");
+            fwrite($handle, "-- Host: localhost\n");
+            fwrite($handle, "-- Generation Time: " . $genTime . "\n");
+            fwrite($handle, "-- Server version: " . $serverVersion . "\n");
+            fwrite($handle, "-- PHP Version: " . $phpVersion . "\n\n");
+            fwrite($handle, "SET FOREIGN_KEY_CHECKS=0;\n");
+            fwrite($handle, "SET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\n");
+            fwrite($handle, "START TRANSACTION;\n");
+            fwrite($handle, "SET time_zone = \"+00:00\";\n\n");
+            fwrite($handle, "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n");
+            fwrite($handle, "/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;\n");
+            fwrite($handle, "/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;\n");
+            fwrite($handle, "/*!40101 SET NAMES utf8mb4 */;\n\n");
+            fwrite($handle, "--\n-- Database: `" . $dbName . "`\n--\n\n");
+
+            // Fetch all tables
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+            $totalTables = count($tables);
+            $totalRows = 0;
+
+            foreach ($tables as $table) {
+                // Table Structure
+                $createStmt = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
+                $createSql = $createStmt['Create Table'] ?? '';
+
+                fwrite($handle, "-- --------------------------------------------------------\n\n");
+                fwrite($handle, "--\n-- Table structure for table `{$table}`\n--\n\n");
+                fwrite($handle, "DROP TABLE IF EXISTS `{$table}`;\n");
+                fwrite($handle, $createSql . ";\n\n");
+
+                // Table Data
+                $rowsStmt = $pdo->query("SELECT * FROM `{$table}`");
+                $rowCountInTable = 0;
+                $batchRows = [];
+                $columns = null;
+
+                while ($row = $rowsStmt->fetch(PDO::FETCH_ASSOC)) {
+                    if ($columns === null) {
+                        $columns = array_keys($row);
+                    }
+                    $rowCountInTable++;
+                    $totalRows++;
+
+                    $vals = [];
+                    foreach ($row as $val) {
+                        if ($val === null) {
+                            $vals[] = 'NULL';
+                        } else {
+                            $vals[] = $pdo->quote($val);
+                        }
+                    }
+                    $batchRows[] = '(' . implode(', ', $vals) . ')';
+
+                    // Write in batches of 100 for optimal memory and SQL dump performance
+                    if (count($batchRows) >= 100) {
+                        if ($rowCountInTable === count($batchRows)) {
+                            fwrite($handle, "--\n-- Dumping data for table `{$table}`\n--\n\n");
+                        }
+                        $colList = '`' . implode('`, `', $columns) . '`';
+                        fwrite($handle, "INSERT INTO `{$table}` ({$colList}) VALUES\n" . implode(",\n", $batchRows) . ";\n\n");
+                        $batchRows = [];
+                    }
+                }
+
+                if (!empty($batchRows)) {
+                    if ($rowCountInTable === count($batchRows)) {
+                        fwrite($handle, "--\n-- Dumping data for table `{$table}`\n--\n\n");
+                    }
+                    $colList = '`' . implode('`, `', $columns) . '`';
+                    fwrite($handle, "INSERT INTO `{$table}` ({$colList}) VALUES\n" . implode(",\n", $batchRows) . ";\n\n");
+                }
+            }
+
+            fwrite($handle, "COMMIT;\n");
+            fwrite($handle, "SET FOREIGN_KEY_CHECKS=1;\n\n");
+            fwrite($handle, "/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;\n");
+            fwrite($handle, "/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;\n");
+            fwrite($handle, "/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;\n");
+
+            fclose($handle);
+
+            $fileSize = file_exists($destinationFile) ? filesize($destinationFile) : 0;
+            return [
+                'success' => true,
+                'bytes' => $fileSize,
+                'tables' => $totalTables,
+                'rows' => $totalRows,
+                'file' => $destinationFile
+            ];
+        } catch (Exception $e) {
+            if ($handle) {
+                fclose($handle);
+            }
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('exportCleanProductionSql')) {
+    function exportCleanProductionSql($pdo, $destinationFile) {
+        if (!$pdo) {
+            return ['success' => false, 'error' => 'Database connection not available.'];
+        }
+
+        $dir = dirname($destinationFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+
+        $handle = @fopen($destinationFile, 'w');
+        if (!$handle) {
+            return ['success' => false, 'error' => "Unable to open target file for writing: $destinationFile"];
+        }
+
+        try {
+            $serverVersion = $pdo->getAttribute(PDO::ATTR_SERVER_VERSION);
+            $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn() ?: 'enteangadi';
+            $genTime = date('Y-m-d H:i:s');
+            $phpVersion = phpversion();
+
+            fwrite($handle, "-- phpMyAdmin SQL Dump\n");
+            fwrite($handle, "-- version 5.2.1 / Enteangadi Clean Production Exporter\n");
+            fwrite($handle, "-- Clean Production Database (Zero Dummy Data)\n");
+            fwrite($handle, "-- Generated: " . $genTime . "\n");
+            fwrite($handle, "-- Server version: " . $serverVersion . "\n");
+            fwrite($handle, "-- PHP Version: " . $phpVersion . "\n\n");
+            fwrite($handle, "SET FOREIGN_KEY_CHECKS=0;\n");
+            fwrite($handle, "SET SQL_MODE = \"NO_AUTO_VALUE_ON_ZERO\";\n");
+            fwrite($handle, "START TRANSACTION;\n");
+            fwrite($handle, "SET time_zone = \"+00:00\";\n\n");
+            fwrite($handle, "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n");
+            fwrite($handle, "/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;\n");
+            fwrite($handle, "/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;\n");
+            fwrite($handle, "/*!40101 SET NAMES utf8mb4 */;\n\n");
+            fwrite($handle, "-- Database: `" . $dbName . "`\n\n");
+
+            $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+            $totalTables = count($tables);
+            $totalRows = 0;
+
+            // Tables where structural schema is preserved, but data is completely wiped
+            $wipedDataTables = [
+                'site_visits', 'analytics_clicks', 'reports', 'messages', 
+                'wishlist', 'user_ratings', 'verification_requests', 
+                'account_closures', 'product_images', 'products', 'blocked_users'
+            ];
+
+            foreach ($tables as $table) {
+                $createStmt = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
+                $createSql = $createStmt['Create Table'] ?? '';
+
+                if (in_array($table, $wipedDataTables)) {
+                    $createSql = preg_replace('/AUTO_INCREMENT=\d+/i', 'AUTO_INCREMENT=1', $createSql);
+                }
+
+                fwrite($handle, "-- --------------------------------------------------------\n\n");
+                fwrite($handle, "-- Table structure for table `{$table}`\n\n");
+                fwrite($handle, "DROP TABLE IF EXISTS `{$table}`;\n");
+                fwrite($handle, $createSql . ";\n\n");
+
+                // Determine rows to export
+                if ($table === 'users') {
+                    // Export ONLY admin / staff accounts (exclude dummy users)
+                    $rowsStmt = $pdo->query("SELECT * FROM `users` WHERE `role` = 'admin' OR `is_admin` = 1");
+                } elseif (in_array($table, $wipedDataTables)) {
+                    // Wiped table: 0 rows exported!
+                    continue;
+                } else {
+                    $rowsStmt = $pdo->query("SELECT * FROM `{$table}`");
+                }
+
+                $rowCountInTable = 0;
+                $batchRows = [];
+                $columns = null;
+
+                while ($row = $rowsStmt->fetch(PDO::FETCH_ASSOC)) {
+                    if ($columns === null) {
+                        $columns = array_keys($row);
+                    }
+                    $rowCountInTable++;
+                    $totalRows++;
+
+                    $vals = [];
+                    foreach ($row as $val) {
+                        if ($val === null) {
+                            $vals[] = 'NULL';
+                        } else {
+                            $vals[] = $pdo->quote($val);
+                        }
+                    }
+                    $batchRows[] = '(' . implode(', ', $vals) . ')';
+
+                    if (count($batchRows) >= 100) {
+                        if ($rowCountInTable === count($batchRows)) {
+                            fwrite($handle, "-- Dumping clean data for table `{$table}`\n\n");
+                        }
+                        $colList = '`' . implode('`, `', $columns) . '`';
+                        fwrite($handle, "INSERT INTO `{$table}` ({$colList}) VALUES\n" . implode(",\n", $batchRows) . ";\n\n");
+                        $batchRows = [];
+                    }
+                }
+
+                if (!empty($batchRows)) {
+                    if ($rowCountInTable === count($batchRows)) {
+                        fwrite($handle, "-- Dumping clean data for table `{$table}`\n\n");
+                    }
+                    $colList = '`' . implode('`, `', $columns) . '`';
+                    fwrite($handle, "INSERT INTO `{$table}` ({$colList}) VALUES\n" . implode(",\n", $batchRows) . ";\n\n");
+                }
+            }
+
+            fwrite($handle, "COMMIT;\n");
+            fwrite($handle, "SET FOREIGN_KEY_CHECKS=1;\n\n");
+            fwrite($handle, "/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;\n");
+            fwrite($handle, "/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;\n");
+            fwrite($handle, "/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;\n");
+
+            fclose($handle);
+
+            $fileSize = file_exists($destinationFile) ? filesize($destinationFile) : 0;
+            return [
+                'success' => true,
+                'bytes' => $fileSize,
+                'tables' => $totalTables,
+                'rows' => $totalRows,
+                'file' => $destinationFile
+            ];
+        } catch (Exception $e) {
+            if ($handle) fclose($handle);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('purgeDummyTestData')) {
+    function purgeDummyTestData($pdo) {
+        if (!$pdo) {
+            return ['success' => false, 'error' => 'Database connection not available.'];
+        }
+
+        try {
+            $root = dirname(__DIR__);
+
+            // 1. Delete physical product images
+            $imgStmt = $pdo->query("SELECT image_path FROM product_images");
+            $images = $imgStmt->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($images as $img) {
+                if (!empty($img)) {
+                    $fullPath = $root . '/' . ltrim($img, '/');
+                    if (is_file($fullPath)) {
+                        @unlink($fullPath);
+                    }
+                }
+            }
+
+            // 2. Delete non-admin user profile pictures
+            $userImgStmt = $pdo->query("SELECT profile_picture FROM users WHERE role != 'admin' AND is_admin = 0");
+            $userImages = $userImgStmt->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($userImages as $uimg) {
+                if (!empty($uimg)) {
+                    $fullPath = $root . '/' . ltrim($uimg, '/');
+                    if (is_file($fullPath)) {
+                        @unlink($fullPath);
+                    }
+                }
+            }
+
+            // 3. Clean up verification request photos if any
+            try {
+                $verImgStmt = $pdo->query("SELECT id_photo FROM verification_requests");
+                if ($verImgStmt) {
+                    $verImages = $verImgStmt->fetchAll(PDO::FETCH_COLUMN);
+                    foreach ($verImages as $vimg) {
+                        if (!empty($vimg)) {
+                            $fullPath = $root . '/' . ltrim($vimg, '/');
+                            if (is_file($fullPath)) {
+                                @unlink($fullPath);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // Fail-safe
+            }
+
+            // 4. Truncate dummy data tables
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");
+            $tablesToTruncate = [
+                'site_visits',
+                'analytics_clicks',
+                'reports',
+                'messages',
+                'wishlist',
+                'user_ratings',
+                'verification_requests',
+                'account_closures',
+                'product_images',
+                'products',
+                'blocked_users'
+            ];
+
+            foreach ($tablesToTruncate as $tbl) {
+                $check = $pdo->query("SHOW TABLES LIKE '{$tbl}'")->fetch();
+                if ($check) {
+                    $pdo->exec("TRUNCATE TABLE `{$tbl}`");
+                }
+            }
+
+            // 5. Delete non-admin users
+            $pdo->exec("DELETE FROM users WHERE role != 'admin' AND is_admin = 0");
+
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+
+            return ['success' => true];
+        } catch (Exception $e) {
+            $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('calc_growth')) {
+    function calc_growth($current, $previous) {
+        if ($previous <= 0) {
+            return $current > 0 ? 100 : 0;
+        }
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+}
+
+if (!function_exists('render_xls_bar')) {
+    function render_xls_bar($val, $max, $color = '#10b981') {
+        if ($max <= 0) return '<span style="color:#94a3b8; font-size:11px;">0.0%</span>';
+        $pct = round(max(0, min(100, ($val / $max) * 100)), 1);
+        $remainder = 100 - $pct;
+        return '<table cellpadding="0" cellspacing="0" style="width: 140px; height: 14px; border: 1px solid #cbd5e1; background: #f1f5f9; display: inline-table; vertical-align: middle;">'
+             . '<tr><td style="width:' . $pct . '%; background:' . $color . '; font-size:1px;">&nbsp;</td>'
+             . '<td style="width:' . $remainder . '%; font-size:1px;">&nbsp;</td></tr></table>'
+             . ' <b style="font-size:11px; color:#0f172a; margin-left:6px;">' . $pct . '%</b>';
+    }
+}
+
+
+
+

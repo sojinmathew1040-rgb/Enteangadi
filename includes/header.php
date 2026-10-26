@@ -53,6 +53,11 @@ try {
     <title><?= __('app_name') ?> - <?= __('tagline') ?></title>
     <meta name="description" content="Buy and sell anything locally with <?= __('app_name') ?>.">
     
+    <!-- Anti-Cache Meta Directives: Force fresh load on refresh -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
     <!-- Open Graph / Facebook Meta Tags -->
     <?php if (isset($og_title)): ?>
         <meta property="og:title" content="<?= htmlspecialchars($og_title) ?>" />
