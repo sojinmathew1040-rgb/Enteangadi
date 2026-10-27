@@ -51,7 +51,7 @@ $logo_version = ($logo_disk_file && file_exists($logo_disk_file)) ? filemtime($l
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title><?= __('app_name') ?> - <?= __('tagline') ?></title>
     <meta name="description" content="Buy and sell anything locally with <?= __('app_name') ?>.">
     
@@ -354,23 +354,47 @@ $logo_version = ($logo_disk_file && file_exists($logo_disk_file)) ? filemtime($l
         }
 
         function renderNotifications(notifications) {
-            const list = document.getElementById('notification-list');
-            if (!notifications || notifications.length === 0) {
-                list.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 20px;">No new notifications</div>';
-                return;
-            }
-            list.innerHTML = notifications.map(n => `
+            const listDesk = document.getElementById('notification-list');
+            const listMobile = document.getElementById('notification-list-mobile');
+            const emptyHtml = '<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 20px;">No new notifications</div>';
+            
+            const html = (!notifications || notifications.length === 0) ? emptyHtml : notifications.map(n => `
                 <div onclick="markRead(${n.id}, '${n.link}')" style="padding: 10px; border-radius: 8px; background: ${n.is_read == 0 ? 'var(--background)' : 'transparent'}; cursor: pointer; border-bottom: 1px solid var(--border-color); position: relative;">
                     <div style="font-size: 13px; font-weight: ${n.is_read == 0 ? '600' : '400'}; color: var(--text-dark);">${n.message}</div>
                     <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${new Date(n.created_at).toLocaleDateString()}</div>
                 </div>
             `).join('');
+
+            if (listDesk) listDesk.innerHTML = html;
+            if (listMobile) listMobile.innerHTML = html;
         }
 
-        function toggleNotifications() {
-            const dropdown = document.getElementById('notification-dropdown');
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        function toggleNotifications(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const isMobile = window.innerWidth <= 768;
+            const targetId = isMobile ? 'notification-dropdown-mobile' : 'notification-dropdown';
+            const dropdown = document.getElementById(targetId);
+            if (dropdown) {
+                const isShowing = dropdown.style.display === 'block';
+                const desk = document.getElementById('notification-dropdown');
+                const mob = document.getElementById('notification-dropdown-mobile');
+                if (desk) desk.style.display = 'none';
+                if (mob) mob.style.display = 'none';
+                dropdown.style.display = isShowing ? 'none' : 'block';
+            }
         }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.notification-wrapper')) {
+                const desk = document.getElementById('notification-dropdown');
+                const mob = document.getElementById('notification-dropdown-mobile');
+                if (desk) desk.style.display = 'none';
+                if (mob) mob.style.display = 'none';
+            }
+        });
 
         async function markRead(id, link) {
             await fetch(`<?= $base_url ?>/api/notifications.php?action=mark_read&id=${id}`);
@@ -463,8 +487,7 @@ $logo_version = ($logo_disk_file && file_exists($logo_disk_file)) ? filemtime($l
 
         <!-- Location Bar -->
         <div class="location-bar">
-            <div class="container"
-                style="padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 100%;">
+            <div class="container location-bar-container">
                 <div class="location-display" onclick="document.getElementById('location-modal').style.display='flex'">
                     <i class="fa fa-map-marker-alt"></i>
                     <span id="current-location-text">
@@ -473,23 +496,31 @@ $logo_version = ($logo_disk_file && file_exists($logo_disk_file)) ? filemtime($l
                     <i class="fa fa-chevron-down" style="font-size: 10px; margin-left: 4px;"></i>
                 </div>
 
-                <div class="search-and-notification-wrapper" style="display: flex; align-items: center; gap: 10px; flex: 1; width: 100%;">
-                    <div class="search-container-header" style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                        <form action="<?= $base_url ?>/index.php" method="GET" style="display: flex; flex: 1; align-items: center; position: relative; margin: 0; width: 100%;">
+                <div class="search-and-notification-wrapper">
+                    <div class="search-container-header">
+                        <form action="<?= $base_url ?>/index.php" method="GET">
                             <input type="text" name="search" id="header-search-input" placeholder="<?= __('search_placeholder') ?>"
-                                value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" style="padding-right: 36px;">
-                            <button type="button" id="header-search-mic-btn" style="position: absolute; right: 40px; background: none; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; height: 100%; width: 30px;" onclick="startVoiceSearch(event)"><i class="fa fa-microphone"></i></button>
-                            <button type="submit"><i class="fa fa-search"></i></button>
+                                value="<?= htmlspecialchars($_GET['search'] ?? '') ?>">
+                            <button type="button" id="header-search-mic-btn" onclick="startVoiceSearch(event)" title="Voice Search"><i class="fa fa-microphone"></i></button>
+                            <button type="submit" aria-label="Search"><i class="fa fa-search"></i></button>
                         </form>
                     </div>
                     <?php if (isset($_SESSION['user_id'])): ?>
-                        <div class="notification-wrapper mobile-only" style="position: relative; flex-shrink: 0; margin-left: 4px;">
-                            <a href="javascript:void(0)" onclick="toggleNotifications()" title="Notifications"
-                                style="text-decoration: none; font-size: 18px; color: var(--text-dark); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: var(--background); border-radius: 50%; border: 1px solid var(--border-color);">
+                        <div class="notification-wrapper mobile-only">
+                            <a href="javascript:void(0)" onclick="toggleNotifications(event)" title="Notifications" class="mobile-notification-btn">
                                 <i class="fa fa-bell"></i>
-                                <span class="notification-badge-mobile" id="notification-badge-mobile"
-                                    style="display: none; position: absolute; top: 0; right: 0; background: var(--danger); color: white; border-radius: 50%; padding: 2px 4px; font-size: 8px; font-weight: bold; line-height: 1;">0</span>
+                                <span class="notification-badge-mobile" id="notification-badge-mobile">0</span>
                             </a>
+                            <div id="notification-dropdown-mobile" class="glass-card notification-dropdown-panel" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-dark);">Notifications</h4>
+                                    <button type="button" onclick="markAllRead()"
+                                        style="background: none; border: none; color: var(--primary-green); font-size: 11px; cursor: pointer; font-weight: 600;">Mark all as read</button>
+                                </div>
+                                <div id="notification-list-mobile" style="display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 20px;">No new notifications</div>
+                                </div>
+                            </div>
                         </div>
                     <?php endif; ?>
                 </div>
