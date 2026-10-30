@@ -1,4 +1,4 @@
-package com.enteangadi.app;
+package com.perumalilcreative.enteangadi;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
