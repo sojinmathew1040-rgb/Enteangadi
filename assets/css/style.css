@@ -731,7 +731,10 @@ footer {
     z-index: 2000;
     border-top: 0.5px solid var(--border-color);
     height: 70px;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(70px + env(safe-area-inset-bottom, 0px));
+    min-height: 70px;
+    box-sizing: border-box;
     transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94), background 0.3s, border 0.3s;
 }
 
@@ -820,7 +823,7 @@ footer {
     }
 
     body {
-        padding-bottom: 74px;
+        padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
         /* Space for the bottom nav */
     }
 
@@ -4568,7 +4571,8 @@ input[type="checkbox"]:checked+.toggle-btn {
         top: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        bottom: calc(70px + env(safe-area-inset-bottom)) !important;
+        top: env(safe-area-inset-top, 0px) !important;
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
         height: auto !important;
         padding: 0 !important;
         margin: 0 !important;

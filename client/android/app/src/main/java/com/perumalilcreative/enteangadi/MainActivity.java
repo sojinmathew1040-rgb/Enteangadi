@@ -23,6 +23,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
@@ -68,6 +73,34 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MicrophonePermissionPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Apply system bar & display cutout insets so API 35/36 Edge-to-Edge never overlaps
+        // the top status bar or bottom 3-button / gesture navigation bar
+        try {
+            WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+            getWindow().setStatusBarColor(Color.WHITE);
+            getWindow().setNavigationBarColor(Color.WHITE);
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+            if (controller != null) {
+                controller.setAppearanceLightStatusBars(true);
+                controller.setAppearanceLightNavigationBars(true);
+            }
+            View contentView = findViewById(android.R.id.content);
+            if (contentView != null) {
+                contentView.setBackgroundColor(Color.WHITE);
+                ViewCompat.setOnApplyWindowInsetsListener(contentView, (v, windowInsets) -> {
+                    Insets bars = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars()
+                        | WindowInsetsCompat.Type.displayCutout()
+                        | WindowInsetsCompat.Type.ime()
+                    );
+                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    return WindowInsetsCompat.CONSUMED;
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         WebView webView = getBridge().getWebView();
 

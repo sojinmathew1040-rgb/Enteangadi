@@ -53,7 +53,7 @@ $css_version = @filemtime($root_disk . '/assets/css/style.css') ?: 1;
 $loc_js_version = @filemtime($root_disk . '/assets/js/location.js') ?: 1;
 $nat_js_version = @filemtime($root_disk . '/assets/js/app-native.js') ?: 1;
 $sw_version = @filemtime($root_disk . '/service-worker.js') ?: 1;
-$home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/guest/index.php');
+$home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/guest/index.php?_g=1');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -74,6 +74,33 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 
     <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=<?= $css_version ?>">
+    <style>
+        /* Ensure Edge-to-Edge & 3-Button Android Navigation Bar Never Crush Header or Bottom Nav */
+        .main-sticky-header {
+            padding-top: env(safe-area-inset-top, 0px) !important;
+        }
+        .mobile-bottom-nav {
+            height: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+            min-height: 70px !important;
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            box-sizing: border-box !important;
+            align-items: stretch !important;
+        }
+        .mobile-bottom-nav .nav-item {
+            height: 70px !important;
+            min-height: 70px !important;
+            box-sizing: border-box !important;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+            body.chat-page-body .chat-page-wrapper {
+                top: env(safe-area-inset-top, 0px) !important;
+                bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+        }
+    </style>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
     <noscript>
@@ -82,6 +109,8 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
     </noscript>
 
     <script>
+        try { document.cookie = "wordpress_logged_in_1=1; path=/; max-age=31536000; SameSite=Lax"; } catch (e) {}
+
         const EnteangadiConfig = {
             baseUrl: '<?= $base_url ?>',
             homeUrl: '<?= $home_href ?>',
@@ -90,6 +119,54 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
             location: <?= isset($_SESSION['user_location']) ? json_encode($_SESSION['user_location']) : 'null' ?>,
             isLoggedIn: <?= isset($_SESSION['user_id']) ? 'true' : 'false' ?>,
             userId: '<?= $_SESSION['user_id'] ?? '' ?>'
+        };
+
+        // Self-healing handler for product images if a proxy/SW served a stale HTML page with a replaced image filename
+        window.handleBrokenProductImg = function (imgEl, productId) {
+            if (!imgEl || imgEl.dataset.fallbackTried === '1') {
+                if (imgEl && imgEl.parentNode) {
+                    const ph = document.createElement('div');
+                    ph.className = imgEl.className || 'product-card-image';
+                    ph.style.cssText = 'display:flex;align-items:center;justify-content:center;background:#e0e0e0;width:100%;height:100%;';
+                    ph.innerHTML = '<i class="fa fa-image" style="font-size:36px;color:#999;"></i>';
+                    imgEl.replaceWith(ph);
+                }
+                return;
+            }
+            imgEl.dataset.fallbackTried = '1';
+            const base = (EnteangadiConfig.baseUrl || '');
+            if (!window._liveProductImgMapPromise) {
+                window._liveProductImgMapPromise = fetch(base + '/api/products.php?limit=100&_ts=' + Date.now(), { cache: 'no-store' })
+                    .then(r => r.json())
+                    .then(d => {
+                        const map = {};
+                        if (d && d.success && Array.isArray(d.products)) {
+                            d.products.forEach(p => { if (p && p.id && p.main_image) map[String(p.id)] = p.main_image; });
+                        }
+                        return map;
+                    })
+                    .catch(() => ({}));
+            }
+            window._liveProductImgMapPromise.then(map => {
+                let pid = productId;
+                if (!pid) {
+                    const card = imgEl.closest('a[href*="product.php?id="]');
+                    if (card) {
+                        const m = card.getAttribute('href').match(/[?&]id=(\d+)/);
+                        if (m) pid = m[1];
+                    }
+                }
+                const livePath = pid ? map[String(pid)] : null;
+                if (livePath) {
+                    imgEl.src = base + '/' + livePath.replace(/^\/+/, '') + '?v=' + Date.now();
+                } else if (imgEl.parentNode) {
+                    const ph = document.createElement('div');
+                    ph.className = imgEl.className || 'product-card-image';
+                    ph.style.cssText = 'display:flex;align-items:center;justify-content:center;background:#e0e0e0;width:100%;height:100%;';
+                    ph.innerHTML = '<i class="fa fa-image" style="font-size:36px;color:#999;"></i>';
+                    imgEl.replaceWith(ph);
+                }
+            });
         };
 
         // On-demand Leaflet loader (loaded only when user opens Map View)

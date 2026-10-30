@@ -1,5 +1,5 @@
-const ASSET_CACHE = 'enteangadi-assets-v9';
-const PAGE_CACHE = 'enteangadi-pages-v9';
+const ASSET_CACHE = 'enteangadi-assets-v11';
+const PAGE_CACHE = 'enteangadi-pages-v11';
 const VALID_CACHES = [ASSET_CACHE, PAGE_CACHE];
 
 self.addEventListener('install', () => {

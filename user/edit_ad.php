@@ -131,20 +131,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$category_id, $type, $title, $brand, $model, $variant, $description, $search_keywords, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $new_status, $product_id, $_SESSION['user_id']]);
 
                 // Handle image deletions
-                if (isset($_POST['delete_images'])) {
+                $deleted_paths_list = [];
+                if (isset($_POST['delete_images']) && is_array($_POST['delete_images'])) {
                     foreach ($_POST['delete_images'] as $del_img_id) {
+                        $del_img_id = (int) $del_img_id;
                         $sel_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE id = ? AND product_id = ?");
                         $sel_stmt->execute([$del_img_id, $product_id]);
                         $path = $sel_stmt->fetchColumn();
-                        if ($path && file_exists('../' . $path))
-                            @unlink('../' . $path);
+                        if ($path) {
+                            $deleted_paths_list[] = $path;
+                            if (file_exists('../' . $path)) {
+                                @unlink('../' . $path);
+                            }
+                        }
 
                         $del_stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ? AND product_id = ?");
                         $del_stmt->execute([$del_img_id, $product_id]);
                     }
                 }
 
-                // Handle new image uploads
+                // Fetch remaining existing images mapped by ID
+                $rem_stmt = $pdo->prepare("SELECT id, image_path FROM product_images WHERE product_id = ? ORDER BY id ASC");
+                $rem_stmt->execute([$product_id]);
+                $kept_existing_map = [];
+                foreach ($rem_stmt->fetchAll() as $rem_row) {
+                    $kept_existing_map[(int) $rem_row['id']] = $rem_row['image_path'];
+                }
+
+                // Handle new image uploads mapped by upload index
+                $new_uploaded_paths = [];
                 if (isset($_FILES['images']) && !empty($_FILES['images']['name'][0])) {
                     $upload_dir = '../uploads/products/';
                     if (!is_dir($upload_dir))
@@ -154,22 +169,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (empty($tmp_name))
                             continue;
 
-                        $file_name = time() . '_' . $key . '.jpg';
+                        $file_name = time() . '_' . $key . '_' . mt_rand(100, 999) . '.jpg';
                         $target_file = $upload_dir . $file_name;
 
                         if (function_exists('imagecreatefromjpeg') && compressProductImageLocal($tmp_name, $target_file, 800, 60)) {
                             @chmod($target_file, 0644);
-                            $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
-                            $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
+                            $new_uploaded_paths[(int) $key] = 'uploads/products/' . $file_name;
                         } else {
-                            $file_name = time() . '_' . $key . '_' . basename($_FILES['images']['name'][$key]);
+                            $file_name = time() . '_' . $key . '_' . mt_rand(100, 999) . '_' . basename($_FILES['images']['name'][$key]);
                             $target_file = $upload_dir . $file_name;
                             if (move_uploaded_file($tmp_name, $target_file)) {
                                 @chmod($target_file, 0644);
-                                $stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
-                                $stmt->execute([$product_id, 'uploads/products/' . $file_name]);
+                                $new_uploaded_paths[(int) $key] = 'uploads/products/' . $file_name;
                             }
                         }
+                    }
+                }
+
+                // Apply photo reordering & cover image selection
+                $final_paths = [];
+                $photo_order_raw = $_POST['photo_order'] ?? '';
+                $photo_order = !empty($photo_order_raw) ? json_decode($photo_order_raw, true) : null;
+
+                if (is_array($photo_order)) {
+                    foreach ($photo_order as $entry) {
+                        if (!is_array($entry)) continue;
+                        $etype = $entry['type'] ?? '';
+                        if ($etype === 'existing') {
+                            $eid = (int) ($entry['id'] ?? 0);
+                            if (isset($kept_existing_map[$eid])) {
+                                $final_paths[] = $kept_existing_map[$eid];
+                                unset($kept_existing_map[$eid]);
+                            }
+                        } elseif ($etype === 'new') {
+                            $nidx = (int) ($entry['newIndex'] ?? -1);
+                            if (isset($new_uploaded_paths[$nidx])) {
+                                $final_paths[] = $new_uploaded_paths[$nidx];
+                                unset($new_uploaded_paths[$nidx]);
+                            }
+                        }
+                    }
+                }
+
+                // Append any remaining kept or new images not explicitly listed
+                foreach ($kept_existing_map as $rem_path) {
+                    $final_paths[] = $rem_path;
+                }
+                foreach ($new_uploaded_paths as $new_path) {
+                    $final_paths[] = $new_path;
+                }
+
+                // Re-insert product_images in exact final order (Cover Image first)
+                $pdo->prepare("DELETE FROM product_images WHERE product_id = ?")->execute([$product_id]);
+                if (!empty($final_paths)) {
+                    $ins_img_stmt = $pdo->prepare("INSERT INTO product_images (product_id, image_path) VALUES (?, ?)");
+                    foreach ($final_paths as $final_path) {
+                        $ins_img_stmt->execute([$product_id, $final_path]);
+                    }
+                }
+
+                // Record deleted image paths -> new cover image so any cached guest feed resolves seamlessly
+                if (!empty($deleted_paths_list)) {
+                    try {
+                        $pdo->exec("CREATE TABLE IF NOT EXISTS product_image_redirects (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            product_id INT NOT NULL,
+                            old_image_path VARCHAR(255) NOT NULL,
+                            new_image_path VARCHAR(255) DEFAULT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            INDEX idx_old_img (old_image_path)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                        $new_cover = $final_paths[0] ?? null;
+                        $redir_stmt = $pdo->prepare("INSERT INTO product_image_redirects (product_id, old_image_path, new_image_path) VALUES (?, ?, ?)");
+                        foreach ($deleted_paths_list as $old_p) {
+                            $redir_stmt->execute([$product_id, $old_p, $new_cover]);
+                        }
+                    } catch (Exception $e_redir) {
                     }
                 }
 
@@ -421,6 +496,11 @@ $edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
                             <h3>Manage Photos</h3>
                         </div>
 
+                        <div class="photo-management-hint">
+                            <i class="fa fa-arrows-alt"></i>
+                            <span>Drag &amp; drop or use <strong>&lt; &gt;</strong> to rearrange photos. Click <strong>Set Cover</strong> (or tap a photo) to select the cover image, or <i class="fa fa-trash-alt"></i> to delete.</span>
+                        </div>
+
                         <div class="photo-management-side-wise">
                             <div class="add-photo-btn-card" onclick="document.getElementById('images').click()">
                                 <i class="fa fa-camera-retro"></i>
@@ -428,24 +508,10 @@ $edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
                                 <input type="file" id="images" name="images[]" multiple accept="image/*"
                                     style="display: none;" onchange="previewImages()">
                             </div>
-                            <div id="image_preview_container" class="image-preview-side-container">
-                                <?php foreach ($existing_images as $img):
-                                    $img_file = '../' . $img['image_path'];
-                                    $img_v = file_exists($img_file) ? filemtime($img_file) : 1;
-                                ?>
-                                    <div class="preview-item" onclick="toggleExistingDelete(<?= $img['id'] ?>, this)">
-                                        <img src="../<?= htmlspecialchars($img['image_path']) ?>?v=<?= $img_v ?>">
-                                        <span class="photo-trash-badge" title="Delete Photo"><i class="fa fa-trash-alt"></i></span>
-                                        <div class="delete-overlay">
-                                            <i class="fa fa-trash-alt"></i>
-                                            <span>DELETED</span>
-                                        </div>
-                                        <input type="checkbox" name="delete_images[]" value="<?= $img['id'] ?>"
-                                            id="del-<?= $img['id'] ?>" style="display: none;">
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+                            <div id="image_preview_container" class="image-preview-side-container"></div>
                         </div>
+                        <div id="deleted_images_inputs"></div>
+                        <input type="hidden" id="photo_order" name="photo_order" value="">
                     </div>
                     <div class="form-actions-premium">
                         <button type="button" class="btn-back-premium" onclick="goToStep(1)">Back</button>
@@ -547,6 +613,18 @@ $edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
     </div>
 </div>
 
+<?php
+$existing_photos_js = [];
+foreach ($existing_images as $idx => $img) {
+    $img_file = '../' . $img['image_path'];
+    $img_v = file_exists($img_file) ? filemtime($img_file) : 1;
+    $existing_photos_js[] = [
+        'id' => (int) $img['id'],
+        'src' => '../' . $img['image_path'] . '?v=' . $img_v,
+        'isCover' => ($idx === 0)
+    ];
+}
+?>
 <script>
     const l2Categories = <?= $l2_json ?>;
     const catDetails = <?= $details_json ?>;
@@ -554,6 +632,7 @@ $edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
     const currentBrand = <?= json_encode($product['brand'] ?? '') ?>;
     const currentModel = <?= json_encode($product['model'] ?? '') ?>;
     const currentVariant = <?= json_encode($product['variant'] ?? '') ?>;
+    const initialExistingPhotos = <?= json_encode($existing_photos_js) ?>;
 </script>
 <script src="../assets/js/edit_ad.js?v=<?= $edit_js_v ?>"></script>
 

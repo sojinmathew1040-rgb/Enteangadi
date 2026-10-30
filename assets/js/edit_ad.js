@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Enteangadi - Ad Editing Logic
  * Handles category updates, perishable checks, existing image management, and real-time safety moderation.
  */
@@ -106,11 +106,11 @@ function updateTypeUI(type) {
     const priceLabel = document.getElementById('priceLabel');
     if (priceLabel) {
         if (type === 'sell') {
-            priceLabel.innerText = 'Price (₹) *';
+            priceLabel.innerText = 'Price (â‚¹) *';
         } else if (type === 'rent') {
-            priceLabel.innerText = 'Rent Price (₹) *';
+            priceLabel.innerText = 'Rent Price (â‚¹) *';
         } else {
-            priceLabel.innerText = 'Budget (₹) *';
+            priceLabel.innerText = 'Budget (â‚¹) *';
         }
     }
 }
@@ -301,58 +301,274 @@ function toggleContact(type) {
     if (input && chk) input.required = chk.checked;
 }
 
-async function toggleExistingDelete(id, el) {
-    const chk = document.getElementById('del-' + id);
-    if (!chk) return;
-    const isMarked = chk.checked;
-    const imgEl = el.querySelector('img');
-    const imgSrc = imgEl ? imgEl.src : '';
-    const askConfirm = window.confirmPhotoDelete
-        ? await window.confirmPhotoDelete({
-            title: isMarked ? 'Keep Photo?' : 'Delete Photo?',
-            message: isMarked ? 'Do you want to restore and keep this photo?' : 'Do you want to delete this photo?',
-            imgSrc: imgSrc,
-            yesText: 'Yes',
-            noText: 'No',
-            isRestore: isMarked
-        })
-        : confirm(isMarked ? 'Do you want to restore this photo?' : 'Do you want to delete this photo?');
-    if (!askConfirm) return;
-    chk.checked = !isMarked;
-    el.classList.toggle('marked-delete', chk.checked);
-    if (typeof showToast === 'function') {
-        showToast(chk.checked ? 'Photo marked for deletion. Save changes to apply.' : 'Photo restored.');
+
+let editPhotoItems = [];
+let deletedExistingIds = [];
+let editDragSrcIndex = null;
+
+function initEditPhotos() {
+    editPhotoItems = [];
+    deletedExistingIds = [];
+    if (typeof initialExistingPhotos !== 'undefined' && Array.isArray(initialExistingPhotos)) {
+        initialExistingPhotos.forEach((p, idx) => {
+            editPhotoItems.push({
+                key: 'ex_' + p.id,
+                type: 'existing',
+                existingId: Number(p.id),
+                src: p.src,
+                isCover: Boolean(p.isCover || idx === 0)
+            });
+        });
+    }
+    if (editPhotoItems.length > 0 && !editPhotoItems.some(item => item.isCover)) {
+        editPhotoItems[0].isCover = true;
+    }
+    renderEditPhotoPreviews();
+}
+
+function readEditFileAsDataURL(file) {
+    return new Promise((resolve) => {
+        const cached = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        if (cached) {
+            resolve(cached);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+    });
+}
+
+function syncEditPhotoInputs() {
+    const filesInput = document.getElementById('images');
+    const delContainer = document.getElementById('deleted_images_inputs');
+    const orderInput = document.getElementById('photo_order');
+
+    if (editPhotoItems.length > 0 && !editPhotoItems.some(item => item.isCover)) {
+        editPhotoItems[0].isCover = true;
+    }
+
+    // 1. Sync deleted existing image IDs
+    if (delContainer) {
+        delContainer.innerHTML = '';
+        deletedExistingIds.forEach(id => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'delete_images[]';
+            inp.value = String(id);
+            delContainer.appendChild(inp);
+        });
+    }
+
+    // 2. Sync newly uploaded files in DataTransfer and assign newIndex
+    const dt = new DataTransfer();
+    let newCounter = 0;
+    editPhotoItems.forEach(item => {
+        if (item.type === 'new' && item.file) {
+            item.newIndex = newCounter++;
+            dt.items.add(item.file);
+        }
+    });
+    if (filesInput) {
+        filesInput.files = dt.files;
+    }
+
+    // 3. Build ordered photo list with selected Cover Image first
+    if (orderInput) {
+        const coverItem = editPhotoItems.find(item => item.isCover) || null;
+        const orderedList = [];
+        if (coverItem) {
+            orderedList.push(
+                coverItem.type === 'existing'
+                    ? { type: 'existing', id: coverItem.existingId, isCover: true }
+                    : { type: 'new', newIndex: coverItem.newIndex, isCover: true }
+            );
+        }
+        editPhotoItems.forEach(item => {
+            if (coverItem && item.key === coverItem.key) return;
+            orderedList.push(
+                item.type === 'existing'
+                    ? { type: 'existing', id: item.existingId, isCover: false }
+                    : { type: 'new', newIndex: item.newIndex, isCover: false }
+            );
+        });
+        orderInput.value = JSON.stringify(orderedList);
     }
 }
 
-function bindNewUploadPreview(div, file, src, filesInput) {
-    div.innerHTML = `<img src="${src}"><div class="new-badge">NEW</div><span class="photo-trash-badge" title="Delete Photo"><i class="fa fa-trash-alt"></i></span>`;
-    div.onclick = async () => {
-        const confirmed = window.confirmPhotoDelete
-            ? await window.confirmPhotoDelete({
-                title: 'Delete Photo?',
-                message: 'Do you want to delete this photo?',
-                imgSrc: src,
-                yesText: 'Yes',
-                noText: 'No'
-            })
-            : confirm('Do you want to delete this photo?');
-        if (!confirmed) return;
-        const dt = new DataTransfer();
-        Array.from(filesInput.files || []).forEach(f => {
-            if (f !== file && f.name !== file.name) dt.items.add(f);
-        });
-        filesInput.files = dt.files;
-        div.remove();
-        if (typeof showToast === 'function') showToast('Photo removed.');
-    };
+function setEditPhotoCover(index) {
+    if (index < 0 || index >= editPhotoItems.length) return;
+    editPhotoItems.forEach((item, idx) => {
+        item.isCover = (idx === index);
+    });
+    renderEditPhotoPreviews();
+    if (typeof showToast === 'function') {
+        showToast('Cover image updated.');
+    }
 }
 
-function _legacyToggleExistingDeleteUnused(id, el) {
-    const chk = document.getElementById('del-' + id);
-    if (!chk) return;
-    chk.checked = !chk.checked;
-    el.classList.toggle('marked-delete', chk.checked);
+function moveEditPhoto(fromIndex, toIndex) {
+    if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= editPhotoItems.length ||
+        toIndex >= editPhotoItems.length
+    ) {
+        return;
+    }
+    const [moved] = editPhotoItems.splice(fromIndex, 1);
+    editPhotoItems.splice(toIndex, 0, moved);
+    renderEditPhotoPreviews();
+}
+
+async function deleteEditPhoto(index) {
+    if (index < 0 || index >= editPhotoItems.length) return;
+    const item = editPhotoItems[index];
+
+    const confirmed = window.confirmPhotoDelete
+        ? await window.confirmPhotoDelete({
+            title: 'Delete Photo?',
+            message: 'Are you sure you want to delete this photo?',
+            imgSrc: item.src,
+            yesText: 'Yes',
+            noText: 'No'
+        })
+        : confirm('Are you sure you want to delete this photo?');
+
+    if (!confirmed) return;
+
+    if (item.type === 'existing' && item.existingId) {
+        if (!deletedExistingIds.includes(item.existingId)) {
+            deletedExistingIds.push(item.existingId);
+        }
+    }
+
+    const wasCover = item.isCover;
+    editPhotoItems.splice(index, 1);
+    if (wasCover && editPhotoItems.length > 0) {
+        editPhotoItems[0].isCover = true;
+    }
+
+    renderEditPhotoPreviews();
+    if (typeof showToast === 'function') {
+        showToast('Photo removed. Save changes to apply.');
+    }
+}
+
+function renderEditPhotoPreviews() {
+    const container = document.getElementById('image_preview_container');
+    if (!container) return;
+
+    syncEditPhotoInputs();
+    container.innerHTML = '';
+
+    editPhotoItems.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'preview-item' + (item.isCover ? ' is-cover' : '');
+        card.draggable = true;
+        card.dataset.index = idx;
+
+        const badgeHtml = item.isCover
+            ? `<span class="photo-badge cover-badge-pill"><i class="fa fa-star"></i> COVER</span>`
+            : `<span class="photo-badge order-badge-pill">#${idx + 1}</span>`;
+
+        card.innerHTML = `
+            <div class="photo-thumb-area" title="Click to set as Cover Image">
+                <img src="${item.src}" alt="Product Photo ${idx + 1}">
+                ${badgeHtml}
+                <button type="button" class="photo-delete-btn" title="Delete Photo">
+                    <i class="fa fa-trash-alt"></i>
+                </button>
+            </div>
+            <div class="photo-controls-bar">
+                <button type="button" class="photo-ctrl-btn move-left" ${idx === 0 ? 'disabled' : ''} title="Move Left">
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+                <button type="button" class="photo-cover-select-btn ${item.isCover ? 'active' : ''}" title="Set as Cover Image">
+                    ${item.isCover ? '<i class="fa fa-check-circle"></i> Cover' : 'Set Cover'}
+                </button>
+                <button type="button" class="photo-ctrl-btn move-right" ${idx === editPhotoItems.length - 1 ? 'disabled' : ''} title="Move Right">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+            </div>
+        `;
+
+        const thumbArea = card.querySelector('.photo-thumb-area');
+        const deleteBtn = card.querySelector('.photo-delete-btn');
+        const moveLeftBtn = card.querySelector('.move-left');
+        const moveRightBtn = card.querySelector('.move-right');
+        const coverBtn = card.querySelector('.photo-cover-select-btn');
+
+        if (thumbArea) {
+            thumbArea.addEventListener('click', (e) => {
+                if (e.target.closest('.photo-delete-btn')) return;
+                setEditPhotoCover(idx);
+            });
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteEditPhoto(idx);
+            });
+        }
+        if (moveLeftBtn) {
+            moveLeftBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                moveEditPhoto(idx, idx - 1);
+            });
+        }
+        if (moveRightBtn) {
+            moveRightBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                moveEditPhoto(idx, idx + 1);
+            });
+        }
+        if (coverBtn) {
+            coverBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setEditPhotoCover(idx);
+            });
+        }
+
+        // HTML5 Drag and Drop Reordering
+        card.addEventListener('dragstart', (e) => {
+            editDragSrcIndex = idx;
+            card.classList.add('is-dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(idx));
+            }
+        });
+        card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            if (editDragSrcIndex !== null && editDragSrcIndex !== idx) {
+                card.classList.add('drag-over');
+            }
+        });
+        card.addEventListener('dragleave', () => {
+            card.classList.remove('drag-over');
+        });
+        card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            card.classList.remove('drag-over');
+            const fromIdx = editDragSrcIndex !== null ? editDragSrcIndex : parseInt(e.dataTransfer?.getData('text/plain') || '-1', 10);
+            editDragSrcIndex = null;
+            if (!isNaN(fromIdx) && fromIdx >= 0 && fromIdx !== idx) {
+                moveEditPhoto(fromIdx, idx);
+            }
+        });
+        card.addEventListener('dragend', () => {
+            editDragSrcIndex = null;
+            document.querySelectorAll('#image_preview_container .preview-item').forEach(el => {
+                el.classList.remove('is-dragging', 'drag-over');
+            });
+        });
+
+        container.appendChild(card);
+    });
 }
 
 // Dynamic loading of TensorFlow.js and NSFWJS for 18+ content filtering
@@ -366,12 +582,14 @@ async function loadNSFWModel() {
     modelLoadingPromise = (async () => {
         try {
             if (typeof tf === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.8.5/dist/tf.min.js');
             }
             if (typeof nsfwjs === 'undefined') {
-                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs/dist/nsfwjs.min.js');
+                await loadScript('https://cdn.jsdelivr.net/npm/nsfwjs@2.4.2/dist/nsfwjs.min.js');
             }
-            nsfwModel = await nsfwjs.load();
+            const baseUrl = (window.EnteangadiConfig && typeof window.EnteangadiConfig.baseUrl !== 'undefined') ? window.EnteangadiConfig.baseUrl : '..';
+            const modelUrl = baseUrl + '/assets/models/nsfw/';
+            nsfwModel = await nsfwjs.load(modelUrl);
             return nsfwModel;
         } catch (e) {
             console.error("Failed to load NSFW detection model:", e);
@@ -411,7 +629,6 @@ function checkImageNSFWWithModel(model, file) {
                         nsfwScore += p.probability;
                     }
                 }
-                // Flag as NSFW if the combined probability is 60% or higher
                 resolve(nsfwScore >= 0.60);
             } catch (err) {
                 console.error("Image classification error:", err);
@@ -420,7 +637,7 @@ function checkImageNSFWWithModel(model, file) {
         };
         img.onerror = () => {
             if (!isDataURL) {
-                try { URL.revokeObjectURL(img.src); } catch(e) {}
+                try { URL.revokeObjectURL(img.src); } catch (e) {}
             }
             resolve(false);
         };
@@ -432,13 +649,11 @@ async function previewImages() {
     const filesInput = document.getElementById('images');
     if (!container || !filesInput) return;
 
-    const files = Array.from(filesInput.files);
-
-    // Clear previous new uploads
-    const newPreviews = container.querySelectorAll('.preview-item.new-upload');
-    newPreviews.forEach(p => p.remove());
-
-    if (files.length === 0) return;
+    const files = Array.from(filesInput.files || []);
+    if (files.length === 0) {
+        syncEditPhotoInputs();
+        return;
+    }
 
     // Show Safety Scanning overlay
     const loader = document.getElementById('loadingOverlay');
@@ -458,13 +673,9 @@ async function previewImages() {
         console.error("Failed to fetch model:", e);
     }
 
-    const validFiles = [];
-    const dt = new DataTransfer();
-
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // Exclude video files on client-side
         if (file.type.startsWith('video/')) {
             alert(`Videos are not allowed: ${file.name}`);
             continue;
@@ -484,8 +695,14 @@ async function previewImages() {
             continue;
         }
 
-        validFiles.push(file);
-        dt.items.add(file);
+        const dataURL = await readEditFileAsDataURL(file);
+        editPhotoItems.push({
+            key: 'new_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            type: 'new',
+            file: file,
+            src: dataURL,
+            isCover: editPhotoItems.length === 0
+        });
     }
 
     // Hide scanning overlay
@@ -495,28 +712,7 @@ async function previewImages() {
         if (loaderDesc) loaderDesc.innerText = "Please wait while we update your ad...";
     }
 
-    // Update the input with filtered safe files
-    filesInput.files = dt.files;
-
-    for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
-        if (dataURL) {
-            const div = document.createElement('div');
-            div.className = 'preview-item new-upload';
-            bindNewUploadPreview(div, file, dataURL, filesInput);
-            container.appendChild(div);
-        } else {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const div = document.createElement('div');
-                div.className = 'preview-item new-upload';
-                bindNewUploadPreview(div, file, e.target.result, filesInput);
-                container.appendChild(div);
-            };
-            reader.readAsDataURL(file);
-        }
-    }
+    renderEditPhotoPreviews();
 }
 
 async function detectPostLocation(e) {
@@ -549,6 +745,7 @@ async function detectPostLocation(e) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initEditPhotos();
     updateL2Categories();
     const checkedType = document.querySelector('input[name="type"]:checked');
     if (checkedType) {
@@ -580,6 +777,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Your ad title or description contains prohibited terms. Please review highlighted fields.');
                 return;
             }
+
+            syncEditPhotoInputs();
 
             const loader = document.getElementById('loadingOverlay');
             if (loader) {

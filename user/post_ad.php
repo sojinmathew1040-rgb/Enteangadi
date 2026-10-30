@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once '../config.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -132,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (empty($tmp_name))
                             continue;
 
-                        $file_name = time() . '_' . $key . '.jpg';
+                        $file_name = time() . '_' . $key . '_' . mt_rand(100, 999) . '.jpg';
                         $target_file = $upload_dir . $file_name;
 
                         if (function_exists('imagecreatefromjpeg') && compressImage($tmp_name, $target_file, 800, 60)) {
@@ -340,27 +340,27 @@ require_once '../includes/header.php';
                                 </select>
                             </div>
                             <div class="form-group-premium" id="brand_group" style="display: none;">
-                                <label for="brand_select">Brand / Make (നിർമ്മാതാവ് / ബ്രാൻഡ്)</label>
+                                <label for="brand_select">Brand / Make (à´¨à´¿àµ¼à´®àµà´®à´¾à´¤à´¾à´µàµ / à´¬àµà´°à´¾àµ»à´¡àµ)</label>
                                 <select id="brand_select" name="brand" class="premium-select" onchange="onBrandSelected(this)">
                                     <option value="">Select Brand</option>
                                 </select>
                             </div>
                             <div class="form-group-premium" id="model_group" style="display: none;">
-                                <label for="model_select">Model / Variety (മോഡൽ / ഇനം)</label>
+                                <label for="model_select">Model / Variety (à´®àµ‹à´¡àµ½ / à´‡à´¨à´‚)</label>
                                 <select id="model_select" name="model" class="premium-select" onchange="onModelSelected(this)">
                                     <option value="">Select Model</option>
                                 </select>
                             </div>
                             <div class="form-group-premium" id="variant_group" style="display: none;">
-                                <label for="variant_select">Variant / Trim / Spec (വേരിയന്റ്)</label>
+                                <label for="variant_select">Variant / Trim / Spec (à´µàµ‡à´°à´¿à´¯à´¨àµà´±àµ)</label>
                                 <select id="variant_select" name="variant" class="premium-select" onchange="onVariantSelected(this)">
                                     <option value="">Select Variant</option>
                                 </select>
                             </div>
                             <div class="form-group-premium" id="price_group">
-                                <label for="price" id="priceLabel">Price (₹) *</label>
+                                <label for="price" id="priceLabel">Price (â‚¹) *</label>
                                 <div class="price-input-wrapper">
-                                    <span class="currency-symbol">₹</span>
+                                    <span class="currency-symbol">â‚¹</span>
                                     <input type="number" id="price" name="price" step="0.01"
                                         class="premium-input with-prefix" required placeholder="0.00">
                                 </div>
@@ -496,6 +496,6 @@ require_once '../includes/header.php';
     const l2Categories = <?= $l2_json ?>;
     const catDetails = <?= $details_json ?>;
 </script>
-<script src="../assets/js/post_ad.js"></script>
+<script src="../assets/js/post_ad.js?v=<?= @filemtime('../assets/js/post_ad.js') ?: time() ?>"></script>
 
 <?php require_once '../includes/footer.php'; ?>

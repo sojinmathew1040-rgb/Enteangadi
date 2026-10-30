@@ -37,6 +37,7 @@ if (!headers_sent()) {
     header("Vary: Cookie");
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
         header("Set-Cookie: _ea_nc=1; Path=/; SameSite=Lax", false);
+        header("Set-Cookie: wordpress_logged_in_1=1; Path=/; Max-Age=31536000; SameSite=Lax", false);
     }
 }
 

@@ -1,7 +1,7 @@
 <!-- Mobile Bottom Navigation -->
 <?php
 $current_page = basename($_SERVER['PHP_SELF'] ?? '');
-$home_href = ($base_url ?? '') . (isset($_SESSION['user_id']) ? '/user/index.php' : '/guest/index.php');
+$home_href = ($base_url ?? '') . (isset($_SESSION['user_id']) ? '/user/index.php' : '/guest/index.php?_g=1');
 $main_js_v = @filemtime(dirname(__DIR__) . '/assets/js/main.js') ?: 1;
 ?>
 <nav class="mobile-bottom-nav">

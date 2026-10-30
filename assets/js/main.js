@@ -246,7 +246,7 @@
     // Global Yes / No Photo Deletion Confirmation Helper
     window.confirmPhotoDelete = function (options = {}) {
         const title = options.title || 'Delete Photo?';
-        const message = options.message || 'Do you want to delete this photo?';
+        const message = options.message || 'Are you sure you want to delete this photo?';
         const imgSrc = options.imgSrc || '';
         const yesText = options.yesText || 'Yes';
         const noText = options.noText || 'No';
@@ -268,7 +268,7 @@
                             </div>
                         </div>
                         <h3 id="photoConfirmTitle">Delete Photo?</h3>
-                        <p id="photoConfirmDesc">Do you want to delete this photo?</p>
+                        <p id="photoConfirmDesc">Are you sure you want to delete this photo?</p>
                         <div class="photo-confirm-actions">
                             <button type="button" class="btn-confirm-no" id="photoConfirmNoBtn">No</button>
                             <button type="button" class="btn-confirm-yes" id="photoConfirmYesBtn">Yes</button>

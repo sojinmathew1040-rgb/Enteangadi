@@ -28,7 +28,7 @@
         width: 100%;
         background: var(--white, #ffffff);
         border-radius: 24px 24px 0 0;
-        padding: 24px 24px 34px 24px; /* extra bottom padding for mobile safe area */
+        padding: 24px 24px calc(24px + env(safe-area-inset-bottom, 12px)) 24px; /* extra bottom padding for mobile safe area */
         box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.15);
         transform: translateY(100%);
         transition: transform 0.3s cubic-bezier(0.1, 0.8, 0.3, 1);

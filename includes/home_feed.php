@@ -7,9 +7,30 @@
 if (!function_exists('renderProductCard')) {
     function renderProductCard(array $product, bool $eager = false): string
     {
-        $detailLink = "../product.php?id=" . (int)$product['id'];
+        global $pdo;
+        $pid = (int)$product['id'];
+        $detailLink = "../product.php?id=" . $pid;
+        $rootDisk = dirname(__DIR__);
+        $mainImg = $product['main_image'] ?? '';
+
+        if ($mainImg !== '' && !is_file($rootDisk . '/' . $mainImg) && isset($pdo)) {
+            try {
+                $altStmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ? ORDER BY id ASC");
+                $altStmt->execute([$pid]);
+                $mainImg = '';
+                foreach ($altStmt->fetchAll(PDO::FETCH_COLUMN) as $cand) {
+                    if ($cand && is_file($rootDisk . '/' . $cand)) {
+                        $mainImg = $cand;
+                        break;
+                    }
+                }
+            } catch (Exception $e) {
+                $mainImg = '';
+            }
+        }
+
         $imgVersion = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : 1);
-        $imageSrc = !empty($product['main_image']) ? "../" . htmlspecialchars($product['main_image']) . "?v=" . $imgVersion : null;
+        $imageSrc = $mainImg !== '' ? "../" . htmlspecialchars($mainImg) . "?v=" . $imgVersion : null;
 
         if ($product['type'] === 'buy') {
             $typeBadge = '<div class="badge-wanted">' . htmlspecialchars(__('wanted')) . '</div>';
@@ -25,7 +46,7 @@ if (!function_exists('renderProductCard')) {
 
         $loadAttr = $eager ? 'fetchpriority="high" decoding="async"' : 'loading="lazy" decoding="async"';
         $imgHtml = $imageSrc
-            ? '<img src="' . $imageSrc . '" ' . $loadAttr . ' alt="' . htmlspecialchars($product['title']) . '" class="product-card-image">'
+            ? '<img src="' . $imageSrc . '" ' . $loadAttr . ' alt="' . htmlspecialchars($product['title']) . '" class="product-card-image" onerror="window.handleBrokenProductImg && window.handleBrokenProductImg(this, ' . $pid . ')">'
             : '<div class="product-card-image" style="display:flex;align-items:center;justify-content:center;background:#e0e0e0;"><i class="fa fa-image" style="font-size:40px;color:#999;"></i></div>';
 
         $priceVal = number_format((float)$product['price'], (fmod((float)$product['price'], 1) == 0) ? 0 : 2);
@@ -189,11 +210,14 @@ $is_commercial = ($root_cat_id === 61);
 $is_mobiles = ($root_cat_id === 11);
 $is_properties = ($root_cat_id === 32);
 
-$buildFilterUrl = function ($overrides = []) {
+$buildFilterUrl = function ($overrides = []) use ($is_guest_feed) {
     $p = $_GET;
     foreach ($overrides as $k => $v) {
         if ($v === null || $v === '') unset($p[$k]);
         else $p[$k] = $v;
+    }
+    if (empty($p) && !empty($is_guest_feed)) {
+        $p['_g'] = '1';
     }
     return 'index.php' . (!empty($p) ? '?' . http_build_query($p) : '');
 };
@@ -327,7 +351,7 @@ require_once __DIR__ . '/header.php';
             <h2 style="color:var(--text-dark);font-size:22px;font-weight:800;margin:0;letter-spacing:-0.5px;">Browse categories</h2>
             <div style="display:flex;align-items:center;gap:10px;">
                 <?php if ($category_filter || $post_type || $search_query || $active_spec): ?>
-                    <a href="index.php" style="font-size:13px;color:var(--primary-green);text-decoration:none;font-weight:700;background:#f0fdf4;padding:6px 14px;border-radius:12px;">Clear Filter</a>
+                    <a href="index.php<?= !empty($is_guest_feed) ? '?_g=1' : '' ?>" style="font-size:13px;color:var(--primary-green);text-decoration:none;font-weight:700;background:#f0fdf4;padding:6px 14px;border-radius:12px;">Clear Filter</a>
                 <?php endif; ?>
                 <div class="category-nav-controls">
                     <button type="button" class="cat-nav-btn cat-prev-btn" onclick="scrollCategorySlider(-1)" title="Scroll Left" aria-label="Previous categories"><i class="fa fa-chevron-left"></i></button>
@@ -451,7 +475,7 @@ require_once __DIR__ . '/header.php';
                                 <div style="position:absolute;top:6px;left:6px;background:var(--primary-green,#1B5E20);color:#fff;font-size:7px;font-weight:800;padding:2px 6px;border-radius:3px;text-transform:uppercase;z-index:2;display:flex;align-items:center;gap:2px;"><i class="fa fa-check-double" style="font-size:6px;"></i> Verified</div>
                             <?php endif; ?>
                             <?php if (!empty($rv_p['main_image'])): ?>
-                                <img src="../<?= htmlspecialchars($rv_p['main_image']) ?>" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;">
+                                <img src="../<?= htmlspecialchars($rv_p['main_image']) ?>" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:cover;" onerror="window.handleBrokenProductImg && window.handleBrokenProductImg(this, <?= (int)$rv_p['id'] ?>)">
                             <?php else: ?>
                                 <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><i class="fa fa-image" style="font-size:24px;color:#cbd5e1;"></i></div>
                             <?php endif; ?>
@@ -708,7 +732,7 @@ require_once __DIR__ . '/header.php';
                 <?php endforeach; ?>
             </div>
 
-            <div style="padding:16px 24px;border-top:1px solid var(--border-color);background:#fff;display:flex;gap:12px;align-items:center;border-radius:0 0 24px 24px;">
+            <div style="padding:16px 24px calc(16px + env(safe-area-inset-bottom, 0px)) 24px;border-top:1px solid var(--border-color);background:#fff;display:flex;gap:12px;align-items:center;border-radius:0 0 24px 24px;">
                 <button type="button" onclick="closeCatalogDrawer()" style="flex:1;padding:14px;background:var(--primary-green);color:#fff;border:none;border-radius:14px;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,.3);display:flex;align-items:center;justify-content:center;gap:8px;">
                     <span>View Results</span>
                     <span id="btn-view-count" style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:12px;font-size:12px;"><?= $total_matching_ads ?> ads</span>
@@ -786,7 +810,8 @@ require_once __DIR__ . '/header.php';
             <div style="display:flex;background:#f1f5f9;padding:4px;border-radius:12px;gap:4px;font-size:12px;font-weight:700;">
                 <?php foreach ($dealTabs as $tKey => $tLabel):
                     $isTab = ($tKey === '' ? empty($post_type) : ($post_type === $tKey));
-                    $tabHref = 'index.php' . ($tKey !== '' ? '?post_type=' . $tKey . $extraParams : ($extraParams !== '' ? '?' . ltrim($extraParams, '&') : ''));
+                    $defaultReset = !empty($is_guest_feed) ? '?_g=1' : '';
+                    $tabHref = 'index.php' . ($tKey !== '' ? '?post_type=' . $tKey . $extraParams : ($extraParams !== '' ? '?' . ltrim($extraParams, '&') : $defaultReset));
                 ?>
                     <a href="<?= $tabHref ?>" style="padding:6px 12px;border-radius:8px;text-decoration:none;color:<?= $isTab ? '#fff' : '#64748b' ?>;background:<?= $isTab ? 'var(--primary-green)' : 'transparent' ?>;"><?= $tLabel ?></a>
                 <?php endforeach; ?>
@@ -796,7 +821,7 @@ require_once __DIR__ . '/header.php';
                 <i class="fa fa-map"></i> Show Map
             </button>
             <?php if ($category_filter || $search_query || $post_type || $active_spec): ?>
-                <a href="index.php" class="section-view-all-btn" style="background:#f1f5f9;color:#475569;"><i class="fa fa-arrow-left"></i> Back to Home</a>
+                <a href="index.php<?= !empty($is_guest_feed) ? '?_g=1' : '' ?>" class="section-view-all-btn" style="background:#f1f5f9;color:#475569;"><i class="fa fa-arrow-left"></i> Back to Home</a>
             <?php endif; ?>
         </div>
     </div>
@@ -915,7 +940,7 @@ require_once __DIR__ . '/header.php';
                 : (p.type === 'rent' ? `<div class="badge-rent">${i18nLabels.for_rent}</div>` : `<div class="badge-selling">${i18nLabels.for_sale}</div>`);
             const adminBadge = Number(p.is_admin_posted) ? `<div class="badge-admin-posted" style="position:absolute;top:10px;right:10px;background:linear-gradient(135deg,#059669 0%,#10b981 100%);color:#fff;padding:4px 9px;border-radius:8px;font-size:9px;font-weight:800;text-transform:uppercase;z-index:10;display:flex;align-items:center;gap:4px;"><i class="fa fa-shield-alt" style="font-size:8px;"></i> Posted by Admin</div>` : '';
             const imgHtml = p.main_image
-                ? `<img src="../${p.main_image}" loading="lazy" decoding="async" alt="" class="product-card-image">`
+                ? `<img src="../${p.main_image}" loading="lazy" decoding="async" alt="" class="product-card-image" onerror="window.handleBrokenProductImg && window.handleBrokenProductImg(this, ${Number(p.id) || 0})">`
                 : `<div class="product-card-image" style="display:flex;align-items:center;justify-content:center;background:#e0e0e0;"><i class="fa fa-image" style="font-size:40px;color:#999;"></i></div>`;
             const numPrice = Number(p.price || 0);
             const priceFmt = numPrice.toLocaleString('en-IN', { minimumFractionDigits: numPrice % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 });

@@ -1,4 +1,4 @@
-.post-ad-page-premium {
+﻿.post-ad-page-premium {
     padding: 40px 0 100px;
     background: var(--background);
 }
@@ -479,37 +479,53 @@
     margin: 0 auto 20px;
 }
 
-/* Photo Management Side-Wise */
-.photo-management-side-wise {
+/* Photo Management Side-Wise & Grid */
+.photo-management-hint {
     display: flex;
-    gap: 16px;
-    padding: 16px;
-    background: #f8fafc;
-    border-radius: 24px;
-    border: 2px dashed #e2e8f0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    scroll-behavior: smooth;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 14px;
+    color: #166534;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
-.photo-management-side-wise::-webkit-scrollbar {
-    display: none;
+.photo-management-hint i {
+    color: var(--primary-green);
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.photo-management-side-wise {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 18px;
+    background: #f8fafc;
+    border-radius: 24px;
+    border: 2px dashed #cbd5e1;
 }
 
 .add-photo-btn-card {
-    min-width: 110px;
-    height: 110px;
+    width: 140px;
+    min-width: 140px;
+    height: 164px;
     background: white;
     border-radius: 18px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 10px;
     cursor: pointer;
-    border: 2px solid #f1f5f9;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px dashed #cbd5e1;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     color: var(--text-muted);
     flex-shrink: 0;
 }
@@ -518,11 +534,12 @@
     border-color: var(--primary-green);
     color: var(--primary-green);
     background: #f0fdf4;
-    transform: scale(0.98);
+    transform: translateY(-2px);
 }
 
 .add-photo-btn-card i {
-    font-size: 24px;
+    font-size: 28px;
+    color: var(--primary-green);
 }
 
 .add-photo-btn-card span {
@@ -534,27 +551,49 @@
 
 .image-preview-side-container {
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
+    align-items: flex-start;
 }
 
 .preview-item {
-    width: 110px;
-    height: 110px;
+    width: 140px;
+    height: 164px;
     border-radius: 18px;
     overflow: hidden;
     position: relative;
-    cursor: pointer;
-    border: 2px solid white;
+    cursor: grab;
+    border: 2px solid #e2e8f0;
     background: white;
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, opacity 0.2s ease;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     flex-shrink: 0;
+    user-select: none;
+}
+
+.preview-item:active {
+    cursor: grabbing;
+}
+
+.preview-item.is-dragging {
+    opacity: 0.45;
+    transform: scale(0.95);
+    border-style: dashed;
+    border-color: var(--primary-green);
+}
+
+.preview-item.drag-over {
+    border-color: var(--primary-green);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+    transform: scale(1.04);
 }
 
 @keyframes popIn {
     0% {
-        transform: scale(0.5);
+        transform: scale(0.8);
         opacity: 0;
     }
 
@@ -565,9 +604,24 @@
 }
 
 .preview-item:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
     border-color: var(--primary-green);
+}
+
+.preview-item.is-cover {
+    border-color: var(--primary-green);
+    border-width: 2.5px;
+    box-shadow: 0 8px 22px rgba(22, 163, 74, 0.22);
+}
+
+.photo-thumb-area {
+    position: relative;
+    width: 100%;
+    height: 124px;
+    overflow: hidden;
+    background: #f1f5f9;
+    cursor: pointer;
 }
 
 .preview-item img {
@@ -575,63 +629,140 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.4s;
+    transition: transform 0.35s ease;
+    pointer-events: none;
 }
 
-.preview-item:hover img {
-    transform: scale(1.1);
+.preview-item:hover .photo-thumb-area img {
+    transform: scale(1.06);
 }
 
-.preview-item.is-cover {
-    border-color: var(--primary-green);
-    box-shadow: 0 8px 20px rgba(34, 197, 94, 0.2);
-}
-
-.cover-badge {
+.photo-badge {
     position: absolute;
     top: 8px;
-    right: 8px;
-    background: var(--primary-green);
-    color: white;
-    font-size: 8px;
-    font-weight: 900;
+    left: 8px;
+    font-size: 9px;
+    font-weight: 800;
     padding: 4px 8px;
-    border-radius: 10px;
-    display: none;
+    border-radius: 999px;
+    letter-spacing: 0.5px;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
-    z-index: 2;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
 }
 
-.preview-item.is-cover .cover-badge {
-    display: block;
+.cover-badge-pill {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: #ffffff;
+    box-shadow: 0 3px 8px rgba(22, 163, 74, 0.4);
 }
 
-/* Selection overlay */
-.selection-overlay {
+.order-badge-pill {
+    background: rgba(15, 23, 42, 0.72);
+    color: #ffffff;
+    backdrop-filter: blur(4px);
+}
+
+.photo-delete-btn {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(to top, rgba(34, 197, 94, 0.4), transparent);
-    opacity: 0;
-    transition: 0.3s;
+    top: 7px;
+    right: 7px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.9);
+    background: rgba(239, 68, 68, 0.94);
+    color: #ffffff;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
-    padding-bottom: 10px;
-    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 4;
+    box-shadow: 0 3px 10px rgba(239, 68, 68, 0.35);
+    transition: transform 0.2s ease, background 0.2s ease;
+    padding: 0;
+}
+
+.photo-delete-btn:hover {
+    background: #dc2626;
+    transform: scale(1.12);
+}
+
+.photo-controls-bar {
+    height: 40px;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px;
+    gap: 4px;
+    z-index: 3;
+}
+
+.photo-ctrl-btn {
+    width: 26px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.photo-ctrl-btn:hover:not(:disabled) {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.photo-ctrl-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.photo-cover-select-btn {
+    flex: 1;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
     font-size: 10px;
     font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: all 0.2s ease;
+    padding: 0 4px;
+    white-space: nowrap;
 }
 
-.preview-item:hover .selection-overlay {
-    opacity: 1;
+.photo-cover-select-btn:hover {
+    border-color: var(--primary-green);
+    color: var(--primary-green);
+    background: #f0fdf4;
 }
 
-.preview-item.is-cover .selection-overlay {
-    display: none;
+.photo-cover-select-btn.active {
+    background: #dcfce7;
+    border-color: #22c55e;
+    color: #15803d;
 }
-
 @keyframes spin {
     0% {
         transform: rotate(0deg);
@@ -825,15 +956,19 @@
     }
 
     .photo-management-side-wise {
-        padding: 12px !important;
+        padding: 14px !important;
         border-radius: 20px !important;
         gap: 12px !important;
     }
 
     .add-photo-btn-card, .preview-item {
-        width: 90px !important;
-        height: 90px !important;
-        min-width: 90px !important;
+        width: 128px !important;
+        height: 152px !important;
+        min-width: 128px !important;
+    }
+
+    .photo-thumb-area {
+        height: 112px !important;
     }
 
     .post-success-card {

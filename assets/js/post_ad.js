@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Enteangadi - Ad Posting Logic
  * Handles multi-step form navigation, category updates, location detection, and image previews.
  */
@@ -326,11 +326,11 @@ function updateTypeUI(t) {
     const priceLabel = document.getElementById('priceLabel');
     if (priceLabel) {
         if (t === 'sell') {
-            priceLabel.innerText = "Price (₹) *";
+            priceLabel.innerText = "Price (â‚¹) *";
         } else if (t === 'rent') {
-            priceLabel.innerText = "Rent Price (₹) *";
+            priceLabel.innerText = "Rent Price (â‚¹) *";
         } else {
-            priceLabel.innerText = "Budget (₹) *";
+            priceLabel.innerText = "Budget (â‚¹) *";
         }
     }
 }
@@ -453,15 +453,219 @@ function checkImageNSFWWithModel(model, file) {
     });
 }
 
+
+let postPhotoItems = [];
+let postDragSrcIndex = null;
+
+function readFileAsDataURL(file) {
+    return new Promise((resolve) => {
+        const cached = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
+        if (cached) {
+            resolve(cached);
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+    });
+}
+
+function syncPostFilesInput() {
+    const imagesInput = document.getElementById('images');
+    const coverIdxInput = document.getElementById('cover_index');
+    if (!imagesInput) return;
+
+    if (postPhotoItems.length > 0 && !postPhotoItems.some(item => item.isCover)) {
+        postPhotoItems[0].isCover = true;
+    }
+
+    const dt = new DataTransfer();
+    let coverIndex = 0;
+    postPhotoItems.forEach((item, idx) => {
+        if (item.file) dt.items.add(item.file);
+        if (item.isCover) coverIndex = idx;
+    });
+    imagesInput.files = dt.files;
+    if (coverIdxInput) coverIdxInput.value = coverIndex;
+}
+
+function setPostPhotoCover(index) {
+    if (index < 0 || index >= postPhotoItems.length) return;
+    postPhotoItems.forEach((item, idx) => {
+        item.isCover = (idx === index);
+    });
+    renderPostPhotoPreviews();
+    if (typeof showToast === 'function') {
+        showToast('Cover image updated.');
+    }
+}
+
+function movePostPhoto(fromIndex, toIndex) {
+    if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= postPhotoItems.length ||
+        toIndex >= postPhotoItems.length
+    ) {
+        return;
+    }
+    const [moved] = postPhotoItems.splice(fromIndex, 1);
+    postPhotoItems.splice(toIndex, 0, moved);
+    renderPostPhotoPreviews();
+}
+
+async function deletePostPhoto(index) {
+    if (index < 0 || index >= postPhotoItems.length) return;
+    const item = postPhotoItems[index];
+    const confirmed = window.confirmPhotoDelete
+        ? await window.confirmPhotoDelete({
+            title: 'Delete Photo?',
+            message: 'Are you sure you want to delete this photo?',
+            imgSrc: item.src,
+            yesText: 'Yes',
+            noText: 'No'
+        })
+        : confirm('Are you sure you want to delete this photo?');
+
+    if (!confirmed) return;
+
+    const wasCover = item.isCover;
+    postPhotoItems.splice(index, 1);
+    if (wasCover && postPhotoItems.length > 0) {
+        postPhotoItems[0].isCover = true;
+    }
+    renderPostPhotoPreviews();
+    if (typeof showToast === 'function') {
+        showToast('Photo deleted.');
+    }
+}
+
+function renderPostPhotoPreviews() {
+    const c = document.getElementById('image_preview_container');
+    if (!c) return;
+
+    syncPostFilesInput();
+    c.innerHTML = '';
+
+    postPhotoItems.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'preview-item' + (item.isCover ? ' is-cover' : '');
+        card.draggable = true;
+        card.dataset.index = idx;
+
+        const badgeHtml = item.isCover
+            ? `<span class="photo-badge cover-badge-pill"><i class="fa fa-star"></i> COVER</span>`
+            : `<span class="photo-badge order-badge-pill">#${idx + 1}</span>`;
+
+        card.innerHTML = `
+            <div class="photo-thumb-area" title="Click to set as Cover Image">
+                <img src="${item.src}" alt="Product Photo ${idx + 1}">
+                ${badgeHtml}
+                <button type="button" class="photo-delete-btn" title="Delete Photo">
+                    <i class="fa fa-trash-alt"></i>
+                </button>
+            </div>
+            <div class="photo-controls-bar">
+                <button type="button" class="photo-ctrl-btn move-left" ${idx === 0 ? 'disabled' : ''} title="Move Left">
+                    <i class="fa fa-chevron-left"></i>
+                </button>
+                <button type="button" class="photo-cover-select-btn ${item.isCover ? 'active' : ''}" title="Set as Cover Image">
+                    ${item.isCover ? '<i class="fa fa-check-circle"></i> Cover' : 'Set Cover'}
+                </button>
+                <button type="button" class="photo-ctrl-btn move-right" ${idx === postPhotoItems.length - 1 ? 'disabled' : ''} title="Move Right">
+                    <i class="fa fa-chevron-right"></i>
+                </button>
+            </div>
+        `;
+
+        const thumbArea = card.querySelector('.photo-thumb-area');
+        const deleteBtn = card.querySelector('.photo-delete-btn');
+        const moveLeftBtn = card.querySelector('.move-left');
+        const moveRightBtn = card.querySelector('.move-right');
+        const coverBtn = card.querySelector('.photo-cover-select-btn');
+
+        if (thumbArea) {
+            thumbArea.addEventListener('click', (e) => {
+                if (e.target.closest('.photo-delete-btn')) return;
+                setPostPhotoCover(idx);
+            });
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePostPhoto(idx);
+            });
+        }
+        if (moveLeftBtn) {
+            moveLeftBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                movePostPhoto(idx, idx - 1);
+            });
+        }
+        if (moveRightBtn) {
+            moveRightBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                movePostPhoto(idx, idx + 1);
+            });
+        }
+        if (coverBtn) {
+            coverBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setPostPhotoCover(idx);
+            });
+        }
+
+        // HTML5 Drag and Drop Reordering
+        card.addEventListener('dragstart', (e) => {
+            postDragSrcIndex = idx;
+            card.classList.add('is-dragging');
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(idx));
+            }
+        });
+        card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            if (postDragSrcIndex !== null && postDragSrcIndex !== idx) {
+                card.classList.add('drag-over');
+            }
+        });
+        card.addEventListener('dragleave', () => {
+            card.classList.remove('drag-over');
+        });
+        card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            card.classList.remove('drag-over');
+            const fromIdx = postDragSrcIndex !== null ? postDragSrcIndex : parseInt(e.dataTransfer?.getData('text/plain') || '-1', 10);
+            postDragSrcIndex = null;
+            if (!isNaN(fromIdx) && fromIdx >= 0 && fromIdx !== idx) {
+                movePostPhoto(fromIdx, idx);
+            }
+        });
+        card.addEventListener('dragend', () => {
+            postDragSrcIndex = null;
+            document.querySelectorAll('#image_preview_container .preview-item').forEach(el => {
+                el.classList.remove('is-dragging', 'drag-over');
+            });
+        });
+
+        c.appendChild(card);
+    });
+}
+
 async function previewImages() {
     const c = document.getElementById('image_preview_container');
     const imagesInput = document.getElementById('images');
     if (!c || !imagesInput) return;
 
-    const files = Array.from(imagesInput.files);
-    c.innerHTML = '';
-
-    if (files.length === 0) return;
+    const files = Array.from(imagesInput.files || []);
+    if (files.length === 0) {
+        syncPostFilesInput();
+        return;
+    }
 
     // Show beautiful premium scanner overlay
     const loader = document.getElementById('loadingOverlay');
@@ -480,9 +684,6 @@ async function previewImages() {
     } catch (e) {
         console.error("Failed to fetch model:", e);
     }
-
-    const validFiles = [];
-    const dt = new DataTransfer();
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -507,8 +708,13 @@ async function previewImages() {
             continue;
         }
 
-        validFiles.push(file);
-        dt.items.add(file);
+        const dataURL = await readFileAsDataURL(file);
+        postPhotoItems.push({
+            id: 'post_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            file: file,
+            src: dataURL,
+            isCover: postPhotoItems.length === 0
+        });
     }
 
     // Hide scanning overlay
@@ -518,49 +724,7 @@ async function previewImages() {
         if (loaderDesc) loaderDesc.innerText = "Please wait while we set everything up...";
     }
 
-    // Update the input with filtered safe files
-    imagesInput.files = dt.files;
-
-    // Render preview cards
-    for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        const dataURL = file.dataURL || (window.EnteangadiImageCache && window.EnteangadiImageCache[file.name]);
-        if (dataURL) {
-            const d = document.createElement('div');
-            d.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
-            d.onclick = () => {
-                document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
-                d.classList.add('is-cover');
-                const coverIdx = document.getElementById('cover_index');
-                if (coverIdx) coverIdx.value = i;
-            };
-            d.innerHTML = `
-                <img src="${dataURL}">
-                <div class="cover-badge">COVER</div>
-                <div class="selection-overlay">Set as Main</div>
-            `;
-            c.appendChild(d);
-        } else {
-            const r = new FileReader();
-            r.onload = (e) => {
-                const d = document.createElement('div');
-                d.className = 'preview-item' + (i === 0 ? ' is-cover' : '');
-                d.onclick = () => {
-                    document.querySelectorAll('.preview-item').forEach(el => el.classList.remove('is-cover'));
-                    d.classList.add('is-cover');
-                    const coverIdx = document.getElementById('cover_index');
-                    if (coverIdx) coverIdx.value = i;
-                };
-                d.innerHTML = `
-                    <img src="${e.target.result}">
-                    <div class="cover-badge">COVER</div>
-                    <div class="selection-overlay">Set as Main</div>
-                `;
-                c.appendChild(d);
-            }
-            r.readAsDataURL(file);
-        }
-    }
+    renderPostPhotoPreviews();
 }
 
 // Preload the NSFW model when post_ad page loads
