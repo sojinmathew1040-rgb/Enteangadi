@@ -1,23 +1,16 @@
 <?php
 // Configure secure session cookie params before starting session
 if (session_status() === PHP_SESSION_NONE) {
-    $secure = false;
-    if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) {
-        $secure = true;
-    } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-        $secure = true;
-    }
-
-    // Default secure to true on production hosts
-    if (isset($_SERVER['HTTP_HOST']) && (strpos($_SERVER['HTTP_HOST'], 'localhost') !== false || strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false)) {
-        // Localhost: keep secure as detected
-    } else {
+    $secure = (!empty($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1))
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $httpHost = $_SERVER['HTTP_HOST'] ?? '';
+    if ($httpHost !== '' && strpos($httpHost, 'localhost') === false && strpos($httpHost, '127.0.0.1') === false) {
         $secure = true;
     }
 
     if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
         session_set_cookie_params([
-            'lifetime' => 0, // Session cookie (until browser closes)
+            'lifetime' => 0,
             'path' => '/',
             'domain' => '',
             'secure' => $secure,
@@ -30,20 +23,24 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 session_start();
 
-// Anti-Cache HTTP Headers: Ensure live browser refreshes always load fresh data without stale cache
+$is_preload_req = !empty($_SERVER['HTTP_X_ENTEANGADI_PRELOAD'])
+    || (($_SERVER['HTTP_PURPOSE'] ?? '') === 'prefetch')
+    || (($_SERVER['HTTP_SEC_PURPOSE'] ?? '') === 'prefetch');
+
+// Allow short private caching for background preloads; keep direct refreshes fresh
 if (!headers_sent()) {
-    header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
-    header("Pragma: no-cache");
-    header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    if ($is_preload_req) {
+        header("Cache-Control: private, max-age=45");
+    } else {
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
+        header("Pragma: no-cache");
+        header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    }
 }
 
-// Load local configuration (untracked by git) for local secrets like API keys
 if (file_exists(__DIR__ . '/config_local.php')) {
     include_once __DIR__ . '/config_local.php';
 }
-
-// Groq API Key for browser-independent Speech-to-Text (e.g. Brave, Firefox fallbacks)
-// Get your free key from https://console.groq.com/
 if (!defined('GROQ_API_KEY')) {
     define('GROQ_API_KEY', '');
 }
@@ -51,57 +48,41 @@ if (!defined('GROQ_API_KEY')) {
 // Set base URL dynamically
 if (!isset($base_url)) {
     $current_dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-    $base_url = ($current_dir == '/' || $current_dir == '.') ? '' : $current_dir;
-    if (basename($base_url) == 'user' || basename($base_url) == 'admin' || basename($base_url) == 'guest' || basename($base_url) == 'api' || basename($base_url) == 'includes') {
+    $base_url = ($current_dir === '/' || $current_dir === '.') ? '' : $current_dir;
+    $subDirs = ['user', 'admin', 'guest', 'api', 'includes', 'cron'];
+    if (in_array(basename($base_url), $subDirs, true)) {
         $base_url = dirname($base_url);
     }
-    if (basename($base_url) == 'user' || basename($base_url) == 'admin' || basename($base_url) == 'guest' || basename($base_url) == 'api' || basename($base_url) == 'includes') {
+    if (in_array(basename($base_url), $subDirs, true)) {
         $base_url = dirname($base_url);
     }
     $base_url = str_replace('\\', '/', $base_url);
-    if ($base_url == '/') {
+    if ($base_url === '/' || $base_url === '.') {
         $base_url = '';
     }
 }
 
-// Unified Cookie Helper Function
 if (!function_exists('enteangadi_set_cookie')) {
     function enteangadi_set_cookie($name, $value, $expiry)
     {
-        $secure = false;
-        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) {
-            $secure = true;
-        } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-            $secure = true;
-        }
-
-        // Detect localhost and local private network IPs to avoid enforcing secure flags on HTTP dev envs
-        $is_local = false;
-        if (isset($_SERVER['HTTP_HOST'])) {
-            $host = $_SERVER['HTTP_HOST'];
-            if (
-                strpos($host, 'localhost') !== false ||
-                strpos($host, '127.0.0.1') !== false ||
-                strpos($host, '10.') === 0 ||
-                strpos($host, '192.168.') !== false ||
-                preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $host)
-            ) {
-                $is_local = true;
-            }
-        }
-
-        if ($is_local) {
-            // Local development: keep secure as detected (usually false)
-        } else {
-            // Live server (production): default secure to true since it uses HTTPS
+        $secure = (!empty($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1))
+            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $is_local = $host !== '' && (
+            strpos($host, 'localhost') !== false ||
+            strpos($host, '127.0.0.1') !== false ||
+            strpos($host, '10.') === 0 ||
+            strpos($host, '192.168.') !== false ||
+            preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $host)
+        );
+        if (!$is_local && $host !== '') {
             $secure = true;
         }
-
         if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
             setcookie($name, $value, [
                 'expires' => $expiry,
                 'path' => '/',
-                'domain' => '', // Default to current host
+                'domain' => '',
                 'secure' => $secure,
                 'httponly' => true,
                 'samesite' => 'Lax'
@@ -112,10 +93,37 @@ if (!function_exists('enteangadi_set_cookie')) {
     }
 }
 
+if (!function_exists('compressProductImage')) {
+    function compressProductImage($source_path, $quality = 30)
+    {
+        $abs_path = __DIR__ . '/' . $source_path;
+        if (!file_exists($abs_path)) return false;
+        $info = @getimagesize($abs_path);
+        if (!$info) return false;
+        if ($info['mime'] === 'image/jpeg') $image = @imagecreatefromjpeg($abs_path);
+        elseif ($info['mime'] === 'image/gif') $image = @imagecreatefromgif($abs_path);
+        elseif ($info['mime'] === 'image/png') $image = @imagecreatefrompng($abs_path);
+        else return false;
+        if (!$image) return false;
+        imagejpeg($image, $abs_path, $quality);
+        imagedestroy($image);
+        return true;
+    }
+}
+
+if (!function_exists('has_permission')) {
+    function has_permission($module)
+    {
+        if (!isset($_SESSION['admin_permissions'])) return false;
+        if ($_SESSION['admin_permissions'] === '*') return true;
+        return in_array($module, explode(',', $_SESSION['admin_permissions']), true);
+    }
+}
+
 // Restore user location from cookie if session is missing
 if (!isset($_SESSION['user_location']) && isset($_COOKIE['user_location'])) {
     $cookie_loc = json_decode($_COOKIE['user_location'], true);
-    if ($cookie_loc && isset($cookie_loc['name']) && isset($cookie_loc['lat']) && isset($cookie_loc['lng'])) {
+    if ($cookie_loc && isset($cookie_loc['name'], $cookie_loc['lat'], $cookie_loc['lng'])) {
         $_SESSION['user_location'] = [
             'name' => $cookie_loc['name'],
             'lat' => $cookie_loc['lat'],
@@ -124,649 +132,132 @@ if (!isset($_SESSION['user_location']) && isset($_COOKIE['user_location'])) {
     }
 }
 
-// --- CONTENT MODERATION SETTINGS ---
-define('SIGHTENGINE_USER', ''); // Enter your Sightengine User ID here
-define('SIGHTENGINE_SECRET', ''); // Enter your Sightengine Secret Key here
-define('MODERATION_STRICTNESS', 0.70); // Probability threshold (70%)
+if (!defined('SIGHTENGINE_USER')) define('SIGHTENGINE_USER', '');
+if (!defined('SIGHTENGINE_SECRET')) define('SIGHTENGINE_SECRET', '');
+if (!defined('MODERATION_STRICTNESS')) define('MODERATION_STRICTNESS', 0.70);
 
-// Allow Cross-Origin Resource Sharing (CORS) with Session Credentials (cookies) for Decoupled Clients (Vite, Capacitor)
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
-header("Access-Control-Allow-Origin: " . ($origin !== '*' ? $origin : '*'));
-header("Access-Control-Allow-Credentials: true");
-header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization");
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-
-// Return immediately for OPTIONS preflight checks
+// CORS headers for Capacitor / Vite clients
+if (!headers_sent()) {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+    header("Access-Control-Allow-Origin: " . ($origin !== '*' ? $origin : '*'));
+    header("Access-Control-Allow-Credentials: true");
+    header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization, X-User-Id, X-Session-Token, X-Enteangadi-Preload");
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+}
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-$host = defined('DB_HOST') ? DB_HOST : 'localhost';
+require_once __DIR__ . '/includes/helpers.php';
+
+$defaultHost = (PHP_OS_FAMILY === 'Windows') ? '127.0.0.1' : 'localhost';
+$host = defined('DB_HOST') ? ((PHP_OS_FAMILY === 'Windows' && DB_HOST === 'localhost') ? '127.0.0.1' : DB_HOST) : $defaultHost;
 $username = defined('DB_USER') ? DB_USER : 'root';
 $password = defined('DB_PASS') ? DB_PASS : '';
 $dbname = defined('DB_NAME') ? DB_NAME : 'enteangadi';
 
 try {
-    // 1. Connect to MySQL server without dbname first to ensure we can create it if missing
+    $pdoOpts = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ];
     try {
-        $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
-    } catch (PDOException $e) {
-        // Fallback to 127.0.0.1 if localhost socket connection fails (common on live Unix/Linux servers)
-        if ($host === 'localhost') {
+        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password, $pdoOpts);
+    } catch (PDOException $connErr) {
+        $errCode = (int)($connErr->errorInfo[1] ?? 0);
+        if ($errCode === 1049) {
+            // Database not created yet: create & select it
+            $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
+            $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $pdo->exec("USE `$dbname`");
+            @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+        } elseif ($host === 'localhost') {
             $host = '127.0.0.1';
-            $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password);
+            try {
+                $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password, $pdoOpts);
+            } catch (PDOException $e2) {
+                if ((int)($e2->errorInfo[1] ?? 0) === 1049) {
+                    $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
+                    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    $pdo->exec("USE `$dbname`");
+                    @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+                } else {
+                    throw $e2;
+                }
+            }
         } else {
-            throw $e;
-        }
-    }
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // 2. Create database if it doesn't exist
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
-    $pdo->exec("USE `$dbname`;");
-
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-    // 3. Check if core tables exist (e.g. check if 'users' or 'products' table exists)
-    $table_check = $pdo->query("SHOW TABLES LIKE 'products'");
-    if (!$table_check->fetch()) {
-        // If core table is missing, import schema from db/enteangadi.sql or db_schema.sql
-        $schema_file = dirname(__FILE__) . '/db/enteangadi.sql';
-        if (!file_exists($schema_file)) {
-            $schema_file = dirname(__FILE__) . '/db_schema.sql';
-        }
-        if (file_exists($schema_file)) {
-            $sql = file_get_contents($schema_file);
-            // Remove database creation and use statements from the schema if they exist to avoid conflicts
-            $sql = preg_replace('/CREATE DATABASE IF NOT EXISTS `?[a-zA-Z0-9_]+`?;/i', '', $sql);
-            $sql = preg_replace('/USE `?[a-zA-Z0-9_]+`?;/i', '', $sql);
-            $pdo->exec($sql);
+            throw $connErr;
         }
     }
 
-    // Cleanup expired chats for products sold/deleted more than 15 days ago
-    try {
-        $cutoff_date = date('Y-m-d H:i:s', time() - (15 * 86400));
-        $stmt_exp = $pdo->prepare("SELECT id FROM products WHERE status IN ('sold', 'deleted') AND updated_at < ?");
-        $stmt_exp->execute([$cutoff_date]);
-        $expired_products = $stmt_exp->fetchAll(PDO::FETCH_COLUMN);
+    // Run schema migrations & index setup only once (or when lock missing), and maintenance hourly
+    $schemaLock = sys_get_temp_dir() . '/enteangadi_schema_v3.lock';
+    $maintLock = sys_get_temp_dir() . '/enteangadi_maint_v3.lock';
+    $needSchema = !file_exists($schemaLock) || isset($_GET['force_schema_sync']);
+    $needMaint = !$is_preload_req && (!file_exists($maintLock) || (time() - @filemtime($maintLock)) >= 3600);
 
-        if (!empty($expired_products)) {
-            foreach ($expired_products as $p_id) {
-                // Find all messages with files (audio or images) for this product
-                $file_stmt = $pdo->prepare("SELECT message_text FROM messages WHERE product_id = ? AND (message_text LIKE '[AUDIO]:%' OR message_text LIKE '[IMAGE]:%')");
-                $file_stmt->execute([$p_id]);
-                $files = $file_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-                foreach ($files as $file_text) {
-                    $prefix = '';
-                    if (strpos($file_text, '[AUDIO]:') === 0) {
-                        $prefix = '[AUDIO]:';
-                    } elseif (strpos($file_text, '[IMAGE]:') === 0) {
-                        $prefix = '[IMAGE]:';
-                    }
-                    if (!empty($prefix)) {
-                        $relative_path = substr($file_text, strlen($prefix));
-                        $absolute_path = dirname(__FILE__) . '/' . $relative_path;
-                        if (file_exists($absolute_path)) {
-                            @unlink($absolute_path);
-                        }
-                    }
-                }
-
-                // Delete all messages associated with this product
-                $del_msgs = $pdo->prepare("DELETE FROM messages WHERE product_id = ?");
-                $del_msgs->execute([$p_id]);
-            }
+    if ($needSchema || $needMaint) {
+        require_once __DIR__ . '/includes/schema_maintenance.php';
+        if ($needSchema) {
+            runEnteangadiSchemaSetup($pdo, __DIR__);
         }
-    } catch (Exception $exp_err) {
-        // Fail silently
-    }
-
-    // Ensure site_visits table exists for visitor reporting & analytics
-    try {
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS `site_visits` (
-                `id` int(11) NOT NULL AUTO_INCREMENT,
-                `visit_date` date NOT NULL,
-                `ip_address` varchar(45) NOT NULL,
-                `user_id` int(11) DEFAULT NULL,
-                `page_url` varchar(255) DEFAULT NULL,
-                `user_agent` varchar(255) DEFAULT NULL,
-                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                KEY `idx_visit_date` (`visit_date`),
-                KEY `idx_user_id` (`user_id`),
-                KEY `idx_ip_date` (`ip_address`, `visit_date`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-        ");
-
-        // Ensure announcement_views table exists for poster impression tracking
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS `announcement_views` (
-                `id` int(11) NOT NULL AUTO_INCREMENT,
-                `poster_image` varchar(255) DEFAULT NULL,
-                `view_date` date NOT NULL,
-                `user_id` int(11) DEFAULT NULL,
-                `ip_address` varchar(45) NOT NULL,
-                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                KEY `idx_view_date` (`view_date`),
-                KEY `idx_poster` (`poster_image`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-        ");
-
-        // site_visits table ready (no dummy auto-seeding)
-
-        // Automatic page visit logger for live requests
-        if (!empty($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'GET' && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
-            $req_uri = $_SERVER['REQUEST_URI'] ?? '';
-            $is_asset = preg_match('/\.(css|js|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|ttf|map)$/i', $req_uri);
-            $is_cron = (strpos($req_uri, 'cron/') !== false || strpos($req_uri, 'sync_') !== false);
-            $is_admin = (strpos($req_uri, '/admin/') !== false);
-            $is_scratch = (strpos($req_uri, '/scratch/') !== false);
-            $is_api = (strpos($req_uri, '/api/') !== false || strpos($req_uri, 'api_') !== false || strpos($req_uri, '.json') !== false);
-            
-            if (!$is_asset && !$is_cron && !$is_admin && !$is_scratch && !$is_api) {
-                $v_date = date('Y-m-d');
-                $v_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-                if (strpos($v_ip, ',') !== false) {
-                    $v_ip = trim(explode(',', $v_ip)[0]);
-                }
-                $v_uid = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : (isset($_SESSION['admin_id']) ? (int)$_SESSION['admin_id'] : null);
-                $v_page = substr($req_uri, 0, 250);
-                $v_agent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 250);
-
-                if (!isset($_SESSION['last_visit_log']) || (time() - $_SESSION['last_visit_log']) >= 3) {
-                    $_SESSION['last_visit_log'] = time();
-                    $stmt_v = $pdo->prepare("INSERT INTO site_visits (visit_date, ip_address, user_id, page_url, user_agent) VALUES (?, ?, ?, ?, ?)");
-                    $stmt_v->execute([$v_date, $v_ip, $v_uid, $v_page, $v_agent]);
-                }
-            }
-        }
-    } catch (Exception $e_sv) {
-        // Continue silently if DB is busy
-    }
-
-    // --- HELPER FUNCTIONS ---
-
-    /**
-     * Compresses an image significantly to save storage
-     * Used for expired/sold/deleted products
-     */
-    if (!function_exists('compressProductImage')) {
-        function compressProductImage($source_path, $quality = 30)
-        {
-            $abs_path = dirname(__FILE__) . '/' . $source_path;
-            if (!file_exists($abs_path))
-                return false;
-
-            $info = getimagesize($abs_path);
-            if (!$info)
-                return false;
-
-            if ($info['mime'] == 'image/jpeg')
-                $image = imagecreatefromjpeg($abs_path);
-            elseif ($info['mime'] == 'image/gif')
-                $image = imagecreatefromgif($abs_path);
-            elseif ($info['mime'] == 'image/png')
-                $image = imagecreatefrompng($abs_path);
-            else
-                return false;
-
-            // Save as JPEG with high compression
-            imagejpeg($image, $abs_path, $quality);
-            return true;
+        if ($needMaint) {
+            runEnteangadiHourlyMaintenance($pdo, __DIR__);
         }
     }
 
-    // --- AUTOMATED MAINTENANCE ---
-
-    // 1. Auto-expire ads older than 60 days
-    $expiry_days = 60;
-    $expire_stmt = $pdo->prepare("
-        SELECT p.id, pi.image_path 
-        FROM products p
-        LEFT JOIN product_images pi ON p.id = pi.product_id
-        WHERE p.status = 'active' 
-        AND p.created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-    ");
-    $expire_stmt->execute([$expiry_days]);
-    $to_expire = $expire_stmt->fetchAll();
-
-    if (!empty($to_expire)) {
-        $ids_to_upd = array_unique(array_column($to_expire, 'id'));
-
-        // Update Status
-        $update_stmt = $pdo->prepare("
-            UPDATE products 
-            SET status = 'expired', 
-                status_reason = 'System auto-expiry (60 days)',
-                updated_at = NOW() 
-            WHERE id = ?
-        ");
-
-        foreach ($ids_to_upd as $id) {
-            $update_stmt->execute([$id]);
-        }
-
-        // Compress images for expired ads
-        foreach ($to_expire as $item) {
-            if ($item['image_path']) {
-                compressProductImage($item['image_path'], 20); // Extra compression
-            }
-        }
-    }
-
-    // Auto-create messages table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS messages (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        sender_id INT NOT NULL,
-        receiver_id INT NOT NULL,
-        product_id INT NOT NULL,
-        message_text TEXT NOT NULL,
-        is_read TINYINT(1) DEFAULT 0,
-        deleted_by_sender TINYINT(1) DEFAULT 0,
-        deleted_by_receiver TINYINT(1) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-    )");
-
-    // Migration: Add deleted_by_sender and deleted_by_receiver columns to messages if they don't exist
-    $check_del_sender = $pdo->query("SHOW COLUMNS FROM messages LIKE 'deleted_by_sender'");
-    if (!$check_del_sender->fetch()) {
-        $pdo->exec("ALTER TABLE messages ADD COLUMN deleted_by_sender TINYINT(1) DEFAULT 0");
-    }
-
-    $check_del_receiver = $pdo->query("SHOW COLUMNS FROM messages LIKE 'deleted_by_receiver'");
-    if (!$check_del_receiver->fetch()) {
-        $pdo->exec("ALTER TABLE messages ADD COLUMN deleted_by_receiver TINYINT(1) DEFAULT 0");
-    }
-
-    // Migration: Add email, phone, and is_admin columns to users if they don't exist
-    $check_email = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");
-    if (!$check_email->fetch()) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN email VARCHAR(155) UNIQUE DEFAULT NULL AFTER phone_number");
-    }
-
-    $check_is_admin = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
-    if (!$check_is_admin->fetch()) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0 AFTER role");
-    }
-
-    $check_phone = $pdo->query("SHOW COLUMNS FROM users LIKE 'phone'");
-    if (!$check_phone->fetch()) {
-        // Safe check: Only use AFTER if email exists, otherwise just add it
-        $after_clause = "AFTER email";
-        $check_email = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'");
-        if (!$check_email->fetch())
-            $after_clause = "";
-        $pdo->exec("ALTER TABLE users ADD COLUMN phone VARCHAR(20) DEFAULT NULL $after_clause");
-    }
-
-    $check_perm = $pdo->query("SHOW COLUMNS FROM users LIKE 'permissions'");
-    if (!$check_perm->fetch()) {
-        $after_clause = "AFTER is_admin";
-        $check_is_admin = $pdo->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
-        if (!$check_is_admin->fetch())
-            $after_clause = "";
-        $pdo->exec("ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL $after_clause");
-    }
-
-    // Ensure default admin user exists and has a valid password
-    $stmt_check_admin = $pdo->prepare("SELECT * FROM users WHERE username = 'admin'");
-    $stmt_check_admin->execute();
-    $admin_user = $stmt_check_admin->fetch();
-
-    $default_admin_hash = '$2y$10$OWyw9HIV10p07vkWgiRrh.aWK83dyOhUPH8cxvlxOTR6PeJjkn2QG'; // hash of admin123
-    $old_broken_hash = '$2y$10$K8pe9htFbLrJD/EjOE3In.RPOFpPz2WZ44lwQVt8RJRmUgXNnfnSC'; // old broken hash in schema
-
-    if (!$admin_user) {
-        // Insert admin user if missing
-        $stmt_insert_admin = $pdo->prepare("
-            INSERT IGNORE INTO users (username, phone_number, email, password, role, is_admin, permissions) 
-            VALUES ('admin', '1234567890', 'admin@enteangadi.com', ?, 'admin', 1, '*')
-        ");
-        $stmt_insert_admin->execute([$default_admin_hash]);
-    } else {
-        // If the admin user exists but has the old broken hash, update it to the default working hash
-        if ($admin_user['password'] === $old_broken_hash) {
-            $stmt_update_admin = $pdo->prepare("
-                UPDATE users 
-                SET password = ? 
-                WHERE username = 'admin'
-            ");
-            $stmt_update_admin->execute([$default_admin_hash]);
-        }
-    }
-
-    // Auto-fix: Ensure the currently logged-in main admin has all permissions
-    if (isset($_SESSION['admin_id'])) {
+    // Refresh admin permissions at most once per minute
+    if (isset($_SESSION['admin_id']) && (!isset($_SESSION['_adm_perm_ts']) || (time() - $_SESSION['_adm_perm_ts']) > 60)) {
         $stmt_admin = $pdo->prepare("SELECT permissions FROM users WHERE id = ?");
         $stmt_admin->execute([$_SESSION['admin_id']]);
         $_SESSION['admin_permissions'] = $stmt_admin->fetchColumn();
+        $_SESSION['_adm_perm_ts'] = time();
     }
 
-    function has_permission($module)
-    {
-        if (!isset($_SESSION['admin_permissions']))
-            return false;
-        if ($_SESSION['admin_permissions'] === '*')
-            return true;
-        $perms = explode(',', $_SESSION['admin_permissions']);
-        return in_array($module, $perms);
-    }
-
-    // Auto-create wishlist table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS wishlist (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        product_id INT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_wishlist (user_id, product_id),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-    )");
-
-    // Auto-create blocked_users table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS blocked_users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        blocker_id INT NOT NULL,
-        blocked_id INT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_block (blocker_id, blocked_id),
-        FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
-    )");
-
-    // Auto-add reported_user_id column to reports if missing
-    try {
-        $pdo->query("SELECT reported_user_id FROM reports LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE reports ADD COLUMN reported_user_id INT DEFAULT NULL AFTER product_id");
-        $pdo->exec("ALTER TABLE reports ADD FOREIGN KEY (reported_user_id) REFERENCES users(id) ON DELETE CASCADE");
-    }
-
-
-    // Auto-add session_token column to users if missing
-    try {
-        $pdo->query("SELECT session_token FROM users LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN session_token VARCHAR(255) DEFAULT NULL");
-    }
-
-    // Auto-add type column to products if missing (for Sell vs Buy) and support 'rent'
-    try {
-        $pdo->query("SELECT type FROM products LIMIT 1");
-        $pdo->exec("ALTER TABLE products MODIFY COLUMN type ENUM('sell', 'buy', 'rent') DEFAULT 'sell'");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN type ENUM('sell', 'buy', 'rent') DEFAULT 'sell' AFTER category_id");
-    }
-
-    // Auto-add is_perishable column to categories if missing
-    try {
-        $pdo->query("SELECT is_perishable FROM categories LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE categories ADD COLUMN is_perishable TINYINT(1) DEFAULT 0");
-    }
-
-    // Auto-add expiry_date column to products if missing
-    try {
-        $pdo->query("SELECT expiry_date FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN expiry_date DATE DEFAULT NULL AFTER price");
-    }
-
-    // Auto-add updated_at column to products if missing
-    try {
-        $pdo->query("SELECT updated_at FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-    }
-
-    // [AD APPROVAL SYSTEM] Auto-add unique_id to products
-    try {
-        $pdo->query("SELECT unique_id FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN unique_id VARCHAR(20) UNIQUE AFTER id");
-        // Update existing
-        $stmt = $pdo->query("SELECT id FROM products WHERE unique_id IS NULL");
-        $products_to_update = $stmt->fetchAll();
-        foreach ($products_to_update as $p) {
-            $uid = 'ENTAGD' . rand(1000, 9999);
-            $pdo->prepare("UPDATE products SET unique_id = ? WHERE id = ?")->execute([$uid, $p['id']]);
-        }
-    }
-
-    // [LOCATION & CONTACT] Auto-add missing columns to products
-    try {
-        $pdo->query("SELECT whatsapp_number FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN whatsapp_number VARCHAR(20) DEFAULT NULL AFTER expiry_date");
-    }
-    try {
-        $pdo->query("SELECT phone_number FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN phone_number VARCHAR(20) DEFAULT NULL AFTER whatsapp_number");
-    }
-    try {
-        $pdo->query("SELECT location_name FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN location_name VARCHAR(255) DEFAULT NULL AFTER phone_number");
-    }
-    try {
-        $pdo->query("SELECT latitude FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN latitude DECIMAL(10, 8) DEFAULT NULL AFTER location_name");
-    }
-    try {
-        $pdo->query("SELECT longitude FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN longitude DECIMAL(11, 8) DEFAULT NULL AFTER latitude");
-    }
-
-    // [AD APPROVAL SYSTEM] Auto-add is_verified to products
-    try {
-        $pdo->query("SELECT is_verified FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN is_verified TINYINT(1) DEFAULT 0 AFTER status");
-    }
-
-    // Auto-add is_admin_posted column to products
-    try {
-        $pdo->query("SELECT is_admin_posted FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN is_admin_posted TINYINT(1) DEFAULT 0 AFTER is_verified");
-    }
-
-    // [AD APPROVAL SYSTEM] Auto-add is_notified to products (for one-time success message)
-    try {
-        $pdo->query("SELECT is_notified FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN is_notified TINYINT(1) DEFAULT 0 AFTER is_verified");
-    }
-
-    // [AD APPROVAL SYSTEM] Auto-add status_reason to products
-    try {
-        $pdo->query("SELECT status_reason FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN status_reason TEXT DEFAULT NULL AFTER status");
-    }
-
-    // [AD ANALYTICS] Auto-add views column to products
-    try {
-        $pdo->query("SELECT views FROM products LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE products ADD COLUMN views INT DEFAULT 0 AFTER status_reason");
-    }
-
-    // [ACCOUNT CLOSURE FEEDBACK] Create table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS account_closures (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(255),
-        email VARCHAR(255),
-        reason TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )");
-
-    // [AD APPROVAL SYSTEM] Update status ENUM
-    try {
-        $pdo->exec("ALTER TABLE products MODIFY COLUMN status ENUM('active', 'deleted', 'sold', 'expired', 'pending', 'inactive') DEFAULT 'active'");
-    } catch (Exception $e) {
-    }
-
-    // [AD APPROVAL SYSTEM] Auto-create app_settings
-    $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        setting_key VARCHAR(50) UNIQUE NOT NULL,
-        setting_value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )");
-    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['ad_approval_mode', 'auto']);
-    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['play_store_url', 'https://play.google.com/store/apps/details?id=com.enteangadi.app']);
-    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['app_store_url', 'https://apps.apple.com/app/enteangadi']);
-    $pdo->prepare("INSERT IGNORE INTO app_settings (setting_key, setting_value) VALUES (?, ?)")->execute(['adult_content_check', '1']);
-
-    // [TRUST & ANALYTICS SYSTEMS] Auto-create user_ratings and analytics_clicks tables
-    $pdo->exec("CREATE TABLE IF NOT EXISTS user_ratings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        reviewer_id INT NOT NULL,
-        reviewee_id INT NOT NULL,
-        rating TINYINT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-        comment TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (reviewee_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE KEY unique_reviewer_reviewee (reviewer_id, reviewee_id)
-    )");
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS analytics_clicks (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        product_id INT NOT NULL,
-        click_type ENUM('view', 'favorite', 'chat') NOT NULL,
-        click_date DATE NOT NULL,
-        click_count INT DEFAULT 1,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-        UNIQUE KEY unique_product_type_date (product_id, click_type, click_date)
-    )");
-
-    // Add is_verified column to users table if not exists
-    try {
-        $pdo->query("SELECT is_verified FROM users LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN is_verified TINYINT(1) DEFAULT 0");
-    }
-
-    // Auto-create verification_requests table
-    $pdo->exec("CREATE TABLE IF NOT EXISTS verification_requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        id_type VARCHAR(100) NOT NULL,
-        id_photo VARCHAR(255) NOT NULL,
-        status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
-        rejection_reason TEXT DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    )");
-
-    // [SESSION TIMEOUT] Auto-add last_activity to users
-    try {
-        $pdo->query("SELECT last_activity FROM users LIMIT 1");
-    } catch (Exception $e) {
-        $pdo->exec("ALTER TABLE users ADD COLUMN last_activity TIMESTAMP NULL DEFAULT NULL AFTER session_token");
-    }
-
-    // Include shared helper functions
-    require_once dirname(__FILE__) . '/includes/helpers.php';
-
-    // Auto-deactivate expired items (Perishable/Edible)
-    // We check for products that reached their expiry date today or earlier
-    $stmt = $pdo->query("SELECT id FROM products WHERE expiry_date IS NOT NULL AND expiry_date <= CURRENT_DATE AND status = 'active'");
-    $expired_ids = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-    if (!empty($expired_ids)) {
-        foreach ($expired_ids as $pid) {
-            // 1. Mark as expired
-            $pdo->prepare("UPDATE products SET status = 'expired' WHERE id = ?")->execute([$pid]);
-
-            // 2. Compress images to save space (since they are now archived)
-            $img_stmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ?");
-            $img_stmt->execute([$pid]);
-            $images = $img_stmt->fetchAll(PDO::FETCH_COLUMN);
-
-            foreach ($images as $img) {
-                $fullPath = dirname(__FILE__) . '/' . $img;
-                recompressTo50kb($fullPath);
-            }
-        }
-    }
-
-    // --- PURGE ARCHIVED ADS AFTER 60 DAYS ---
-    // Permanently remove ads and images that have been inactive for more than 60 days
-    $purge_interval = 60;
-    $purge_stmt = $pdo->prepare("
-        SELECT p.id, pi.image_path 
-        FROM products p
-        LEFT JOIN product_images pi ON p.id = pi.product_id
-        WHERE p.status IN ('deleted', 'sold', 'expired') 
-        AND p.updated_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-    ");
-    $purge_stmt->execute([$purge_interval]);
-    $to_purge = $purge_stmt->fetchAll();
-
-    if (!empty($to_purge)) {
-        $purge_ids = array_unique(array_column($to_purge, 'id'));
-
-        // 1. Physical Cleanup (Delete image files)
-        foreach ($to_purge as $item) {
-            if ($item['image_path']) {
-                $fullPath = dirname(__FILE__) . '/' . $item['image_path'];
-                if (file_exists($fullPath)) {
-                    @unlink($fullPath);
+    // Lightweight visit logger (skips background preloads, API calls, assets, and throttles to 30s)
+    if (!$is_preload_req && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+        if (!isset($_SESSION['last_visit_log']) || (time() - $_SESSION['last_visit_log']) >= 30) {
+            $req_uri = $_SERVER['REQUEST_URI'] ?? '';
+            $skipVisit = preg_match('/\.(css|js|jpg|jpeg|png|gif|svg|webp|ico|woff|woff2|ttf|map|json)$/i', $req_uri)
+                || strpos($req_uri, 'cron/') !== false
+                || strpos($req_uri, 'sync_') !== false
+                || strpos($req_uri, '/admin/') !== false
+                || strpos($req_uri, '/scratch/') !== false
+                || strpos($req_uri, '/api/') !== false
+                || strpos($req_uri, 'api_') !== false;
+            if (!$skipVisit) {
+                $_SESSION['last_visit_log'] = time();
+                try {
+                    $v_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+                    if (strpos($v_ip, ',') !== false) $v_ip = trim(explode(',', $v_ip)[0]);
+                    $v_uid = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : (isset($_SESSION['admin_id']) ? (int)$_SESSION['admin_id'] : null);
+                    $pdo->prepare("INSERT INTO site_visits (visit_date, ip_address, user_id, page_url, user_agent) VALUES (?, ?, ?, ?, ?)")
+                        ->execute([date('Y-m-d'), $v_ip, $v_uid, substr($req_uri, 0, 250), substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 250)]);
+                } catch (Exception $e_sv) {
                 }
             }
         }
-
-        // 2. Database Cleanup (Cascading deletes handle child tables)
-        $final_delete = $pdo->prepare("DELETE FROM products WHERE id = ?");
-        foreach ($purge_ids as $pid) {
-            $final_delete->execute([$pid]);
-        }
     }
 
-    // Token-Based Header Auto-Login for hybrid/mobile WebView clients
+    // Token-Based Header Auto-Login for mobile WebView clients
     if (!isset($_SESSION['user_id'])) {
-        $header_user_id = $_SERVER['HTTP_X_USER_ID'] ?? '';
-        $header_token = $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '';
-        if (empty($header_user_id) && isset($_SERVER['REDIRECT_HTTP_X_USER_ID'])) {
-            $header_user_id = $_SERVER['REDIRECT_HTTP_X_USER_ID'];
-        }
-        if (empty($header_token) && isset($_SERVER['REDIRECT_HTTP_X_SESSION_TOKEN'])) {
-            $header_token = $_SERVER['REDIRECT_HTTP_X_SESSION_TOKEN'];
-        }
-
-        if (!empty($header_user_id) && !empty($header_token)) {
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND session_token = ?");
+        $header_user_id = $_SERVER['HTTP_X_USER_ID'] ?? ($_SERVER['REDIRECT_HTTP_X_USER_ID'] ?? '');
+        $header_token = $_SERVER['HTTP_X_SESSION_TOKEN'] ?? ($_SERVER['REDIRECT_HTTP_X_SESSION_TOKEN'] ?? '');
+        if ($header_user_id !== '' && $header_token !== '') {
+            $stmt = $pdo->prepare("SELECT id, username, role, session_token, last_activity, created_at FROM users WHERE id = ? AND session_token = ? LIMIT 1");
             $stmt->execute([$header_user_id, $header_token]);
             $user = $stmt->fetch();
-
             if ($user) {
-                // Check if user is active (has activity in the last 30 days)
                 $last_act = $user['last_activity'] ? strtotime($user['last_activity']) : strtotime($user['created_at']);
-                if ((time() - $last_act) <= (30 * 24 * 60 * 60)) {
+                if ((time() - $last_act) <= (30 * 86400)) {
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_role'] = $user['role'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['session_token'] = $user['session_token'];
-
-                    // Update last activity if needed
+                    $_SESSION['_tok_verified_at'] = time();
                     if (!$user['last_activity'] || (time() - strtotime($user['last_activity'])) > 900) {
-                        $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
-                        $upd->execute([$user['id']]);
+                        $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?")->execute([$user['id']]);
                     }
                 }
             }
@@ -774,161 +265,137 @@ try {
     }
 
     // Cookie-Based Server-Side Auto-Login
-    if (!isset($_SESSION['user_id']) && isset($_COOKIE['enteangadi_remember_user']) && isset($_COOKIE['enteangadi_remember_token'])) {
-        $cookie_user = $_COOKIE['enteangadi_remember_user'];
-        $cookie_token = $_COOKIE['enteangadi_remember_token'];
-
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ? AND session_token = ?");
-        $stmt->execute([$cookie_user, $cookie_token]);
+    if (!isset($_SESSION['user_id']) && isset($_COOKIE['enteangadi_remember_user'], $_COOKIE['enteangadi_remember_token'])) {
+        $stmt = $pdo->prepare("SELECT id, username, role, session_token, last_activity, created_at FROM users WHERE id = ? AND session_token = ? LIMIT 1");
+        $stmt->execute([$_COOKIE['enteangadi_remember_user'], $_COOKIE['enteangadi_remember_token']]);
         $user = $stmt->fetch();
-
         if ($user) {
-            // Check if user is active (has activity in the last 30 days)
             $last_act = $user['last_activity'] ? strtotime($user['last_activity']) : strtotime($user['created_at']);
-            if ((time() - $last_act) <= (30 * 24 * 60 * 60)) {
-                // Log the user in
+            if ((time() - $last_act) <= (30 * 86400)) {
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_role'] = $user['role'];
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['session_token'] = $user['session_token'];
-
-                // Update last activity
-                $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
-                $upd->execute([$user['id']]);
-
-                // Renew cookies for 30 days
-                enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 24 * 60 * 60);
-                enteangadi_set_cookie('enteangadi_remember_token', $user['session_token'], time() + 30 * 24 * 60 * 60);
+                $_SESSION['_tok_verified_at'] = time();
+                $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?")->execute([$user['id']]);
+                enteangadi_set_cookie('enteangadi_remember_user', $user['id'], time() + 30 * 86400);
+                enteangadi_set_cookie('enteangadi_remember_token', $user['session_token'], time() + 30 * 86400);
             } else {
-                // Inactivity > 30 days. Clear cookies.
                 enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
                 enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
             }
         } else {
-            // Invalid token/user. Clear cookies.
             enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
             enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
         }
     }
 
-    // Global session token & inactivity check for remote logout, deleted users, and 30-day inactivity
+    // Session token & 30-day inactivity check (re-verified against DB once per 60s instead of every API/page hit)
     if (isset($_SESSION['user_id']) && !isset($_SESSION['is_admin_session'])) {
-        $stmt = $pdo->prepare("SELECT session_token, last_activity, created_at FROM users WHERE id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
-        $user_record = $stmt->fetch();
+        $now = time();
+        if (!isset($_SESSION['_tok_verified_at']) || ($now - $_SESSION['_tok_verified_at']) >= 60) {
+            $stmt = $pdo->prepare("SELECT session_token, last_activity, created_at FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$_SESSION['user_id']]);
+            $user_record = $stmt->fetch();
 
-        // 1. If user is deleted or token doesn't match
-        if (!$user_record || (isset($user_record['session_token']) && (!isset($_SESSION['session_token']) || $_SESSION['session_token'] !== $user_record['session_token']))) {
-            session_destroy();
-            enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
-            enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
-
-            $current_page = basename($_SERVER['PHP_SELF']);
-            if ($current_page != 'login.php' && $current_page != 'index.php') {
-                header("Location: login.php?msg=account_inactive");
-                exit;
-            }
-        } else {
-            // 2. Inactivity Check (30 days)
-            $last_act = $user_record['last_activity'] ? strtotime($user_record['last_activity']) : strtotime($user_record['created_at']);
-            if ((time() - $last_act) > (30 * 24 * 60 * 60)) {
-                // Exceeded 30 days inactivity. Log out.
-                $upd = $pdo->prepare("UPDATE users SET session_token = NULL WHERE id = ?");
-                $upd->execute([$_SESSION['user_id']]);
-
+            if (!$user_record || (isset($user_record['session_token']) && (($_SESSION['session_token'] ?? '') !== $user_record['session_token']))) {
                 session_destroy();
-                enteangadi_set_cookie('enteangadi_remember_user', '', time() - 3600);
-                enteangadi_set_cookie('enteangadi_remember_token', '', time() - 3600);
-
-                // Determine redirect path depending on current location
-                $current_dir = basename(dirname($_SERVER['PHP_SELF']));
-                $redirect_prefix = ($current_dir == 'user' || $current_dir == 'admin' || $current_dir == 'guest') ? '../' : '';
-                header("Location: " . $redirect_prefix . "login.php?msg=session_expired");
-                exit;
-            } else {
-                // 3. Update activity and renew cookies
-                // To avoid writing to DB on every request, write only if last update was > 15 minutes (900 seconds) ago
-                if (!$user_record['last_activity'] || (time() - strtotime($user_record['last_activity'])) > 900) {
-                    $upd = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
-                    $upd->execute([$_SESSION['user_id']]);
+                enteangadi_set_cookie('enteangadi_remember_user', '', $now - 3600);
+                enteangadi_set_cookie('enteangadi_remember_token', '', $now - 3600);
+                $current_page = basename($_SERVER['PHP_SELF'] ?? '');
+                if ($current_page !== 'login.php' && $current_page !== 'index.php') {
+                    $curDir = basename(dirname($_SERVER['PHP_SELF'] ?? ''));
+                    $prefix = in_array($curDir, ['user', 'admin', 'guest'], true) ? '../' : '';
+                    header("Location: {$prefix}login.php?msg=account_inactive");
+                    exit;
                 }
-
-                // Renew cookies
-                enteangadi_set_cookie('enteangadi_remember_user', $_SESSION['user_id'], time() + 30 * 24 * 60 * 60);
-                enteangadi_set_cookie('enteangadi_remember_token', $_SESSION['session_token'], time() + 30 * 24 * 60 * 60);
+            } else {
+                $last_act = $user_record['last_activity'] ? strtotime($user_record['last_activity']) : strtotime($user_record['created_at']);
+                if (($now - $last_act) > (30 * 86400)) {
+                    $pdo->prepare("UPDATE users SET session_token = NULL WHERE id = ?")->execute([$_SESSION['user_id']]);
+                    session_destroy();
+                    enteangadi_set_cookie('enteangadi_remember_user', '', $now - 3600);
+                    enteangadi_set_cookie('enteangadi_remember_token', '', $now - 3600);
+                    $curDir = basename(dirname($_SERVER['PHP_SELF'] ?? ''));
+                    $prefix = in_array($curDir, ['user', 'admin', 'guest'], true) ? '../' : '';
+                    header("Location: {$prefix}login.php?msg=session_expired");
+                    exit;
+                }
+                $_SESSION['_tok_verified_at'] = $now;
+                if (!$user_record['last_activity'] || ($now - strtotime($user_record['last_activity'])) > 900) {
+                    $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?")->execute([$_SESSION['user_id']]);
+                    enteangadi_set_cookie('enteangadi_remember_user', $_SESSION['user_id'], $now + 30 * 86400);
+                    enteangadi_set_cookie('enteangadi_remember_token', $_SESSION['session_token'], $now + 30 * 86400);
+                }
             }
         }
     }
-
 } catch (PDOException $e) {
     die("Connection failed: " . $e->getMessage());
 }
 
-// Intercept unauthenticated visits to protected user pages to perform client-side auto-login
+// Intercept unauthenticated visits to protected /user/ pages to restore mobile WebView session seamlessly
 if (!isset($_SESSION['user_id'])) {
     $request_uri = $_SERVER['REQUEST_URI'] ?? '';
-    $current_page = basename($_SERVER['PHP_SELF']);
-
+    $current_page = basename($_SERVER['PHP_SELF'] ?? '');
     $is_user_page = (strpos($request_uri, '/user/') !== false);
-    $is_api_call = (strpos($current_page, 'api_') === 0 || $current_page === 'toggle_wishlist.php' || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false));
+    $is_api_call = (strpos($current_page, 'api_') === 0 || $current_page === 'toggle_wishlist.php' || strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false);
 
     if ($is_user_page && !$is_api_call) {
+        $cssVer = @filemtime(__DIR__ . '/assets/css/style.css') ?: '2.0';
         ?>
         <!DOCTYPE html>
         <html lang="en">
-
         <head>
             <meta charset="UTF-8">
             <title>Authenticating...</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <link rel="stylesheet" href="../assets/css/style.css?v=1.2">
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <link rel="stylesheet" href="../assets/css/style.css?v=<?= $cssVer ?>">
+        </head>
+        <body>
+            <div id="loader-wrapper" class="loader-active">
+                <div class="loader-emblem">
+                    <span class="loader-ring loader-ring-1"></span>
+                    <span class="loader-ring loader-ring-2"></span>
+                    <img src="../uploads/logo/logo_enteangadi.png" alt="Enteangadi" class="loader-logo-img" onerror="this.style.display='none'">
+                </div>
+                <div class="loader-progress-wrap">
+                    <div class="loader-percent" id="auth-pct">12%</div>
+                    <div class="loader-bar-track"><div class="loader-bar-fill" id="auth-bar" style="width:12%"></div></div>
+                </div>
+                <div class="loader-location-status">Restoring session...</div>
+            </div>
             <script>
                 (function () {
+                    let p = 12;
+                    const pct = document.getElementById('auth-pct'), bar = document.getElementById('auth-bar');
+                    const iv = setInterval(() => {
+                        if (p < 90) { p += Math.max(1, Math.round((92 - p) * 0.14)); if (pct) pct.textContent = p + '%'; if (bar) bar.style.width = p + '%'; }
+                    }, 60);
                     const uid = localStorage.getItem('enteangadi_user_id');
                     const token = localStorage.getItem('enteangadi_session_token');
+                    const fallbackUrl = window.location.pathname.endsWith('/user/index.php') ? ('../guest/index.php' + window.location.search) : '../login.php';
+                    const done = (url) => { clearInterval(iv); if (pct) pct.textContent = '100%'; if (bar) bar.style.width = '100%'; window.location.replace(url); };
                     if (uid && token) {
                         fetch('../api/auto_login.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                             body: 'user_id=' + encodeURIComponent(uid) + '&session_token=' + encodeURIComponent(token)
                         })
-                            .then(res => res.json())
-                            .then(data => {
-                                if (data.success) {
-                                    setTimeout(() => {
-                                        location.reload();
-                                    }, 100);
-                                } else {
-                                    localStorage.removeItem('enteangadi_user_id');
-                                    localStorage.removeItem('enteangadi_session_token');
-                                    window.location.href = '../login.php';
-                                }
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.success) { clearInterval(iv); if (pct) pct.textContent = '100%'; if (bar) bar.style.width = '100%'; location.reload(); }
+                                else { localStorage.removeItem('enteangadi_user_id'); localStorage.removeItem('enteangadi_session_token'); done(fallbackUrl); }
                             })
-                            .catch(() => {
-                                window.location.href = '../login.php';
-                            });
+                            .catch(() => done(fallbackUrl));
                     } else {
-                        window.location.href = '../login.php';
+                        done(fallbackUrl);
                     }
                 })();
             </script>
-        </head>
-
-        <body>
-            <div id="loader-wrapper" class="loader-active" style="background: var(--background);">
-                <div class="loader-logo">
-                    <?= htmlspecialchars($app_settings['app_name'] ?? 'Enteangadi') ?>
-                </div>
-                <div class="loader-location-status" style="color: var(--text-dark);">
-                    <i class="fa fa-spinner fa-spin" style="color: var(--primary-green);"></i> Restoring session...
-                </div>
-            </div>
         </body>
-
         </html>
         <?php
         exit;
     }
 }
-?>

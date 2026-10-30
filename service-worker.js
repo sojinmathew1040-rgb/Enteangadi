@@ -1,100 +1,177 @@
-const CACHE_NAME = 'enteangadi-cache-v6';
+const ASSET_CACHE = 'enteangadi-assets-v8';
+const PAGE_CACHE = 'enteangadi-pages-v8';
+const VALID_CACHES = [ASSET_CACHE, PAGE_CACHE];
 
-self.addEventListener('install', event => {
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            console.log('[SW] Deleting stale cache:', cache);
-            return caches.delete(cache);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys()
+      .then((names) => Promise.all(names.map((n) => (!VALID_CACHES.includes(n) ? caches.delete(n) : null))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Allow client code to trigger cache purge on demand (e.g., after ad deletion or logo update)
-self.addEventListener('message', event => {
-  if (event.data && (event.data.action === 'clearCache' || event.data === 'CLEAR_CACHE')) {
-    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))));
-    if (event.ports && event.ports[0]) {
-      event.ports[0].postMessage({ success: true });
-    }
+self.addEventListener('message', (event) => {
+  const action = event.data && (event.data.action || event.data);
+  if (action === 'clearCache' || action === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() => {
+        if (event.ports && event.ports[0]) event.ports[0].postMessage({ success: true });
+      })
+    );
+  } else if (action === 'clearPageCache') {
+    event.waitUntil(caches.delete(PAGE_CACHE));
   }
 });
 
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+function buildCleanPageResponse(res) {
+  return res.clone().arrayBuffer().then((buf) => {
+    const headers = new Headers(res.headers);
+    headers.set('X-SW-Cached-At', String(Date.now()));
+    return new Response(buf, {
+      status: res.status,
+      statusText: res.statusText,
+      headers
+    });
+  });
+}
 
-  // Only handle GET requests
-  if (event.request.method !== 'GET') return;
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
 
-  // 1. NEVER intercept or cache:
-  // - API endpoints (/api/, api_)
-  // - Admin portal (/admin/)
-  // - User uploads (/uploads/ - product photos, logos, posters, profile avatars change and delete frequently)
-  // - Capacitor/native bridge scripts
+  // Any state-changing POST/PUT/DELETE invalidates preloaded HTML pages immediately
+  if (req.method !== 'GET') {
+    if (url.origin === self.location.origin) {
+      caches.delete(PAGE_CACHE).catch(() => {});
+    }
+    return;
+  }
+
+  // Never intercept APIs, Admin, Capacitor bridge, or dynamic auth/state URLs
   if (
     url.pathname.includes('/api/') ||
     url.pathname.includes('api_') ||
     url.pathname.includes('/admin/') ||
-    url.pathname.includes('/uploads/') ||
-    url.pathname.includes('/capacitor.js')
+    url.pathname.includes('/capacitor.js') ||
+    url.pathname.endsWith('chat.php')
   ) {
-    return; // Pass directly to network
+    return;
   }
 
-  // 2. Core CSS/JS and external Fonts: Stale-While-Revalidate
-  const isStaticCoreAsset = 
-    url.pathname.includes('/assets/css/') || 
-    url.pathname.includes('/assets/js/') || 
-    event.request.destination === 'font' ||
-    event.request.url.includes('cdnjs.cloudflare.com') ||
-    event.request.url.includes('fonts.googleapis.com') ||
-    event.request.url.includes('fonts.gstatic.com');
+  if (
+    url.pathname.endsWith('logout.php') ||
+    url.searchParams.has('logged_out') ||
+    url.searchParams.has('lang') ||
+    url.searchParams.has('lang_changed') ||
+    url.searchParams.has('loc_set')
+  ) {
+    caches.delete(PAGE_CACHE).catch(() => {});
+    return;
+  }
 
-  if (isStaticCoreAsset) {
+  // 1. Static Assets + Optimized Logos, Category Icons & Versioned Product Thumbnails: Stale-While-Revalidate
+  const isCacheableUpload =
+    url.pathname.includes('/uploads/logo/') ||
+    url.pathname.includes('/uploads/categories/') ||
+    (url.pathname.includes('/uploads/products/') && url.searchParams.has('v'));
+
+  const isStaticAsset =
+    isCacheableUpload ||
+    url.pathname.includes('/assets/css/') ||
+    url.pathname.includes('/assets/js/') ||
+    req.destination === 'font' ||
+    req.url.includes('cdnjs.cloudflare.com') ||
+    req.url.includes('fonts.googleapis.com') ||
+    req.url.includes('fonts.gstatic.com');
+
+  if (isStaticAsset) {
     event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(event.request).then(cachedResponse => {
-          const fetchPromise = fetch(event.request).then(networkResponse => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {});
+      caches.open(ASSET_CACHE).then((cache) =>
+        cache.match(req).then((cached) => {
+          const networkFetch = fetch(req)
+            .then((netRes) => {
+              if (netRes && netRes.status === 200) {
+                cache.put(req, netRes.clone());
+              }
+              return netRes;
+            })
+            .catch(() => cached);
+          return cached || networkFetch;
+        })
+      )
+    );
+    return;
+  }
 
-          return cachedResponse || fetchPromise;
-        });
+  // 2. Background Preload Requests (X-Enteangadi-Preload: 1) -> Populate PAGE_CACHE cleanly
+  const isPreload = req.headers.get('X-Enteangadi-Preload') === '1';
+  if (isPreload && url.origin === self.location.origin) {
+    event.respondWith(
+      caches.open(PAGE_CACHE).then(async (cache) => {
+        const existing = await cache.match(url.href);
+        if (existing) {
+          const cachedAt = Number(existing.headers.get('X-SW-Cached-At') || 0);
+          if (Date.now() - cachedAt < 45000) return existing;
+        }
+        const netRes = await fetch(req);
+        if (netRes && netRes.status === 200 && (netRes.headers.get('content-type') || '').includes('text/html')) {
+          const targetUrl = netRes.url || url.href;
+          const clean = await buildCleanPageResponse(netRes);
+          await cache.put(targetUrl, clean.clone());
+          if (targetUrl !== url.href) {
+            await cache.put(url.href, clean.clone());
+          }
+          return clean;
+        }
+        return netRes;
       })
     );
     return;
   }
 
-  // 3. Dynamic HTML Pages & Documents: Network-First
-  // Always fetch fresh from network to reflect deleted ads, updated listings, and user actions
-  if (event.request.destination === 'document' || url.pathname.endsWith('.php') || url.pathname.endsWith('/')) {
+  // 3. HTML Page Navigations -> Instant Hit from PAGE_CACHE if fresh + Background Revalidate
+  const isHtmlNav =
+    req.mode === 'navigate' ||
+    req.destination === 'document' ||
+    (url.origin === self.location.origin && (url.pathname.endsWith('.php') || url.pathname.endsWith('/')) && req.headers.get('X-Requested-With') !== 'XMLHttpRequest');
+
+  if (isHtmlNav && url.origin === self.location.origin) {
     event.respondWith(
-      fetch(event.request)
-        .then(networkResponse => {
-          return networkResponse;
-        })
-        .catch(() => {
-          // Only show offline notice when there is completely no network connection
-          return caches.match(event.request).then(cached => {
-            return cached || new Response(
-              '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline - Enteangadi</title></head><body style="font-family:sans-serif;text-align:center;padding:50px 20px;"><h2 style="color:#059669;">Enteangadi</h2><p>Connection lost. Please check your internet connection.</p><button onclick="window.location.reload()" style="padding:10px 24px;border-radius:10px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:bold;">Retry</button></body></html>',
-              { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-            );
-          });
-        })
+      caches.open(PAGE_CACHE).then(async (cache) => {
+        const cached = await cache.match(url.href);
+        const maxAge = (url.pathname.endsWith('inbox.php') || url.pathname.endsWith('my_ads.php')) ? 25000 : 75000;
+
+        const refreshInBg = fetch(req)
+          .then(async (netRes) => {
+            if (netRes && netRes.status === 200 && !netRes.redirected && (netRes.headers.get('content-type') || '').includes('text/html')) {
+              const clean = await buildCleanPageResponse(netRes);
+              cache.put(url.href, clean).catch(() => {});
+            }
+            return netRes;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          const age = Date.now() - Number(cached.headers.get('X-SW-Cached-At') || 0);
+          if (age < maxAge) {
+            event.waitUntil(refreshInBg);
+            return cached;
+          }
+        }
+
+        const liveRes = await refreshInBg;
+        if (liveRes) return liveRes;
+        if (cached) return cached;
+
+        return new Response(
+          '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - Enteangadi</title></head><body style="font-family:sans-serif;text-align:center;padding:60px 20px;"><h2 style="color:#2E7D32;">Enteangadi</h2><p style="color:#64748b;">Connection lost. Please check your internet connection.</p><button onclick="window.location.reload()" style="padding:10px 24px;border-radius:12px;background:#2E7D32;color:#fff;border:none;cursor:pointer;font-weight:700;">Retry</button></body></html>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      })
     );
-    return;
   }
 });

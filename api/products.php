@@ -1,25 +1,21 @@
 <?php
 require_once '../config.php';
 
+$user_location = $_SESSION['user_location'] ?? null;
+session_write_close(); // Release session file lock before DB queries
+
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-if (isset($_GET['action']) && $_GET['action'] === 'view') {
-    $product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if (($_GET['action'] ?? '') === 'view') {
+    $product_id = (int)($_GET['id'] ?? 0);
     if ($product_id) {
         try {
-            // Update total views
-            $update_views = $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?");
-            $update_views->execute([$product_id]);
-            
-            // Increment daily analytics view count
-            $stmt_an = $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) 
-                                     VALUES (?, 'view', CURRENT_DATE, 1) 
-                                     ON DUPLICATE KEY UPDATE click_count = click_count + 1");
-            $stmt_an->execute([$product_id]);
-            
+            $pdo->prepare("UPDATE products SET views = views + 1 WHERE id = ?")->execute([$product_id]);
+            $pdo->prepare("INSERT INTO analytics_clicks (product_id, click_type, click_date, click_count) VALUES (?, 'view', CURRENT_DATE, 1) ON DUPLICATE KEY UPDATE click_count = click_count + 1")
+                ->execute([$product_id]);
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -30,17 +26,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'view') {
     exit;
 }
 
-$page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
-$limit = 12;
-$offset = ($page - 1) * $limit;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$limit = isset($_GET['limit']) ? min(48, max(6, (int)$_GET['limit'])) : 12;
+$offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : (($page - 1) * $limit);
 
 $category_filter = $_GET['category_id'] ?? null;
 $search_query = $_GET['search'] ?? null;
-$user_location = $_SESSION['user_location'] ?? null;
-
 $min_price = $_GET['min_price'] ?? null;
 $max_price = $_GET['max_price'] ?? null;
-$ad_type = $_GET['ad_type'] ?? null;
+$ad_type = $_GET['ad_type'] ?? ($_GET['post_type'] ?? null);
 $sort_by = $_GET['sort_by'] ?? 'newest';
 
 $where_clause = "WHERE p.status = 'active'";
@@ -59,12 +53,7 @@ if ($search_query) {
         foreach ($words as $w) {
             $word_clauses[] = "(p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR c.name LIKE ? OR parent_c.name LIKE ? OR p.location_name LIKE ?)";
             $wildcard = "%$w%";
-            $params[] = $wildcard;
-            $params[] = $wildcard;
-            $params[] = $wildcard;
-            $params[] = $wildcard;
-            $params[] = $wildcard;
-            $params[] = $wildcard;
+            array_push($params, $wildcard, $wildcard, $wildcard, $wildcard, $wildcard, $wildcard);
         }
         $where_clause .= " AND (" . implode(" AND ", $word_clauses) . ")";
     }
@@ -74,23 +63,20 @@ if ($min_price !== null && $min_price !== '') {
     $where_clause .= " AND p.price >= ?";
     $params[] = floatval($min_price);
 }
-
 if ($max_price !== null && $max_price !== '') {
     $where_clause .= " AND p.price <= ?";
     $params[] = floatval($max_price);
 }
-
-if ($ad_type && in_array($ad_type, ['buy', 'sell'])) {
+if ($ad_type && in_array($ad_type, ['buy', 'sell', 'rent'], true)) {
     $where_clause .= " AND p.type = ?";
     $params[] = $ad_type;
 }
 
 $spec = $_GET['spec'] ?? null;
 if ($spec) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = '%' . $spec . '%';
-    $params[] = '%' . $spec . '%';
-    $params[] = '%' . $spec . '%';
+    $clean_spec = trim(preg_replace('/\(.*?\)/', '', $spec));
+    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+    array_push($params, "%$spec%", "%$spec%", "%$spec%", "%$clean_spec%", "%$clean_spec%", "%$clean_spec%");
 }
 
 $body_type = $_GET['body_type'] ?? null;
@@ -100,97 +86,73 @@ if ($body_type) {
     } elseif ($body_type === 'SUV') {
         $where_clause .= " AND (p.body_type IN ('SUV', 'Compact SUV') OR p.title LIKE '%SUV%' OR p.description LIKE '%SUV%' OR p.search_keywords LIKE '%SUV%')";
     } else {
+        $clean_bt = trim(preg_replace('/\(.*?\)/', '', $body_type));
         $where_clause .= " AND (p.body_type = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
-        $params[] = $body_type;
-        $params[] = '%' . $body_type . '%';
-        $params[] = '%' . $body_type . '%';
-        $params[] = '%' . $body_type . '%';
+        array_push($params, $body_type, "%$clean_bt%", "%$clean_bt%", "%$clean_bt%");
     }
 }
 
-$fuel = $_GET['fuel'] ?? null;
-if ($fuel) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = '%' . $fuel . '%';
-    $params[] = '%' . $fuel . '%';
-    $params[] = '%' . $fuel . '%';
-}
-
-$transmission = $_GET['transmission'] ?? null;
-if ($transmission) {
-    $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = '%' . $transmission . '%';
-    $params[] = '%' . $transmission . '%';
-    $params[] = '%' . $transmission . '%';
+foreach (['fuel', 'transmission'] as $fKey) {
+    $fVal = $_GET[$fKey] ?? null;
+    if ($fVal) {
+        $where_clause .= " AND (p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
+        array_push($params, "%$fVal%", "%$fVal%", "%$fVal%");
+    }
 }
 
 $brand = $_GET['brand'] ?? null;
 if ($brand) {
     $where_clause .= " AND (p.brand = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = $brand;
-    $params[] = '%' . $brand . '%';
-    $params[] = '%' . $brand . '%';
+    array_push($params, $brand, "%$brand%", "%$brand%");
 }
 
 $model = $_GET['model'] ?? null;
 if ($model) {
     $where_clause .= " AND (p.model = ? OR p.title LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = $model;
-    $params[] = '%' . $model . '%';
-    $params[] = '%' . $model . '%';
+    array_push($params, $model, "%$model%", "%$model%");
 }
 
 $variant = $_GET['variant'] ?? null;
 if ($variant) {
     $where_clause .= " AND (p.variant = ? OR p.title LIKE ? OR p.description LIKE ? OR p.search_keywords LIKE ?)";
-    $params[] = $variant;
-    $params[] = '%' . $variant . '%';
-    $params[] = '%' . $variant . '%';
-    $params[] = '%' . $variant . '%';
+    array_push($params, $variant, "%$variant%", "%$variant%", "%$variant%");
 }
 
 $radius = isset($_GET['radius']) ? floatval($_GET['radius']) : null;
-if ($radius && $user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
-    $lat = floatval($user_location['lat']);
-    $lng = floatval($user_location['lng']);
-    $where_clause .= " AND (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) <= ?";
-    $params[] = $radius;
-}
-
 $distance_select = "";
-$order_by = "p.created_at DESC";
-
-if ($user_location && isset($user_location['lat']) && isset($user_location['lng'])) {
+if ($user_location && isset($user_location['lat'], $user_location['lng'])) {
     $lat = floatval($user_location['lat']);
     $lng = floatval($user_location['lng']);
-    $distance_select = ", (6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude)))) AS distance";
+    $distExpr = "(6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude))))";
+    $distance_select = ", $distExpr AS distance";
+    if ($radius) {
+        $where_clause .= " AND $distExpr <= ?";
+        $params[] = $radius;
+    }
 }
 
 if ($sort_by === 'price_asc') {
     $order_by = "p.price ASC";
 } elseif ($sort_by === 'price_desc') {
     $order_by = "p.price DESC";
-} elseif ($sort_by === 'distance' && !empty($distance_select)) {
+} elseif ($sort_by === 'distance' && $distance_select !== '') {
     $order_by = "distance ASC";
 } else {
-    if (!empty($distance_select)) {
-        $order_by = "p.created_at DESC, distance ASC";
-    } else {
-        $order_by = "p.created_at DESC";
-    }
+    $order_by = $distance_select !== '' ? "p.created_at DESC, distance ASC" : "p.created_at DESC";
 }
 
 try {
-    $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, parent_c.name as parent_category_name, u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
-            (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id LIMIT 1) as main_image,
+    $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, parent_c.name as parent_category_name,
+            u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
+            (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.id ASC LIMIT 1) as main_image,
             COALESCE((SELECT ROUND(AVG(rating), 1) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id), 0) as seller_rating,
             (SELECT COUNT(*) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id) as seller_reviews_count
             $distance_select
-            FROM products p 
+            FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN categories parent_c ON c.parent_id = parent_c.id
             JOIN users u ON p.user_id = u.id
-            $where_clause 
+            $where_clause
             ORDER BY $order_by
             LIMIT $limit OFFSET $offset";
 
@@ -206,4 +168,3 @@ try {
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 }
-?>

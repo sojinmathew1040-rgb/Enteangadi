@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 require_once '../config.php';
+session_write_close();
 
 $action = $_GET['action'] ?? '';
 
@@ -20,8 +21,7 @@ try {
             $stmt = $pdo->prepare("SELECT id, name, slug FROM product_brands WHERE category_id = ? ORDER BY sort_order, name");
             $stmt->execute([$cat_id]);
         }
-        $brands = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(['success' => true, 'brands' => $brands]);
+        echo json_encode(['success' => true, 'brands' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         exit;
     }
 
@@ -42,8 +42,7 @@ try {
             $stmt = $pdo->prepare("SELECT id, name, slug, body_type FROM product_models WHERE brand_id = ? ORDER BY sort_order, name");
             $stmt->execute([$brand_id]);
         }
-        $models = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(['success' => true, 'models' => $models]);
+        echo json_encode(['success' => true, 'models' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         exit;
     }
 
@@ -58,8 +57,7 @@ try {
         }
         $stmt = $pdo->prepare("SELECT id, name FROM product_variants WHERE model_id = ? ORDER BY sort_order, name");
         $stmt->execute([$model_id]);
-        $variants = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo json_encode(['success' => true, 'variants' => $variants]);
+        echo json_encode(['success' => true, 'variants' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         exit;
     }
 
