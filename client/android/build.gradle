@@ -43,6 +43,11 @@ subprojects {
 
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
+            try {
+                if (project.android.defaultConfig.minSdk != null && project.android.defaultConfig.minSdk < 24) {
+                    project.android.defaultConfig.minSdk = 24
+                }
+            } catch (Exception ignored) {}
             project.android.buildTypes.each { buildType ->
                 def hasUnoptimized = buildType.proguardFiles.any { it.name == 'proguard-android.txt' }
                 if (hasUnoptimized) {
