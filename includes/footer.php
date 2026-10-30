@@ -38,8 +38,9 @@ $main_js_v = @filemtime(dirname(__DIR__) . '/assets/js/main.js') ?: 1;
 <div id="toast-container" style="position:fixed;top:80px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none;"></div>
 
 <footer>
-    <div class="container" style="padding:0;">
-        <p>&copy; <?= date('Y') ?> Enteangadi. All rights reserved.</p>
+    <div class="container" style="padding:0;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 16px;">
+        <span>&copy; <?= date('Y') ?> Enteangadi. All rights reserved.</span>
+        <a href="<?= $base_url ?>/privacy-policy" style="color:var(--primary-green, #2E7D32);font-weight:600;text-decoration:none;">Privacy Policy</a>
     </div>
 </footer>
 

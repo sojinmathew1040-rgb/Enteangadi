@@ -1,3 +1,9 @@
+# Clean Routes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^privacy-policy/?$ privacy-policy.php [L,QSA]
+</IfModule>
+
 # Enforce Caching for Static Assets
 <IfModule mod_expires.c>
     ExpiresActive On

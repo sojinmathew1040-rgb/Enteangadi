@@ -60,7 +60,7 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title><?= __('app_name') ?> - <?= __('tagline') ?></title>
+    <title><?= isset($page_title) ? htmlspecialchars($page_title) . ' - ' . __('app_name') : (__('app_name') . ' - ' . __('tagline')) ?></title>
     <meta name="description" content="Buy and sell anything locally with <?= __('app_name') ?>.">
 
     <?php if (isset($og_title)): ?><meta property="og:title" content="<?= htmlspecialchars($og_title) ?>" /><?php endif; ?>

@@ -1135,6 +1135,13 @@ function App() {
         </section>
       </main>
 
+      <footer style={{ textAlign: 'center', padding: '1rem 1.5rem 2rem', fontSize: '0.84rem', color: 'var(--text)', borderTop: '1px solid var(--border)' }}>
+        &copy; {new Date().getFullYear()} Enteangadi &bull;{' '}
+        <a href={`${backendUrl}/privacy-policy`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-green)', fontWeight: 700, textDecoration: 'none' }}>
+          Privacy Policy
+        </a>
+      </footer>
+
       {/* Message Actions Modal */}
       {selectedMessageAction && (
         <div className="modal-overlay high-z" onClick={() => setSelectedMessageAction(null)}>
