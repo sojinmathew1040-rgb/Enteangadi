@@ -171,7 +171,7 @@ try {
             $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
             $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
             $pdo->exec("USE `$dbname`");
-            @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+            @unlink(sys_get_temp_dir() . '/enteangadi_schema_v4.lock');
         } elseif ($host === 'localhost') {
             $host = '127.0.0.1';
             try {
@@ -181,7 +181,7 @@ try {
                     $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
                     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
                     $pdo->exec("USE `$dbname`");
-                    @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+                    @unlink(sys_get_temp_dir() . '/enteangadi_schema_v4.lock');
                 } else {
                     throw $e2;
                 }
@@ -192,7 +192,7 @@ try {
     }
 
     // Run schema migrations & index setup only once (or when lock missing), and maintenance hourly
-    $schemaLock = sys_get_temp_dir() . '/enteangadi_schema_v3.lock';
+    $schemaLock = sys_get_temp_dir() . '/enteangadi_schema_v4.lock';
     $maintLock = sys_get_temp_dir() . '/enteangadi_maint_v3.lock';
     $needSchema = !file_exists($schemaLock) || isset($_GET['force_schema_sync']);
     $needMaint = !$is_preload_req && (!file_exists($maintLock) || (time() - @filemtime($maintLock)) >= 3600);

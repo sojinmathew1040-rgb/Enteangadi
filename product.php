@@ -688,7 +688,7 @@ require_once 'includes/header.php';
 <script>
     const imgCount = <?= count($images) ?>;
     const sessionUserId = <?= isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 'null' ?>;
-    const playStoreUrl = '<?= !empty($app_settings['play_store_url']) ? htmlspecialchars($app_settings['play_store_url'], ENT_QUOTES) : 'https://play.google.com/store/apps/details?id=com.enteangadi.app' ?>';
+    const playStoreUrl = '<?= !empty($app_settings['play_store_url']) ? htmlspecialchars($app_settings['play_store_url'], ENT_QUOTES) : 'https://play.google.com/store/apps/details?id=com.perumalilcreative.enteangadi' ?>';
     const appStoreUrl = '<?= !empty($app_settings['app_store_url']) ? htmlspecialchars($app_settings['app_store_url'], ENT_QUOTES) : 'https://apps.apple.com/app/enteangadi' ?>';
 </script>
 <script src="assets/js/product.js?v=<?= time() ?>"></script>

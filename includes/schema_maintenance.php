@@ -7,7 +7,7 @@
 if (!function_exists('runEnteangadiSchemaSetup')) {
     function runEnteangadiSchemaSetup(PDO $pdo, string $rootDir): void
     {
-        $lockFile = sys_get_temp_dir() . '/enteangadi_schema_v3.lock';
+        $lockFile = sys_get_temp_dir() . '/enteangadi_schema_v4.lock';
 
         try {
             // Core schema import if products table is completely missing
@@ -261,7 +261,7 @@ if (!function_exists('runEnteangadiSchemaSetup')) {
             $existingMap = array_flip($existingKeys);
             $defaults = [
                 'ad_approval_mode' => 'auto',
-                'play_store_url' => 'https://play.google.com/store/apps/details?id=com.enteangadi.app',
+                'play_store_url' => 'https://play.google.com/store/apps/details?id=com.perumalilcreative.enteangadi',
                 'app_store_url' => 'https://apps.apple.com/app/enteangadi',
                 'adult_content_check' => '1'
             ];
@@ -271,6 +271,11 @@ if (!function_exists('runEnteangadiSchemaSetup')) {
                     $insSetting->execute([$k, $v]);
                 }
             }
+            $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'play_store_url' AND setting_value = ?")
+                ->execute([
+                    'https://play.google.com/store/apps/details?id=com.perumalilcreative.enteangadi',
+                    'https://play.google.com/store/apps/details?id=com.enteangadi.app'
+                ]);
 
             @file_put_contents($lockFile, (string)time());
         } catch (Exception $e) {
