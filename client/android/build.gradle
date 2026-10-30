@@ -44,8 +44,12 @@ subprojects {
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             try {
+                project.android.compileSdkVersion(36)
                 if (project.android.defaultConfig.minSdk != null && project.android.defaultConfig.minSdk < 24) {
                     project.android.defaultConfig.minSdk = 24
+                }
+                if (project.name == 'app') {
+                    project.android.defaultConfig.targetSdkVersion(36)
                 }
             } catch (Exception ignored) {}
             project.android.buildTypes.each { buildType ->
