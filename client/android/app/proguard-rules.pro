@@ -1,21 +1,36 @@
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve file names and line numbers for Play Console deobfuscation stack traces
+-keepattributes SourceFile,LineNumberTable
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep WebView JavascriptInterface methods
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Enteangadi app classes
+-keep class com.perumalilcreative.enteangadi.** { *; }
+
+# Keep Capacitor Core, Bridge, and Plugins (loaded via reflection)
+-keep class com.getcapacitor.** { *; }
+-keep class * extends com.getcapacitor.Plugin { *; }
+-keep class * extends com.getcapacitor.BridgeActivity { *; }
+-keepclasseswithmembers class * {
+    @com.getcapacitor.annotation.CapacitorPlugin <methods>;
+}
+-keepclasseswithmembers class * {
+    @com.getcapacitor.PluginMethod <methods>;
+}
+-keepclasseswithmembers class * {
+    @com.getcapacitor.NativePlugin <methods>;
+}
+
+# Keep Capacitor official plugin packages
+-keep class com.capacitorjs.plugins.** { *; }
+-keep class org.apache.cordova.** { *; }
+
+-dontwarn com.google.android.gms.**
+-dontwarn org.apache.cordova.**
