@@ -104,11 +104,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if (!empty($error)) {
-            // Keep error message
-        } else {
+        if (empty($error)) {
             try {
                 $pdo->beginTransaction();
+
+                // Respect admin ad_approval_mode setting ('auto' => active immediately, 'manual' => pending review)
+                $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
+                $set_stmt->execute();
+                $approval_mode = strtolower(trim((string)($set_stmt->fetchColumn() ?: 'auto'))) ?: 'auto';
+                $new_status = ($approval_mode !== 'auto') ? 'pending' : 'active';
 
                 // Generate multilingual and cross-lingual search keywords (Malayalam, English, Manglish, Hindi)
                 $cat_name = '';
@@ -123,8 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $search_input = trim($title . ' ' . ($brand ?? '') . ' ' . ($model ?? '') . ' ' . ($variant ?? ''));
                 $search_keywords = function_exists('generateProductSearchKeywords') ? generateProductSearchKeywords($search_input, $description, $cat_name) : '';
 
-                $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, brand = ?, model = ?, variant = ?, description = ?, search_keywords = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = 'pending', updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$category_id, $type, $title, $brand, $model, $variant, $description, $search_keywords, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $product_id]);
+                $stmt = $pdo->prepare("UPDATE products SET category_id = ?, type = ?, title = ?, brand = ?, model = ?, variant = ?, description = ?, search_keywords = ?, price = ?, expiry_date = ?, whatsapp_number = ?, phone_number = ?, location_name = ?, latitude = ?, longitude = ?, status = ?, updated_at = NOW() WHERE id = ? AND user_id = ?");
+                $stmt->execute([$category_id, $type, $title, $brand, $model, $variant, $description, $search_keywords, $price, $expiry_date, $whatsapp_number, $phone_number, $location_name, $latitude, $longitude, $new_status, $product_id, $_SESSION['user_id']]);
 
                 // Handle image deletions
                 if (isset($_POST['delete_images'])) {
@@ -135,8 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($path && file_exists('../' . $path))
                             @unlink('../' . $path);
 
-                        $del_stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ?");
-                        $del_stmt->execute([$del_img_id]);
+                        $del_stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ? AND product_id = ?");
+                        $del_stmt->execute([$del_img_id, $product_id]);
                     }
                 }
 
@@ -170,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->commit();
-                $success = true;
+                $success = ($new_status === 'pending') ? 'pending' : 'active';
             } catch (PDOException $e) {
                 $pdo->rollBack();
                 $error = "Error updating ad. Please try again.";
@@ -255,8 +259,10 @@ function compressProductImageLocal($source, $destination, $max_width, $quality)
 }
 
 require_once '../includes/header.php';
+$post_css_v = @filemtime('../assets/css/post_ad.css') ?: 1;
+$edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
 ?>
-<link rel="stylesheet" href="../assets/css/post_ad.css?v=<?= time() ?>">
+<link rel="stylesheet" href="../assets/css/post_ad.css?v=<?= $post_css_v ?>">
 
 <div class="post-ad-page-premium">
     <div class="container">
@@ -266,15 +272,20 @@ require_once '../includes/header.php';
                     <div class="success-ring"></div>
                     <i class="fa fa-check-circle success-bounce"></i>
                 </div>
-                <h2 class="success-title">Ad Updated Successfully!</h2>
-                <p class="success-subtitle">Your changes have been saved. Your ad is now under review and will be live
-                    shortly.</p>
+                <h2 class="success-title">
+                    <?= ($success === 'pending') ? 'Ad Submitted for Review!' : 'Ad Updated Successfully!' ?>
+                </h2>
+                <p class="success-subtitle">
+                    <?= ($success === 'pending')
+                        ? 'Your changes have been saved. Your ad is now under review and will be live shortly.'
+                        : 'Your changes have been saved and your ad is now live and visible to everyone.' ?>
+                </p>
                 <div class="success-actions">
                     <a href="my_ads.php" class="btn-manage-premium">
                         <i class="fa fa-th-list"></i>
                         Manage My Ads
                     </a>
-                    <a href="../index.php" class="btn-home-premium">
+                    <a href="index.php" class="btn-home-premium">
                         <i class="fa fa-home"></i>
                         Back to Home
                     </a>
@@ -418,9 +429,9 @@ require_once '../includes/header.php';
                                     style="display: none;" onchange="previewImages()">
                             </div>
                             <div id="image_preview_container" class="image-preview-side-container">
-                                <?php foreach ($existing_images as $img): 
+                                <?php foreach ($existing_images as $img):
                                     $img_file = '../' . $img['image_path'];
-                                    $img_v = file_exists($img_file) ? filemtime($img_file) : time();
+                                    $img_v = file_exists($img_file) ? filemtime($img_file) : 1;
                                 ?>
                                     <div class="preview-item" onclick="toggleExistingDelete(<?= $img['id'] ?>, this)">
                                         <img src="../<?= htmlspecialchars($img['image_path']) ?>?v=<?= $img_v ?>">
@@ -543,6 +554,6 @@ require_once '../includes/header.php';
     const currentModel = <?= json_encode($product['model'] ?? '') ?>;
     const currentVariant = <?= json_encode($product['variant'] ?? '') ?>;
 </script>
-<script src="../assets/js/edit_ad.js"></script>
+<script src="../assets/js/edit_ad.js?v=<?= $edit_js_v ?>"></script>
 
 <?php require_once '../includes/footer.php'; ?>

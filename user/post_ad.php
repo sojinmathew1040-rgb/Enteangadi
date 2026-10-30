@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
                 $set_stmt->execute();
-                $approval_mode = $set_stmt->fetchColumn() ?: 'auto';
+                $approval_mode = strtolower(trim((string)($set_stmt->fetchColumn() ?: 'auto'))) ?: 'auto';
                 $status = ($approval_mode !== 'auto') ? 'pending' : 'active';
 
                 // Generate multilingual and cross-lingual search keywords (Malayalam, English, Manglish, Hindi)

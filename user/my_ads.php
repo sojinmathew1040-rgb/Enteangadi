@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ad_action'])) {
             // Check if manual approval is required
             $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
             $set_stmt->execute();
-            $approval_mode = $set_stmt->fetchColumn() ?: 'auto';
+            $approval_mode = strtolower(trim((string)($set_stmt->fetchColumn() ?: 'auto'))) ?: 'auto';
 
             if ($approval_mode !== 'auto') {
                 $new_status = 'pending';
@@ -124,7 +124,7 @@ $all_ads = $ad_stmt->fetchAll();
 // Fetch approval mode for UI
 $set_stmt = $pdo->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'ad_approval_mode'");
 $set_stmt->execute();
-$approval_mode = $set_stmt->fetchColumn() ?: 'auto';
+$approval_mode = strtolower(trim((string)($set_stmt->fetchColumn() ?: 'auto'))) ?: 'auto';
 
 require_once '../includes/header.php';
 ?>

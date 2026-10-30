@@ -522,7 +522,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($_POST['action']) && $_POST['action'] === 'approval') {
         $mode = $_POST['ad_approval_mode'] ?? 'auto';
-        $stmt = $pdo->prepare("UPDATE app_settings SET setting_value = ? WHERE setting_key = 'ad_approval_mode'");
+        $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('ad_approval_mode', ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        unset($_SESSION['_app_settings_cache'], $_SESSION['_app_settings_ts']);
         $stmt->execute([$mode]);
         $success = "Ad approval mode updated to " . strtoupper($mode) . ".";
     } elseif (isset($_POST['action']) && ($_POST['action'] === 'approve_ad' || $_POST['action'] === 'reject_ad')) {
