@@ -435,9 +435,10 @@ $edit_js_v = @filemtime('../assets/js/edit_ad.js') ?: 1;
                                 ?>
                                     <div class="preview-item" onclick="toggleExistingDelete(<?= $img['id'] ?>, this)">
                                         <img src="../<?= htmlspecialchars($img['image_path']) ?>?v=<?= $img_v ?>">
+                                        <span class="photo-trash-badge" title="Delete Photo"><i class="fa fa-trash-alt"></i></span>
                                         <div class="delete-overlay">
                                             <i class="fa fa-trash-alt"></i>
-                                            <span>DELETE</span>
+                                            <span>DELETED</span>
                                         </div>
                                         <input type="checkbox" name="delete_images[]" value="<?= $img['id'] ?>"
                                             id="del-<?= $img['id'] ?>" style="display: none;">

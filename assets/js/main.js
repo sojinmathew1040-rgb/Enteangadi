@@ -22,6 +22,10 @@
         u.hash = '';
         const p = u.pathname;
         if (
+            p === '/' ||
+            p.endsWith('index.php') ||
+            p.endsWith('my_ads.php') ||
+            p.endsWith('inbox.php') ||
             p.includes('/api/') ||
             p.includes('api_') ||
             p.includes('/admin/') ||
@@ -107,16 +111,14 @@
         const base = EnteangadiConfig.baseUrl || '';
         const core = EnteangadiConfig.isLoggedIn
             ? [
-                `${base}/user/index.php`,
-                `${base}/user/inbox.php`,
-                `${base}/user/my_ads.php`,
                 `${base}/user/profile.php`,
-                `${base}/user/post_ad.php`
+                `${base}/user/post_ad.php`,
+                `${base}/privacy-policy`
             ]
             : [
-                `${base}/guest/index.php`,
                 `${base}/login.php`,
-                `${base}/register.php`
+                `${base}/register.php`,
+                `${base}/privacy-policy`
             ];
         core.forEach((u) => enqueuePreload(u, false));
     }
@@ -142,35 +144,46 @@
     document.addEventListener('pointerdown', onIntent, { passive: true });
     document.addEventListener('mouseover', onIntent, { passive: true });
 
-    // Coordinate click navigation with Counting Percentage + Breathing Logo Loader
+    // Trigger loader ONLY on crucial navigation links (e.g. logout or explicit data-crucial-loader)
     document.addEventListener('click', (e) => {
         if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
         if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
         const raw = a.getAttribute('href') || '';
         if (!raw || raw.startsWith('#') || raw.startsWith('javascript:') || raw.startsWith('tel:') || raw.startsWith('mailto:') || raw.startsWith('whatsapp:')) return;
-        if (a.getAttribute('onclick') && a.getAttribute('onclick').includes('applyFilterAjax')) return;
 
         let dest;
         try { dest = new URL(a.href, window.location.href); } catch (err) { return; }
         if (dest.origin !== window.location.origin) return;
-        if (dest.pathname === window.location.pathname && dest.search === window.location.search) return;
 
-        const cleanHref = dest.href.split('#')[0];
-        if (preloadedUrls.has(cleanHref)) {
-            try { sessionStorage.setItem('enteangadi_preloaded_hit', '1'); } catch (err) {}
-        } else if (window.EnteangadiLoader) {
-            window.EnteangadiLoader.startNavigation('Loading page...');
+        const isCrucialLink = a.dataset.crucialLoader === '1' || dest.pathname.endsWith('logout.php');
+        if (isCrucialLink && window.EnteangadiLoader) {
+            window.EnteangadiLoader.startNavigation(dest.pathname.endsWith('logout.php') ? 'Signing out...' : 'Loading...');
         }
     });
 
-    // Show Counting Percentage + Breathing Logo Loader on full-page form submissions
+    // Trigger loader ONLY on crucial form submissions (auth, account security, or explicit data-crucial-loader)
     document.addEventListener('submit', (e) => {
         if (e.defaultPrevented) return;
         const form = e.target;
         if (!form || form.target === '_blank' || form.dataset.ajax === '1') return;
-        if (window.EnteangadiLoader) {
-            window.EnteangadiLoader.startNavigation('Loading...');
+        if (form.id === 'postAdForm' || form.id === 'editAdForm') return; // Handled by dedicated #loadingOverlay
+
+        const actionUrl = (form.getAttribute('action') || window.location.pathname || '').toLowerCase();
+        const method = (form.getAttribute('method') || 'get').toLowerCase();
+        const isCrucialForm =
+            form.dataset.crucialLoader === '1' ||
+            (method === 'post' && (
+                actionUrl.includes('login.php') ||
+                actionUrl.includes('register.php') ||
+                actionUrl.includes('forgot_password') ||
+                actionUrl.includes('reset_password') ||
+                form.id === 'delete_pic_form' ||
+                form.id === 'profile_pic_form'
+            ));
+
+        if (isCrucialForm && window.EnteangadiLoader) {
+            window.EnteangadiLoader.startNavigation('Processing...');
         }
     });
 
@@ -229,4 +242,86 @@
             scanLinks(document);
         });
     });
+
+    // Global Yes / No Photo Deletion Confirmation Helper
+    window.confirmPhotoDelete = function (options = {}) {
+        const title = options.title || 'Delete Photo?';
+        const message = options.message || 'Do you want to delete this photo?';
+        const imgSrc = options.imgSrc || '';
+        const yesText = options.yesText || 'Yes';
+        const noText = options.noText || 'No';
+        const isRestore = Boolean(options.isRestore);
+
+        return new Promise((resolve) => {
+            let modal = document.getElementById('photoConfirmModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'photoConfirmModal';
+                modal.className = 'photo-confirm-modal-overlay';
+                modal.style.display = 'none';
+                modal.innerHTML = `
+                    <div class="photo-confirm-card">
+                        <div class="photo-confirm-thumb-wrapper" id="photoConfirmThumbWrap">
+                            <img id="photoConfirmImg" src="" alt="Photo Preview">
+                            <div class="photo-confirm-badge" id="photoConfirmBadge">
+                                <i class="fa fa-trash-alt"></i>
+                            </div>
+                        </div>
+                        <h3 id="photoConfirmTitle">Delete Photo?</h3>
+                        <p id="photoConfirmDesc">Do you want to delete this photo?</p>
+                        <div class="photo-confirm-actions">
+                            <button type="button" class="btn-confirm-no" id="photoConfirmNoBtn">No</button>
+                            <button type="button" class="btn-confirm-yes" id="photoConfirmYesBtn">Yes</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+
+            const thumbWrap = modal.querySelector('#photoConfirmThumbWrap');
+            const imgEl = modal.querySelector('#photoConfirmImg');
+            const badgeEl = modal.querySelector('#photoConfirmBadge');
+            const titleEl = modal.querySelector('#photoConfirmTitle');
+            const descEl = modal.querySelector('#photoConfirmDesc');
+            const yesBtn = modal.querySelector('#photoConfirmYesBtn');
+            const noBtn = modal.querySelector('#photoConfirmNoBtn');
+
+            if (thumbWrap && imgEl) {
+                if (imgSrc) {
+                    imgEl.src = imgSrc;
+                    thumbWrap.style.display = 'block';
+                    thumbWrap.style.borderColor = isRestore ? '#bbf7d0' : '#fee2e2';
+                } else {
+                    thumbWrap.style.display = 'none';
+                }
+            }
+            if (badgeEl) {
+                badgeEl.style.background = isRestore ? '#16a34a' : '#ef4444';
+                badgeEl.innerHTML = isRestore ? '<i class="fa fa-undo"></i>' : '<i class="fa fa-trash-alt"></i>';
+            }
+            if (titleEl) titleEl.textContent = title;
+            if (descEl) descEl.textContent = message;
+            if (yesBtn) {
+                yesBtn.textContent = yesText;
+                yesBtn.style.background = isRestore ? '#16a34a' : '#ef4444';
+            }
+            if (noBtn) noBtn.textContent = noText;
+
+            modal.style.display = 'flex';
+
+            const finish = (ans) => {
+                modal.style.display = 'none';
+                if (yesBtn) yesBtn.onclick = null;
+                if (noBtn) noBtn.onclick = null;
+                modal.onclick = null;
+                resolve(ans);
+            };
+
+            if (yesBtn) yesBtn.onclick = () => finish(true);
+            if (noBtn) noBtn.onclick = () => finish(false);
+            modal.onclick = (e) => {
+                if (e.target === modal) finish(false);
+            };
+        });
+    };
 })();

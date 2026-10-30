@@ -131,7 +131,21 @@ require_once '../includes/header.php';
 
                 <script>
                 function deleteProfilePicture() {
-                    if (confirm("Are you sure you want to delete your profile picture?")) {
+                    if (window.confirmPhotoDelete) {
+                        const avatarImg = document.getElementById('profile-avatar-img');
+                        window.confirmPhotoDelete({
+                            title: 'Delete Profile Photo?',
+                            message: 'Do you want to delete this photo?',
+                            imgSrc: avatarImg ? avatarImg.src : '',
+                            yesText: 'Yes',
+                            noText: 'No'
+                        }).then(function(ok) {
+                            if (ok) document.getElementById('delete_pic_form').submit();
+                        });
+                    } else if (confirm("Do you want to delete this photo?")) {
+                        document.getElementById('delete_pic_form').submit();
+                    }
+                    if (false) {
                         document.getElementById('delete_pic_form').submit();
                     }
                 }

@@ -3362,7 +3362,7 @@ require_once 'includes/header.php';
                                 style="max-height: 80px; object-fit: contain; background: transparent !important;">
                             <label
                                 style="display: flex; align-items: center; gap: 8px; color: #dc2626; cursor: pointer; font-size: 13px; font-weight: 600; margin-top: 12px;">
-                                <input type="checkbox" name="delete_logo" value="1"> Remove current logo
+                                <input type="checkbox" name="delete_logo" value="1" onchange="if(this.checked && !confirm('Do you want to delete this photo?')) this.checked = false;"> Remove current logo
                             </label>
                         <?php else: ?>
                             <i class="fa fa-image" style="font-size: 40px; color: #cbd5e1;"></i>

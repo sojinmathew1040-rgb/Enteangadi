@@ -11,7 +11,7 @@ if (!$product_id) {
 try {
     $stmt = $pdo->prepare("SELECT p.*, p.phone_number as product_phone, p.whatsapp_number as product_whatsapp, u.username, u.phone_number as user_phone, u.role, u.profile_picture, c.name as category_name 
         FROM products p 
-        JOIN users u ON p.user_id = u.id 
+        LEFT JOIN users u ON p.user_id = u.id 
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.id = ?");
     $stmt->execute([$product_id]);

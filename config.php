@@ -27,14 +27,16 @@ $is_preload_req = !empty($_SERVER['HTTP_X_ENTEANGADI_PRELOAD'])
     || (($_SERVER['HTTP_PURPOSE'] ?? '') === 'prefetch')
     || (($_SERVER['HTTP_SEC_PURPOSE'] ?? '') === 'prefetch');
 
-// Allow short private caching for background preloads; keep direct refreshes fresh
+// Prevent Nginx reverse-proxy (X-Proxy-Cache), LiteSpeed, and CDN caches from serving stale guest/user pages
 if (!headers_sent()) {
-    if ($is_preload_req) {
-        header("Cache-Control: private, max-age=45");
-    } else {
-        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
-        header("Pragma: no-cache");
-        header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    header("Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
+    header("Pragma: no-cache");
+    header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    header("X-Accel-Expires: 0");
+    header("X-LiteSpeed-Cache-Control: no-cache");
+    header("Vary: Cookie");
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+        header("Set-Cookie: _ea_nc=1; Path=/; SameSite=Lax", false);
     }
 }
 
