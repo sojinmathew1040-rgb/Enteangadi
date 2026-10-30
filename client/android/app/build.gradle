@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.enteangadi.app"
+    namespace "com.perumalilcreative.enteangadi"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.enteangadi.app"
+        applicationId "com.perumalilcreative.enteangadi"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -19,6 +19,25 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    signingConfigs {
+        release {
+            def ksFile = file('enteangadi-release.jks')
+            if (ksFile.exists()) {
+                storeFile ksFile
+                storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'Enteangadi@2026'
+                keyAlias System.getenv('KEY_ALIAS') ?: 'enteangadi'
+                keyPassword System.getenv('KEY_PASSWORD') ?: 'Enteangadi@2026'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (file('enteangadi-release.jks').exists()) {
+                signingConfig signingConfigs.release
+            }
             // FIXED: Changed 'proguard-android.txt' to 'proguard-android-optimize.txt' to support modern Gradle/R8 builds
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

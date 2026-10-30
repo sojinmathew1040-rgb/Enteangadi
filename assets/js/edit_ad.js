@@ -301,7 +301,54 @@ function toggleContact(type) {
     if (input && chk) input.required = chk.checked;
 }
 
-function toggleExistingDelete(id, el) {
+async function toggleExistingDelete(id, el) {
+    const chk = document.getElementById('del-' + id);
+    if (!chk) return;
+    const isMarked = chk.checked;
+    const imgEl = el.querySelector('img');
+    const imgSrc = imgEl ? imgEl.src : '';
+    const askConfirm = window.confirmPhotoDelete
+        ? await window.confirmPhotoDelete({
+            title: isMarked ? 'Keep Photo?' : 'Delete Photo?',
+            message: isMarked ? 'Do you want to restore and keep this photo?' : 'Do you want to delete this photo?',
+            imgSrc: imgSrc,
+            yesText: 'Yes',
+            noText: 'No',
+            isRestore: isMarked
+        })
+        : confirm(isMarked ? 'Do you want to restore this photo?' : 'Do you want to delete this photo?');
+    if (!askConfirm) return;
+    chk.checked = !isMarked;
+    el.classList.toggle('marked-delete', chk.checked);
+    if (typeof showToast === 'function') {
+        showToast(chk.checked ? 'Photo marked for deletion. Save changes to apply.' : 'Photo restored.');
+    }
+}
+
+function bindNewUploadPreview(div, file, src, filesInput) {
+    div.innerHTML = `<img src="${src}"><div class="new-badge">NEW</div><span class="photo-trash-badge" title="Delete Photo"><i class="fa fa-trash-alt"></i></span>`;
+    div.onclick = async () => {
+        const confirmed = window.confirmPhotoDelete
+            ? await window.confirmPhotoDelete({
+                title: 'Delete Photo?',
+                message: 'Do you want to delete this photo?',
+                imgSrc: src,
+                yesText: 'Yes',
+                noText: 'No'
+            })
+            : confirm('Do you want to delete this photo?');
+        if (!confirmed) return;
+        const dt = new DataTransfer();
+        Array.from(filesInput.files || []).forEach(f => {
+            if (f !== file && f.name !== file.name) dt.items.add(f);
+        });
+        filesInput.files = dt.files;
+        div.remove();
+        if (typeof showToast === 'function') showToast('Photo removed.');
+    };
+}
+
+function _legacyToggleExistingDeleteUnused(id, el) {
     const chk = document.getElementById('del-' + id);
     if (!chk) return;
     chk.checked = !chk.checked;
@@ -457,14 +504,14 @@ async function previewImages() {
         if (dataURL) {
             const div = document.createElement('div');
             div.className = 'preview-item new-upload';
-            div.innerHTML = `<img src="${dataURL}"><div class="new-badge">NEW</div>`;
+            bindNewUploadPreview(div, file, dataURL, filesInput);
             container.appendChild(div);
         } else {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const div = document.createElement('div');
                 div.className = 'preview-item new-upload';
-                div.innerHTML = `<img src="${e.target.result}"><div class="new-badge">NEW</div>`;
+                bindNewUploadPreview(div, file, e.target.result, filesInput);
                 container.appendChild(div);
             };
             reader.readAsDataURL(file);

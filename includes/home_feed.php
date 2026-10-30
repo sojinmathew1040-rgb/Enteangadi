@@ -207,18 +207,18 @@ $order_by = "p.created_at DESC";
 if ($user_location && isset($user_location['lat'], $user_location['lng'])) {
     $lat = floatval($user_location['lat']);
     $lng = floatval($user_location['lng']);
-    $distExpr = "(6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude))))";
+    $distExpr = "(6371 * acos(LEAST(1.0, GREATEST(-1.0, cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude))))))";
     $distance_select = ", $distExpr AS distance";
     if ($radius) {
-        $where_clause .= " AND $distExpr <= ?";
+        $where_clause .= " AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL AND $distExpr <= ?";
         $params[] = $radius;
     }
 }
 if ($sort_by === 'price_asc') $order_by = "p.price ASC";
 elseif ($sort_by === 'price_desc') $order_by = "p.price DESC";
-elseif ($sort_by === 'distance' && $distance_select !== '') $order_by = "distance ASC";
+elseif ($sort_by === 'distance' && $distance_select !== '') $order_by = "distance IS NULL ASC, distance ASC";
 
-$page_size = 24;
+$page_size = 100;
 $products = [];
 $total_matching_ads = 0;
 
@@ -937,7 +937,7 @@ require_once __DIR__ . '/header.php';
             const btn = document.getElementById('feed-load-more-btn');
             if (!grid || !sentinel) return;
 
-            let offset = parseInt(grid.dataset.loaded || '24', 10);
+            let offset = parseInt(grid.dataset.loaded || '100', 10);
             const total = parseInt(grid.dataset.total || '0', 10);
             let busy = false;
 
@@ -947,8 +947,9 @@ require_once __DIR__ . '/header.php';
                 if (btn) btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Loading...';
                 try {
                     const q = new URLSearchParams(window.location.search);
-                    q.set('limit', '24');
+                    q.set('limit', '48');
                     q.set('offset', String(offset));
+                    q.set('_ts', String(Date.now()));
                     const res = await fetch(`../api/products.php?${q.toString()}`);
                     const data = await res.json();
                     if (data.success && Array.isArray(data.products) && data.products.length > 0) {

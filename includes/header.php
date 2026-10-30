@@ -142,6 +142,12 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
         (function () {
             document.documentElement.setAttribute('data-theme', localStorage.getItem('enteangadi-theme') || 'light');
 
+            try {
+                if (sessionStorage.getItem('hasLoadedBefore') === 'true' && sessionStorage.getItem('enteangadi_crucial_loader') !== '1') {
+                    document.documentElement.classList.add('skip-initial-loader');
+                }
+            } catch (e) {}
+
             const urlParams = new URLSearchParams(window.location.search);
             const flushSwPages = () => {
                 if (navigator.serviceWorker && navigator.serviceWorker.controller) {
@@ -226,6 +232,7 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
     <script src="<?= $base_url ?>/capacitor.js" defer></script>
     <script src="<?= $base_url ?>/assets/js/location.js?v=<?= $loc_js_version ?>" defer></script>
     <script src="<?= $base_url ?>/assets/js/app-native.js?v=<?= $nat_js_version ?>" defer></script>
+    <style>html.skip-initial-loader #loader-wrapper { display: none !important; }</style>
 </head>
 
 <body>
@@ -282,9 +289,13 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
             function hideOverlay() {
                 if (timer) { clearInterval(timer); timer = null; }
                 loader.classList.add('loader-hide');
-                setTimeout(() => { loader.style.display = 'none'; }, 190);
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    document.documentElement.classList.add('skip-initial-loader');
+                }, 190);
                 try {
                     sessionStorage.setItem('hasLoadedBefore', 'true');
+                    sessionStorage.removeItem('enteangadi_crucial_loader');
                     sessionStorage.removeItem('enteangadi_nav_loader');
                 } catch (e) {}
             }
@@ -307,6 +318,7 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
 
             function startCounting(initialVal) {
                 finishing = false;
+                document.documentElement.classList.remove('skip-initial-loader');
                 setPct(initialVal || 0);
                 loader.style.display = 'flex';
                 loader.classList.remove('loader-hide');
@@ -319,44 +331,49 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
                 }, 32);
             }
 
-            // Expose navigation loader API for uncached links & form submissions
+            // Expose loader API for initial load and crucial situations only
             window.EnteangadiLoader = {
                 startNavigation(statusMsg) {
                     const st = document.getElementById('loader-location-status');
                     if (st && statusMsg) st.textContent = statusMsg;
-                    try { sessionStorage.setItem('enteangadi_nav_loader', '1'); } catch (e) {}
-                    startCounting(8);
+                    try { sessionStorage.setItem('enteangadi_crucial_loader', '1'); } catch (e) {}
+                    startCounting(12);
                 },
                 finish: finishTo100,
                 hideInstantly() {
                     if (timer) { clearInterval(timer); timer = null; }
                     loader.classList.add('loader-hide');
                     loader.style.display = 'none';
+                    document.documentElement.classList.add('skip-initial-loader');
+                    try {
+                        sessionStorage.setItem('hasLoadedBefore', 'true');
+                        sessionStorage.removeItem('enteangadi_crucial_loader');
+                    } catch (e) {}
                 }
             };
             window.hideLoader = finishTo100;
             window.hideLoaderInstantly = window.EnteangadiLoader.hideInstantly;
 
-            // Check if this page was preloaded in background (instant swap without blocking overlay)
+            // Show loader ONLY on initial session entry (!hasLoadedBefore) or explicit crucial actions (isCrucialLoad)
             let hasLoadedBefore = false;
-            let wasPreloaded = false;
+            let isCrucialLoad = false;
             try {
                 hasLoadedBefore = sessionStorage.getItem('hasLoadedBefore') === 'true';
-                wasPreloaded = sessionStorage.getItem('enteangadi_preloaded_hit') === '1';
-                if (wasPreloaded) sessionStorage.removeItem('enteangadi_preloaded_hit');
+                isCrucialLoad = sessionStorage.getItem('enteangadi_crucial_loader') === '1';
+                if (isCrucialLoad) sessionStorage.removeItem('enteangadi_crucial_loader');
             } catch (e) {}
 
-            if (hasLoadedBefore && wasPreloaded) {
+            if (hasLoadedBefore && !isCrucialLoad) {
                 window.EnteangadiLoader.hideInstantly();
             } else {
-                startCounting(hasLoadedBefore ? 24 : 4);
+                startCounting(hasLoadedBefore ? 28 : 4);
                 if (document.readyState === 'interactive' || document.readyState === 'complete') {
                     finishTo100();
                 } else {
                     document.addEventListener('DOMContentLoaded', finishTo100, { once: true });
                 }
                 // Hard safety cap so slow 3rd-party assets never trap the user
-                setTimeout(finishTo100, 1200);
+                setTimeout(finishTo100, 1100);
             }
 
             // Always hide immediately when restoring from Back/Forward cache

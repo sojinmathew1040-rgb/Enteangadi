@@ -5,9 +5,11 @@ $user_location = $_SESSION['user_location'] ?? null;
 session_write_close(); // Release session file lock before DB queries
 
 header('Content-Type: application/json');
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
+header('X-Accel-Expires: 0');
+header('X-LiteSpeed-Cache-Control: no-cache');
 
 if (($_GET['action'] ?? '') === 'view') {
     $product_id = (int)($_GET['id'] ?? 0);
@@ -27,7 +29,7 @@ if (($_GET['action'] ?? '') === 'view') {
 }
 
 $page = max(1, (int)($_GET['page'] ?? 1));
-$limit = isset($_GET['limit']) ? min(48, max(6, (int)$_GET['limit'])) : 12;
+$limit = isset($_GET['limit']) ? min(200, max(6, (int)$_GET['limit'])) : 100;
 $offset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : (($page - 1) * $limit);
 
 $category_filter = $_GET['category_id'] ?? null;
@@ -123,10 +125,10 @@ $distance_select = "";
 if ($user_location && isset($user_location['lat'], $user_location['lng'])) {
     $lat = floatval($user_location['lat']);
     $lng = floatval($user_location['lng']);
-    $distExpr = "(6371 * acos(cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude))))";
+    $distExpr = "(6371 * acos(LEAST(1.0, GREATEST(-1.0, cos(radians($lat)) * cos(radians(p.latitude)) * cos(radians(p.longitude) - radians($lng)) + sin(radians($lat)) * sin(radians(p.latitude))))))";
     $distance_select = ", $distExpr AS distance";
     if ($radius) {
-        $where_clause .= " AND $distExpr <= ?";
+        $where_clause .= " AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL AND $distExpr <= ?";
         $params[] = $radius;
     }
 }
@@ -136,14 +138,14 @@ if ($sort_by === 'price_asc') {
 } elseif ($sort_by === 'price_desc') {
     $order_by = "p.price DESC";
 } elseif ($sort_by === 'distance' && $distance_select !== '') {
-    $order_by = "distance ASC";
+    $order_by = "distance IS NULL ASC, distance ASC";
 } else {
-    $order_by = $distance_select !== '' ? "p.created_at DESC, distance ASC" : "p.created_at DESC";
+    $order_by = "p.created_at DESC";
 }
 
 try {
     $sql = "SELECT p.*, c.name as category_name, c.parent_id as parent_category_id, parent_c.name as parent_category_name,
-            u.username as seller_username, u.profile_picture as seller_picture, u.is_verified as seller_verified,
+            COALESCE(u.username, 'Seller') as seller_username, u.profile_picture as seller_picture, COALESCE(u.is_verified, 0) as seller_verified,
             (SELECT image_path FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.id ASC LIMIT 1) as main_image,
             COALESCE((SELECT ROUND(AVG(rating), 1) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id), 0) as seller_rating,
             (SELECT COUNT(*) FROM user_ratings ur WHERE ur.reviewee_id = p.user_id) as seller_reviews_count
@@ -151,7 +153,7 @@ try {
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             LEFT JOIN categories parent_c ON c.parent_id = parent_c.id
-            JOIN users u ON p.user_id = u.id
+            LEFT JOIN users u ON p.user_id = u.id
             $where_clause
             ORDER BY $order_by
             LIMIT $limit OFFSET $offset";

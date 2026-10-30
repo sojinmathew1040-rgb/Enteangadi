@@ -27,14 +27,16 @@ $is_preload_req = !empty($_SERVER['HTTP_X_ENTEANGADI_PRELOAD'])
     || (($_SERVER['HTTP_PURPOSE'] ?? '') === 'prefetch')
     || (($_SERVER['HTTP_SEC_PURPOSE'] ?? '') === 'prefetch');
 
-// Allow short private caching for background preloads; keep direct refreshes fresh
+// Prevent Nginx reverse-proxy (X-Proxy-Cache), LiteSpeed, and CDN caches from serving stale guest/user pages
 if (!headers_sent()) {
-    if ($is_preload_req) {
-        header("Cache-Control: private, max-age=45");
-    } else {
-        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
-        header("Pragma: no-cache");
-        header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    header("Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
+    header("Pragma: no-cache");
+    header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+    header("X-Accel-Expires: 0");
+    header("X-LiteSpeed-Cache-Control: no-cache");
+    header("Vary: Cookie");
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+        header("Set-Cookie: _ea_nc=1; Path=/; SameSite=Lax", false);
     }
 }
 
@@ -171,7 +173,7 @@ try {
             $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
             $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
             $pdo->exec("USE `$dbname`");
-            @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+            @unlink(sys_get_temp_dir() . '/enteangadi_schema_v4.lock');
         } elseif ($host === 'localhost') {
             $host = '127.0.0.1';
             try {
@@ -181,7 +183,7 @@ try {
                     $pdo = new PDO("mysql:host=$host;charset=utf8mb4", $username, $password, $pdoOpts);
                     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
                     $pdo->exec("USE `$dbname`");
-                    @unlink(sys_get_temp_dir() . '/enteangadi_schema_v3.lock');
+                    @unlink(sys_get_temp_dir() . '/enteangadi_schema_v4.lock');
                 } else {
                     throw $e2;
                 }
@@ -192,7 +194,7 @@ try {
     }
 
     // Run schema migrations & index setup only once (or when lock missing), and maintenance hourly
-    $schemaLock = sys_get_temp_dir() . '/enteangadi_schema_v3.lock';
+    $schemaLock = sys_get_temp_dir() . '/enteangadi_schema_v4.lock';
     $maintLock = sys_get_temp_dir() . '/enteangadi_maint_v3.lock';
     $needSchema = !file_exists($schemaLock) || isset($_GET['force_schema_sync']);
     $needMaint = !$is_preload_req && (!file_exists($maintLock) || (time() - @filemtime($maintLock)) >= 3600);
