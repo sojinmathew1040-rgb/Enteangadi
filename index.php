@@ -22,8 +22,6 @@ if (!headers_sent()) {
     header("Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0");
     header("X-Accel-Expires: 0");
     header("X-LiteSpeed-Cache-Control: no-cache");
-    header("Vary: Cookie");
-    header("Set-Cookie: wordpress_logged_in_1=1; Path=/; Max-Age=31536000; SameSite=Lax", false);
 }
 header("Location: " . $target);
 exit;

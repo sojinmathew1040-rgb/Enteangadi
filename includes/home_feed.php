@@ -7,28 +7,9 @@
 if (!function_exists('renderProductCard')) {
     function renderProductCard(array $product, bool $eager = false): string
     {
-        global $pdo;
         $pid = (int)$product['id'];
         $detailLink = "../product.php?id=" . $pid;
-        $rootDisk = dirname(__DIR__);
         $mainImg = $product['main_image'] ?? '';
-
-        if ($mainImg !== '' && !is_file($rootDisk . '/' . $mainImg) && isset($pdo)) {
-            try {
-                $altStmt = $pdo->prepare("SELECT image_path FROM product_images WHERE product_id = ? ORDER BY id ASC");
-                $altStmt->execute([$pid]);
-                $mainImg = '';
-                foreach ($altStmt->fetchAll(PDO::FETCH_COLUMN) as $cand) {
-                    if ($cand && is_file($rootDisk . '/' . $cand)) {
-                        $mainImg = $cand;
-                        break;
-                    }
-                }
-            } catch (Exception $e) {
-                $mainImg = '';
-            }
-        }
-
         $imgVersion = !empty($product['updated_at']) ? strtotime($product['updated_at']) : (!empty($product['created_at']) ? strtotime($product['created_at']) : 1);
         $imageSrc = $mainImg !== '' ? "../" . htmlspecialchars($mainImg) . "?v=" . $imgVersion : null;
 

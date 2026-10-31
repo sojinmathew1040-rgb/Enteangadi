@@ -1,11 +1,7 @@
-# Clean Routes & Missing Product Image Fallback
+# Clean Routes
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^privacy-policy/?$ privacy-policy.php [L,QSA]
-
-    # If a cached guest feed or link requests a replaced/deleted product image, resolve its current active image
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^uploads/products/([^/]+)$ api/product_image_fallback.php?file=$1 [L,QSA]
 </IfModule>
 
 # Enforce Caching for Static Assets
@@ -13,12 +9,14 @@
     ExpiresActive On
     ExpiresDefault "access plus 1 month"
 
-    # Never cache dynamic HTML, JSON, or frequently updated JS/CSS in reverse-proxy without query keys
+    # Never cache dynamic HTML or JSON by default
     ExpiresByType text/html "access plus 0 seconds"
     ExpiresByType application/json "access plus 0 seconds"
-    ExpiresByType text/css "access plus 0 seconds"
-    ExpiresByType application/javascript "access plus 0 seconds"
-    ExpiresByType text/javascript "access plus 0 seconds"
+
+    # Stylesheets and Scripts
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/javascript "access plus 1 year"
 
     # Images and Icons
     ExpiresByType image/jpeg "access plus 1 year"
@@ -36,17 +34,16 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf)$">
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|webp|svg|ico|woff|woff2|ttf|otf)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
-    # Dynamic PHP, JSON, JS & CSS responses must bypass Nginx URI-only proxy_cache so updates apply immediately
-    <FilesMatch "\.(php|json|js|css)$">
+    # Dynamic PHP & JSON responses
+    <FilesMatch "\.(php|json)$">
         Header always set Cache-Control "private, no-store, no-cache, must-revalidate, max-age=0"
         Header always set Pragma "no-cache"
         Header always set Expires "0"
         Header always set X-Accel-Expires "0"
         Header always set X-LiteSpeed-Cache-Control "no-cache"
-        Header merge Vary "Cookie"
     </FilesMatch>
 </IfModule>
 

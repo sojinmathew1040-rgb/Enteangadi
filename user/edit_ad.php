@@ -60,6 +60,87 @@ foreach ($all_cats as $cat) {
     }
 }
 
+function compressProductImageLocal($source, $destination, $max_width, $quality)
+{
+    if (!function_exists('imagecreatefromjpeg')) {
+        return false;
+    }
+    $info = @getimagesize($source);
+    if (!$info || empty($info['mime'])) {
+        return false;
+    }
+    $mime = $info['mime'];
+    if ($mime === 'image/jpeg') {
+        $image = @imagecreatefromjpeg($source);
+    } elseif ($mime === 'image/gif') {
+        $image = @imagecreatefromgif($source);
+    } elseif ($mime === 'image/png') {
+        $image = @imagecreatefrompng($source);
+    } elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+        $image = @imagecreatefromwebp($source);
+    } else {
+        return false;
+    }
+    if (!$image) {
+        return false;
+    }
+
+    $width = (int) ($info[0] ?? 0);
+    $height = (int) ($info[1] ?? 0);
+    if ($width <= 0 || $height <= 0) {
+        return false;
+    }
+    $ratio = $width / $height;
+    if ($width > $max_width) {
+        $new_width = (int) round($max_width);
+        $new_height = max(1, (int) round($max_width / $ratio));
+    } else {
+        $new_width = $width;
+        $new_height = $height;
+    }
+
+    $new_image = imagecreatetruecolor($new_width, $new_height);
+    if ($mime === 'image/png' || $mime === 'image/gif' || $mime === 'image/webp') {
+        imagealphablending($new_image, false);
+        imagesavealpha($new_image, true);
+        $transparent = imagecolorallocatealpha($new_image, 255, 255, 255, 127);
+        imagefilledrectangle($new_image, 0, 0, $new_width, $new_height, $transparent);
+    }
+
+    imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
+
+    // Apply Enteangadi drop-shadow text watermark
+    $watermark_text = "Enteangadi";
+    $font = 5;
+    $font_width = imagefontwidth($font);
+    $font_height = imagefontheight($font);
+    $text_width = $font_width * strlen($watermark_text);
+    $text_height = $font_height;
+
+    $x = (int) ($new_width - $text_width - 15);
+    $y = (int) ($new_height - $text_height - 15);
+    if ($x < 0) $x = 10;
+    if ($y < 0) $y = 10;
+
+    $white = imagecolorallocate($new_image, 255, 255, 255);
+    $black = imagecolorallocate($new_image, 0, 0, 0);
+
+    imagestring($new_image, $font, $x + 1, $y + 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x - 1, $y - 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x + 1, $y - 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x - 1, $y + 1, $watermark_text, $black);
+    imagestring($new_image, $font, $x, $y, $watermark_text, $white);
+
+    if ($mime === 'image/png') {
+        $result = @imagepng($new_image, $destination, 6);
+    } elseif ($mime === 'image/webp' && function_exists('imagewebp')) {
+        $result = @imagewebp($new_image, $destination, $quality);
+    } else {
+        $result = @imagejpeg($new_image, $destination, $quality);
+    }
+    return (bool) $result;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type = $_POST['type'] ?? 'sell';
     $title = $_POST['title'] ?? '';
@@ -228,109 +309,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // Record deleted image paths -> new cover image so any cached guest feed resolves seamlessly
-                if (!empty($deleted_paths_list)) {
-                    try {
-                        $pdo->exec("CREATE TABLE IF NOT EXISTS product_image_redirects (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            product_id INT NOT NULL,
-                            old_image_path VARCHAR(255) NOT NULL,
-                            new_image_path VARCHAR(255) DEFAULT NULL,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            INDEX idx_old_img (old_image_path)
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                        $new_cover = $final_paths[0] ?? null;
-                        $redir_stmt = $pdo->prepare("INSERT INTO product_image_redirects (product_id, old_image_path, new_image_path) VALUES (?, ?, ?)");
-                        foreach ($deleted_paths_list as $old_p) {
-                            $redir_stmt->execute([$product_id, $old_p, $new_cover]);
+                if ($pdo->inTransaction()) {
+                    $pdo->commit();
+                }
+                $success = ($new_status === 'pending') ? 'pending' : 'active';
+
+                // Keep a static copy at the deleted path if a new cover image exists so any cached feed resolves at 100% static speed
+                if (!empty($deleted_paths_list) && !empty($final_paths[0]) && is_file('../' . $final_paths[0])) {
+                    foreach ($deleted_paths_list as $old_p) {
+                        if ($old_p && $old_p !== $final_paths[0]) {
+                            @copy('../' . $final_paths[0], '../' . $old_p);
                         }
-                    } catch (Exception $e_redir) {
                     }
                 }
 
-                $pdo->commit();
-                $success = ($new_status === 'pending') ? 'pending' : 'active';
-            } catch (PDOException $e) {
-                $pdo->rollBack();
+                // Refresh product & existing_images state after update
+                $stmt = $pdo->prepare("SELECT * FROM products WHERE id = ? AND user_id = ?");
+                $stmt->execute([$product_id, $_SESSION['user_id']]);
+                $product = $stmt->fetch() ?: $product;
+                $img_stmt = $pdo->prepare("SELECT * FROM product_images WHERE product_id = ? ORDER BY id ASC");
+                $img_stmt->execute([$product_id]);
+                $existing_images = $img_stmt->fetchAll();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    try {
+                        $pdo->rollBack();
+                    } catch (Throwable $rbErr) {
+                    }
+                }
                 $error = "Error updating ad. Please try again.";
             }
         }
     } else {
         $error = "Please fill out all required fields.";
     }
-}
-
-function compressProductImageLocal($source, $destination, $max_width, $quality)
-{
-    if (!function_exists('imagecreatefromjpeg'))
-        return false;
-    $info = getimagesize($source);
-    if ($info['mime'] == 'image/jpeg')
-        $image = @imagecreatefromjpeg($source);
-    elseif ($info['mime'] == 'image/gif')
-        $image = @imagecreatefromgif($source);
-    elseif ($info['mime'] == 'image/png')
-        $image = @imagecreatefrompng($source);
-    else
-        return false;
-    if (!$image)
-        return false;
-
-    list($width, $height) = getimagesize($source);
-    $ratio = $width / $height;
-    if ($width > $max_width) {
-        $new_width = $max_width;
-        $new_height = $max_width / $ratio;
-    } else {
-        $new_width = $width;
-        $new_height = $height;
-    }
-
-    $new_image = imagecreatetruecolor($new_width, $new_height);
-    if ($info['mime'] == 'image/png' || $info['mime'] == 'image/gif') {
-        imagealphablending($new_image, false);
-        imagesavealpha($new_image, true);
-        $transparent = imagecolorallocatealpha($new_image, 255, 255, 255, 127);
-        imagefilledrectangle($new_image, 0, 0, $new_width, $new_height, $transparent);
-    }
-
-    imagecopyresampled($new_image, $image, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-
-    // Apply Enteangadi drop-shadow text watermark
-    $watermark_text = "Enteangadi";
-    $font = 5; // largest built-in GD font
-    $font_width = imagefontwidth($font);
-    $font_height = imagefontheight($font);
-    $text_width = $font_width * strlen($watermark_text);
-    $text_height = $font_height;
-
-    // Position bottom-right corner with 15px margin
-    $x = $new_width - $text_width - 15;
-    $y = $new_height - $text_height - 15;
-
-    if ($x < 0) $x = 10;
-    if ($y < 0) $y = 10;
-
-    $white = imagecolorallocate($new_image, 255, 255, 255);
-    $black = imagecolorallocate($new_image, 0, 0, 0);
-
-    // Draw shadow outline for visibility on any background
-    imagestring($new_image, $font, $x + 1, $y + 1, $watermark_text, $black);
-    imagestring($new_image, $font, $x - 1, $y - 1, $watermark_text, $black);
-    imagestring($new_image, $font, $x + 1, $y - 1, $watermark_text, $black);
-    imagestring($new_image, $font, $x - 1, $y + 1, $watermark_text, $black);
-
-    // Draw foreground text
-    imagestring($new_image, $font, $x, $y, $watermark_text, $white);
-
-    if ($info['mime'] == 'image/png') {
-        $result = imagepng($new_image, $destination, 6);
-    } elseif ($info['mime'] == 'image/webp') {
-        $result = imagewebp($new_image, $destination, $quality);
-    } else {
-        $result = imagejpeg($new_image, $destination, $quality);
-    }
-    return $result;
 }
 
 require_once '../includes/header.php';

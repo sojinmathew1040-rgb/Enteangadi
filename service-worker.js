@@ -1,5 +1,5 @@
-const ASSET_CACHE = 'enteangadi-assets-v11';
-const PAGE_CACHE = 'enteangadi-pages-v11';
+const ASSET_CACHE = 'enteangadi-assets-v12';
+const PAGE_CACHE = 'enteangadi-pages-v12';
 const VALID_CACHES = [ASSET_CACHE, PAGE_CACHE];
 
 self.addEventListener('install', () => {
@@ -73,11 +73,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. Static Assets + Optimized Logos, Category Icons & Versioned Product Thumbnails: Stale-While-Revalidate
+  // 1. Static Assets + Optimized Logos, Category Icons & Product Thumbnails: Instant Cache-First + Background Revalidate
   const isCacheableUpload =
     url.pathname.includes('/uploads/logo/') ||
     url.pathname.includes('/uploads/categories/') ||
-    (url.pathname.includes('/uploads/products/') && url.searchParams.has('v'));
+    url.pathname.includes('/uploads/products/') ||
+    url.pathname.includes('/uploads/profiles/');
 
   const isStaticAsset =
     isCacheableUpload ||
@@ -107,25 +108,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Never serve cached feed/dashboard pages so Guest & User modes always list 100% live ads
-  const isLiveFeedOrDash =
-    url.pathname === '/' ||
-    url.pathname.endsWith('/index.php') ||
-    url.pathname.endsWith('my_ads.php') ||
-    url.pathname.endsWith('inbox.php');
-
-  // 2. Background Preload Requests (X-Enteangadi-Preload: 1) -> Populate PAGE_CACHE for detail/static pages
+  // 2. Background Preload Requests (X-Enteangadi-Preload: 1) -> Populate PAGE_CACHE for instant mobile taps
   const isPreload = req.headers.get('X-Enteangadi-Preload') === '1';
   if (isPreload && url.origin === self.location.origin) {
-    if (isLiveFeedOrDash) {
-      return;
-    }
     event.respondWith(
       caches.open(PAGE_CACHE).then(async (cache) => {
         const existing = await cache.match(url.href);
         if (existing) {
           const cachedAt = Number(existing.headers.get('X-SW-Cached-At') || 0);
-          if (Date.now() - cachedAt < 25000) return existing;
+          if (Date.now() - cachedAt < 20000) return existing;
         }
         const netRes = await fetch(req);
         if (netRes && netRes.status === 200 && (netRes.headers.get('content-type') || '').includes('text/html')) {
@@ -143,7 +134,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. HTML Page Navigations -> Network-First for live feeds, Instant Hit for preloaded detail pages
+  // 3. HTML Page Navigations -> Instant Stale-While-Revalidate for sub-50ms mobile transitions
   const isHtmlNav =
     req.mode === 'navigate' ||
     req.destination === 'document' ||
@@ -153,6 +144,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(PAGE_CACHE).then(async (cache) => {
         const cached = await cache.match(url.href);
+        const isDynamicFeed =
+          url.pathname === '/' ||
+          url.pathname.endsWith('/index.php') ||
+          url.pathname.endsWith('my_ads.php') ||
+          url.pathname.endsWith('inbox.php');
+        const maxAge = isDynamicFeed ? 15000 : 45000;
 
         const refreshInBg = fetch(req)
           .then(async (netRes) => {
@@ -164,9 +161,9 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => null);
 
-        if (!isLiveFeedOrDash && cached) {
+        if (cached) {
           const age = Date.now() - Number(cached.headers.get('X-SW-Cached-At') || 0);
-          if (age < 30000) {
+          if (age < maxAge) {
             event.waitUntil(refreshInBg);
             return cached;
           }

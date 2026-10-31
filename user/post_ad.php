@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once '../config.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -151,10 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                $pdo->commit();
+                if ($pdo->inTransaction()) { $pdo->commit(); }
                 $success = ($status === 'pending') ? "pending" : "active";
-            } catch (PDOException $e) {
-                $pdo->rollBack();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) { try { $pdo->rollBack(); } catch (Throwable $rbErr) {} }
                 $error = "Error posting ad. Please try again.";
             }
         }
@@ -184,7 +184,7 @@ function compressImage($source, $destination, $max_width, $quality)
     $ratio = $width / $height;
     if ($width > $max_width) {
         $new_width = $max_width;
-        $new_height = $max_width / $ratio;
+        $new_height = max(1, (int) round($max_width / $ratio));
     } else {
         $new_width = $width;
         $new_height = $height;
@@ -209,8 +209,8 @@ function compressImage($source, $destination, $max_width, $quality)
     $text_height = $font_height;
 
     // Position bottom-right corner with 15px margin
-    $x = $new_width - $text_width - 15;
-    $y = $new_height - $text_height - 15;
+    $x = (int) ($new_width - $text_width - 15);
+    $y = (int) ($new_height - $text_height - 15);
 
     if ($x < 0) $x = 10;
     if ($y < 0) $y = 10;

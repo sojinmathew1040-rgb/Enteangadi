@@ -109,7 +109,11 @@ $home_href = $base_url . (isset($_SESSION['user_id']) ? '/user/index.php' : '/gu
     </noscript>
 
     <script>
-        try { document.cookie = "wordpress_logged_in_1=1; path=/; max-age=31536000; SameSite=Lax"; } catch (e) {}
+        try {
+            if (document.cookie.indexOf('wordpress_logged_in_1=') !== -1) {
+                document.cookie = "wordpress_logged_in_1=; path=/; max-age=0; SameSite=Lax";
+            }
+        } catch (e) {}
 
         const EnteangadiConfig = {
             baseUrl: '<?= $base_url ?>',

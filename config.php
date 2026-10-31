@@ -27,17 +27,15 @@ $is_preload_req = !empty($_SERVER['HTTP_X_ENTEANGADI_PRELOAD'])
     || (($_SERVER['HTTP_PURPOSE'] ?? '') === 'prefetch')
     || (($_SERVER['HTTP_SEC_PURPOSE'] ?? '') === 'prefetch');
 
-// Prevent Nginx reverse-proxy (X-Proxy-Cache), LiteSpeed, and CDN caches from serving stale guest/user pages
+// Prevent reverse-proxy and CDN caches from serving stale dynamic PHP responses
 if (!headers_sent()) {
     header("Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0");
     header("Pragma: no-cache");
     header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
     header("X-Accel-Expires: 0");
     header("X-LiteSpeed-Cache-Control: no-cache");
-    header("Vary: Cookie");
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
-        header("Set-Cookie: _ea_nc=1; Path=/; SameSite=Lax", false);
-        header("Set-Cookie: wordpress_logged_in_1=1; Path=/; Max-Age=31536000; SameSite=Lax", false);
+    if (isset($_COOKIE['wordpress_logged_in_1'])) {
+        header("Set-Cookie: wordpress_logged_in_1=; Path=/; Max-Age=0; SameSite=Lax", false);
     }
 }
 
